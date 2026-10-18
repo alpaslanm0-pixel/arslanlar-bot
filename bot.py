@@ -220,55 +220,26 @@ def search_in_drive(query_term: str) -> list:
 
 
 def analyze_message(text: str) -> dict:
-    stock_summary = inventory_df.head(20).to_dict(orient="records")
-    
-    prompt = f"""
-    Sen Arslanlar Marble fabrikasının tecrübeli ve zeki mermer operasyon yöneticisisin.
-    Mehmet Morkoç ile konuşuyorsun. Sevkiyatları, rezerve sürelerini, yükleme günlerini ve müşteri taleplerini yönetirsin.
-
-    Güncel Stok Özeti: {json.dumps(stock_summary, ensure_ascii=False)}
-
-    Kullanıcının mesajını analiz et ve SADECE geçerli bir JSON formatında döndür:
-    {{
-        "action": "sale" | "reserve" | "cancel" | "packing_list" | "photo_request" | "stock_query" | "sync_drive" | "export_stock" | "daily_report" | "drive_link" | "shipment_plan" | "lot_detail" | "chat",
-        "lot": "Lot/Blok kodu (örn: A-283, D-7) veya null",
-        "stone": "Taş cinsi veya koleksiyon adı veya null",
-        "client": "Müşteri/Firma adı veya null",
-        "quantity": "Miktar veya tarih detayı veya null",
-        "reply": "Mehmet Morkoç'un üslubuna uygun, iş bitirici ve samimi Türkçe yanıt"
-    }}
-
-    Mesaj: "{text}"
-    """
-    try:
-        response = model.generate_content(prompt)
-        raw = response.text.strip().replace("```json", "").replace("```", "").strip()
-        return json.loads(raw)
-    except Exception:
-        return fallback_parser(text)
-
-
-def fallback_parser(text: str) -> dict:
     t_lower = text.lower()
     lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
     lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
 
     if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme", "gidecek"]):
-        return {"action": "shipment_plan", "lot": lot, "stone": None, "client": None, "quantity": text, "reply": f"Sevkiyat ve yükleme planını takvime işledim patron! 🚛"}
+        return {"action": "shipment_plan", "lot": lot, "client": "Müşteri", "reply": f"Sevkiyat ve yükleme planını takvime işledim patron! 🚛"}
     elif any(k in t_lower for k in ["tara", "senkronize"]):
-        return {"action": "sync_drive", "lot": lot, "stone": None, "client": None, "reply": "Koleksiyonları tarıyorum! ⚡"}
+        return {"action": "sync_drive", "lot": lot, "client": "Müşteri", "reply": "Koleksiyonları tarıyorum! ⚡"}
     elif any(k in t_lower for k in ["tüm stok", "genel stok"]):
-        return {"action": "export_stock", "lot": lot, "stone": None, "client": None, "reply": "Master stok tablosunu hazırlıyorum! 📋"}
+        return {"action": "export_stock", "lot": lot, "client": "Müşteri", "reply": "Master stok tablosunu hazırlıyorum! 📋"}
     elif any(k in t_lower for k in ["çeki", "packing"]):
-        return {"action": "packing_list", "lot": lot, "stone": None, "client": None, "reply": "Çeki listesini hazırlıyorum! 📄"}
+        return {"action": "packing_list", "lot": lot, "client": "Müşteri", "reply": "Çeki listesini hazırlıyorum! 📄"}
     elif any(k in t_lower for k in ["sattık", "satıldı"]):
-        return {"action": "sale", "lot": lot, "stone": None, "client": None, "reply": "Satışı deftere işledim! 🔴"}
+        return {"action": "sale", "lot": lot, "client": "Müşteri", "reply": "Satışı deftere işledim! 🔴"}
     elif any(k in t_lower for k in ["rezerv", "ayır"]):
-        return {"action": "reserve", "lot": lot, "stone": None, "client": None, "reply": "Rezervasyonu koydum! 🔒"}
+        return {"action": "reserve", "lot": lot, "client": "Müşteri", "reply": "Rezervasyonu koydum! 🔒"}
     elif lot:
-        return {"action": "lot_detail", "lot": lot, "stone": None, "client": None, "reply": f"Lot {lot} detaylarını getiriyorum! 🔍"}
+        return {"action": "lot_detail", "lot": lot, "client": "Müşteri", "reply": f"Lot {lot} detaylarını getiriyorum! 🔍"}
     else:
-        return {"action": "stock_query", "lot": None, "stone": None, "client": None, "reply": "Stok durumunu inceliyorum! 🔍"}
+        return {"action": "stock_query", "lot": None, "client": "Müşteri", "reply": "Stok durumunu inceliyorum! 🔍"}
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -376,8 +347,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parsed = analyze_message(text)
     action = parsed.get("action", "chat")
     lot = parsed.get("lot")
-    stone = parsed.get("stone")
-    client = parsed.get("client") or "Müşteri"
     natural_reply = parsed.get("reply", "Emredersiniz patron! ⚡")
 
     await update.message.reply_text(natural_reply, parse_mode="Markdown")
@@ -408,30 +377,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
         if len(match_idx) > 0:
             inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
-            inventory_df.loc[match_idx[0], "Müşteri"] = client
             inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
-        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` , `{client}` adına kilitlendi! Her 5 günde bir hatırlatacağım. 🔒", parse_mode="Markdown")
+        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` kilitlendi! Her 5 günde bir hatırlatacağım. 🔒", parse_mode="Markdown")
 
     elif action == "sale" and lot:
         match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
         if len(match_idx) > 0:
             inventory_df.loc[match_idx[0], "Durum"] = "Sold"
-            inventory_df.loc[match_idx[0], "Müşteri"] = client
-        daily_log["sold"].append({"lot": lot, "client": client})
-        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla `{client}` firmasına satıldı! 🚀", parse_mode="Markdown")
+        daily_log["sold"].append({"lot": lot})
+        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla satıldı olarak işlendi! 🚀", parse_mode="Markdown")
 
     elif action == "cancel" and lot:
         match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
         if len(match_idx) > 0:
             inventory_df.loc[match_idx[0], "Durum"] = "Available"
-            inventory_df.loc[match_idx[0], "Müşteri"] = ""
             inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = None
         await update.message.reply_text(f"🔄 **İptal:** `{lot}` tekrar serbest stoğa alındı. 💪", parse_mode="Markdown")
 
     elif action == "packing_list":
-        file_path, slabs, m2, total_usd, lots = generate_packing_list_excel(client, lot)
+        file_path, slabs, m2, total_usd, lots = generate_packing_list_excel("Musteri", lot)
         with open(file_path, "rb") as f:
-            await update.message.reply_document(document=f, caption=f"✅ **{client} İçin Çeki Listesi Hazırlandı!**\n📦 Plaka: {slabs} | 📐 Metraj: {m2} m² | 💰 Tutar: {total_usd} USD", parse_mode="Markdown")
+            await update.message.reply_document(document=f, caption=f"✅ **Çeki Listesi Hazırlandı!**\n📦 Plaka: {slabs} | 📐 Metraj: {m2} m² | 💰 Tutar: {total_usd} USD", parse_mode="Markdown")
 
     elif action == "daily_report":
         await update.message.reply_text(build_daily_report_text(), parse_mode="Markdown")
@@ -450,7 +416,6 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
     logger.info("Arslanlar Mermer Zeki Operasyon Asistanı başlatılıyor...")
-    # Çakışmaları önlemek için bekleyen güncellemeleri düşürerek başlatıyoruz
     app.run_polling(drop_pending_updates=True)
 
 
