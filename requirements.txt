@@ -1,8 +1,8 @@
-python-telegram-bot[job-queue]==21.1.1
-google-generativeai==0.8.3
-pandas==2.2.2
-openpyxl==3.1.5
-pytz==2024.1
-requests==2.32.3
-beautifulsoup4==4.12.3
-gdown==5.2.0
+python-telegram-bot[job-queue]
+google-generativeai
+pandas
+openpyxl
+pytz
+requests
+beautifulsoup4
+gdown
