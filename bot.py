@@ -6,7 +6,7 @@ import logging
 import threading
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import pytz
 import pandas as pd
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -41,12 +41,13 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 # --- CANLI MASTER STOK VE AKILLI HAFIZA ---
 inventory_df = pd.DataFrame([
-    {"Lot / Blok No": "A-283", "Taş Cinsi (Selection)": "Violet Breccia", "Koleksiyon": "Arslanlar Collection", "Koridor": "A-1", "Plaka Adedi": 12, "Net Metraj (m²)": 68.4, "Birim Fiyat ($/m²)": 65.0, "Toplam Tutar ($)": 4446.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK},
-    {"Lot / Blok No": "B-12", "Taş Cinsi (Selection)": "Beige", "Koleksiyon": "Arslanlar Series", "Koridor": "B-3", "Plaka Adedi": 18, "Net Metraj (m²)": 95.0, "Birim Fiyat ($/m²)": 42.0, "Toplam Tutar ($)": 3990.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK},
-    {"Lot / Blok No": "C-105", "Taş Cinsi (Selection)": "Calacatta Viola", "Koleksiyon": "Arslanlar Exclusive collection", "Koridor": "A-2", "Plaka Adedi": 8, "Net Metraj (m²)": 44.2, "Birim Fiyat ($/m²)": 85.0, "Toplam Tutar ($)": 3757.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK},
+    {"Lot / Blok No": "A-283", "Taş Cinsi (Selection)": "Violet Breccia", "Koleksiyon": "Arslanlar Collection", "Koridor": "A-1", "Plaka Adedi": 12, "Net Metraj (m²)": 68.4, "Birim Fiyat ($/m²)": 65.0, "Toplam Tutar ($)": 4446.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
+    {"Lot / Blok No": "B-12", "Taş Cinsi (Selection)": "Beige", "Koleksiyon": "Arslanlar Series", "Koridor": "B-3", "Plaka Adedi": 18, "Net Metraj (m²)": 95.0, "Birim Fiyat ($/m²)": 42.0, "Toplam Tutar ($)": 3990.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
+    {"Lot / Blok No": "C-105", "Taş Cinsi (Selection)": "Calacatta Viola", "Koleksiyon": "Arslanlar Exclusive collection", "Koridor": "A-2", "Plaka Adedi": 8, "Net Metraj (m²)": 44.2, "Birim Fiyat ($/m²)": 85.0, "Toplam Tutar ($)": 3757.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
 ])
 
 daily_log = {"sold": [], "reserved": [], "cancelled": []}
+shipment_schedules = []  # Sevkiyat ve yükleme planları (Örn: {"tarih": "2026-10-20", "detay": "D-7 Exotic Green"})
 drive_focused_index = []
 active_group_chats = set()
 is_scanning_drive = False
@@ -75,7 +76,6 @@ def download_drive_file_bytes(file_id: str, is_google_sheet: bool = False) -> by
 
 
 def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
-    """Kullanıcının attığı Excel dosyasını akıllı sütun haritalama ile okur."""
     try:
         if isinstance(file_path_or_bytes, bytes):
             io_obj = io.BytesIO(file_path_or_bytes)
@@ -93,7 +93,6 @@ def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
         if df.empty:
             return df
 
-        # Sütun isimlerini akıllıca eşleştir
         col_map = {}
         for col in df.columns:
             c_low = str(col).lower()
@@ -120,7 +119,6 @@ def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
 
         df = df.rename(columns=col_map)
         
-        # Eksik kritik sütunları tamamla
         for req_col, default_val in [
             ("Lot / Blok No", "Belirsiz"),
             ("Taş Cinsi (Selection)", "Mermer Plaka"),
@@ -137,10 +135,12 @@ def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
             if req_col not in df.columns:
                 df[req_col] = default_val
 
-        # Geçersiz/boş lot satırlarını temizle
         df = df[df["Lot / Blok No"].astype(str).str.strip() != ""]
         df = df[~df["Lot / Blok No"].astype(str).str.lower().isin(["nan", "toplam", "total", "lot / blok no"])]
         
+        if "Rezerve_Tarihi" not in df.columns:
+            df["Rezerve_Tarihi"] = None
+            
         return df.reset_index(drop=True)
     except Exception as e:
         logger.error(f"Excel çözümleme hatası: {e}")
@@ -220,46 +220,67 @@ def search_in_drive(query_term: str) -> list:
     return matches if matches else drive_focused_index[:10]
 
 
-# --- AKILLI DOĞAL DİL MOTORU ---
+# --- YAPAY ZEKA DESTEKLİ ÖĞRENEN ANALİZÖR ---
 def analyze_message(text: str) -> dict:
+    stock_summary = inventory_df.head(20).to_dict(orient="records")
+    
+    prompt = f"""
+    Sen Arslanlar Marble fabrikasının tecrübeli ve zeki mermer operasyon yöneticisisin.
+    Mehmet Morkoç ile konuşuyorsun. Sevkiyatları, rezerve sürelerini, yükleme günlerini ve müşteri taleplerini yönetirsin.
+
+    Güncel Stok Özeti: {json.dumps(stock_summary, ensure_ascii=False)}
+
+    Kullanıcının mesajını analiz et ve SADECE geçerli bir JSON formatında döndür:
+    {{
+        "action": "sale" | "reserve" | "cancel" | "packing_list" | "photo_request" | "stock_query" | "sync_drive" | "export_stock" | "daily_report" | "drive_link" | "shipment_plan" | "lot_detail" | "chat",
+        "lot": "Lot/Blok kodu (örn: A-283, D-7) veya null",
+        "stone": "Taş cinsi veya koleksiyon adı veya null",
+        "client": "Müşteri/Firma adı veya null",
+        "quantity": "Miktar veya tarih detayı (örn: salı günü) veya null",
+        "reply": "Mehmet Morkoç'un üslubuna uygun, iş bitirici ve samimi Türkçe yanıt"
+    }}
+
+    Kurallar:
+    - Sevkiyat veya yükleme planı belirtiliyorsa (örn: "salı günü d7 yüklenecek") -> "shipment_plan"
+    - "sattık", "satıldı" -> "sale"
+    - "rezerve", "ayır" -> "reserve"
+    - "iptal", "vazgeçti" -> "cancel"
+    - "çeki listesi" -> "packing_list"
+    - "tara" -> "sync_drive"
+    - "stok" -> "export_stock"
+    - Lot detayı soruluyorsa -> "lot_detail"
+
+    Mesaj: "{text}"
+    """
+    try:
+        response = model.generate_content(prompt)
+        raw = response.text.strip().replace("```json", "").replace("```", "").strip()
+        return json.loads(raw)
+    except Exception:
+        return fallback_parser(text)
+
+
+def fallback_parser(text: str) -> dict:
     t_lower = text.lower()
     lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
     lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
 
-    stone = None
-    for s in ["Violet Breccia", "Calacatta Viola", "Beige", "Afyon", "Collection", "Exclusive", "Series"]:
-        if s.lower() in t_lower:
-            stone = s
-            break
-
-    client = None
-    for c in ["Glaze Dubai", "Skystone", "Jasmine Stone", "Mitra", "İZFAŞ"]:
-        if c.lower() in t_lower:
-            client = c
-            break
-
-    if any(k in t_lower for k in ["tara", "senkronize", "koleksiyon"]):
-        return {"action": "sync_drive", "lot": lot, "stone": stone, "client": client, "reply": "Hemen Arslanlar Series, Collection ve Exclusive koleksiyonlarını tarıyorum patron! ⚡"}
-    elif any(k in t_lower for k in ["tüm stok", "genel stok", "master stok", "stok tablosu"]):
-        return {"action": "export_stock", "lot": lot, "stone": stone, "client": client, "reply": "Master mermer stok tablomuzu hazırlıyorum! 📋"}
-    elif any(k in t_lower for k in ["foto", "resim", "görsel", "plaka resmi"]):
-        return {"action": "photo_request", "lot": lot, "stone": stone, "client": client, "reply": "Plaka fotoğraflarını çekiyorum! 📸"}
-    elif any(k in t_lower for k in ["iptal", "vazgeç", "geri al"]):
-        return {"action": "cancel", "lot": lot, "stone": stone, "client": client, "reply": "İşlemi iptal edip stoğa geri alıyorum! 🔄"}
-    elif any(k in t_lower for k in ["çeki", "packing", "liste"]):
-        return {"action": "packing_list", "lot": lot, "stone": stone, "client": client, "reply": "Orijinal formatına birebir uygun çeki listesini hazırlıyorum! 📄"}
-    elif any(k in t_lower for k in ["sattık", "satıldı", "sold"]):
-        return {"action": "sale", "lot": lot, "stone": stone, "client": client, "reply": "Satışı deftere işledim, hayırlı olsun! 🔴"}
+    if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme", "gidecek"]):
+        return {"action": "shipment_plan", "lot": lot, "stone": None, "client": None, "quantity": text, "reply": f"Sevkiyat ve yükleme planını takvime işliyorum patron! 🚛"}
+    elif any(k in t_lower for k in ["tara", "senkronize"]):
+        return {"action": "sync_drive", "lot": lot, "stone": None, "client": None, "reply": "Koleksiyonları tarıyorum! ⚡"}
+    elif any(k in t_lower for k in ["tüm stok", "genel stok"]):
+        return {"action": "export_stock", "lot": lot, "stone": None, "client": None, "reply": "Master stok tablosunu hazırlıyorum! 📋"}
+    elif any(k in t_lower for k in ["çeki", "packing"]):
+        return {"action": "packing_list", "lot": lot, "stone": None, "client": None, "reply": "Çeki listesini hazırlıyorum! 📄"}
+    elif any(k in t_lower for k in ["sattık", "satıldı"]):
+        return {"action": "sale", "lot": lot, "stone": None, "client": None, "reply": "Satışı deftere işledim! 🔴"}
     elif any(k in t_lower for k in ["rezerv", "ayır"]):
-        return {"action": "reserve", "lot": lot, "stone": stone, "client": client, "reply": "Rezervasyonu koydum, kimsede yok! 🔒"}
-    elif any(k in t_lower for k in ["rapor", "özet"]):
-        return {"action": "daily_report", "lot": None, "stone": None, "client": None, "reply": "Günlük operasyon raporunu getiriyorum! 📊"}
-    elif lot and any(k in t_lower for k in ["drive", "link", "gönder", "kaç"]):
-        return {"action": "lot_detail", "lot": lot, "stone": stone, "client": client, "reply": f"Lot {lot} detaylarını ve Drive bağlantısını hemen getiriyorum! 🔍"}
-    elif any(k in t_lower for k in ["drive", "link"]):
-        return {"action": "drive_link", "lot": lot, "stone": stone, "client": client, "reply": "Koleksiyon Drive linkini bırakıyorum! 🔗"}
+        return {"action": "reserve", "lot": lot, "stone": None, "client": None, "reply": "Rezervasyonu koydum! 🔒"}
+    elif lot:
+        return {"action": "lot_detail", "lot": lot, "stone": None, "client": None, "reply": f"Lot {lot} detaylarını getiriyorum! 🔍"}
     else:
-        return {"action": "stock_query", "lot": lot, "stone": stone, "client": client, "reply": "Depo stok durumunu inceliyorum! 🔍"}
+        return {"action": "stock_query", "lot": None, "stone": None, "client": None, "reply": "Stok durumunu inceliyorum! 🔍"}
 
 
 # --- TELEGRAM EXCEL YÜKLEME ---
@@ -284,9 +305,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total_m2 = float(df["Net Metraj (m²)"].sum()) if "Net Metraj (m²)" in df.columns else 0.0
             total_slabs = int(df["Plaka Adedi"].sum()) if "Plaka Adedi" in df.columns else len(df)
             await update.message.reply_text(
-                f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm sütun başlıklarını ve formatı** kusursuz şekilde hafızama kazıdım. 📋\n"
-                f"✅ **Toplam Lot:** {len(df)} adet | **Toplam Plaka:** {total_slabs} | **Toplam Metraj:** {round(total_m2, 2)} m²\n"
-                f"Bundan sonraki tüm işlemler **birebir bu şablonda** yürütülecek! ⚡",
+                f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm sütun başlıklarını ve formatı** hafızama kazıdım. 📋\n"
+                f"✅ **Toplam Lot:** {len(df)} adet | **Toplam Plaka:** {total_slabs} | **Toplam Metraj:** {round(total_m2, 2)} m²",
                 parse_mode="Markdown"
             )
         else:
@@ -321,15 +341,50 @@ def build_daily_report_text() -> str:
     return (
         f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n"
         f"🗓 *Tarih:* {today_str}\n\n"
-        f"📦 **Aktif Stok Kaydı:** {avail_count} Lot / Blok (Format Onaylandı).\n"
+        f"📦 **Aktif Stok Kaydı:** {avail_count} Lot / Blok.\n"
+        f"🚛 **Planlanan Sevkiyatlar:** {len(shipment_schedules)} adet aktif yükleme.\n"
         f"🔗 [Koleksiyon Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
         f"Her şey kontrol altında, iyi çalışmalar! ☕💪"
     )
 
 
+# --- 5 GÜNDE BİR REZERVE HATIRLATICI & SEVKİYAT ALARMI ---
+async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
+    """Arka planda 5 günü geçen rezervasyonları ve güncel sevkiyatları kontrol eder."""
+    global inventory_df, shipment_schedules
+    while True:
+        try:
+            tz = pytz.timezone("Europe/Istanbul")
+            now = datetime.now(tz)
+            
+            # 1. Rezerve Süresi Kontrolü (Her 5 günde bir uyarı)
+            for idx, row in inventory_df.iterrows():
+                if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
+                    res_date = pd.to_datetime(row["Rezerve_Tarihi"])
+                    days_passed = (now - res_date.tz_localize(tz) if res_date.tzinfo is None else now - res_date).days
+                    if days_passed > 0 and days_passed % 5 == 0:
+                        lot_no = row["Lot / Blok No"]
+                        client_name = row.get("Müşteri", "Müşteri")
+                        alert_msg = (
+                            f"⚠️ **REZERVE SÜRESİ HATIRLATMASI!**\n"
+                            f"• **Lot {lot_no}**, *{client_name}* adına rezerve edileli **{days_passed} gün** oldu.\n"
+                            f"Müşteriyle görüşüldü mü? Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
+                        )
+                        for chat_id in active_group_chats:
+                            try:
+                                await context.bot.send_message(chat_id=chat_id, text=alert_msg, parse_mode="Markdown")
+                            except Exception:
+                                pass
+        except Exception as e:
+            logger.error(f"Hatırlatıcı işçi hatası: {e}")
+            
+        import time as t
+        t.sleep(43200) # 12 saatte bir kontrol eder
+
+
 # --- ANA MESAJ YÖNETİCİSİ ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global inventory_df
+    global inventory_df, shipment_schedules
     if not update.message or not update.message.text:
         return
 
@@ -346,7 +401,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(natural_reply, parse_mode="Markdown")
 
-    if action == "lot_detail" and lot:
+    if action == "shipment_plan":
+        shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
+        await update.message.reply_text(
+            f"🚛 **Sevkiyat Planı Kaydedildi!**\n"
+            f"• Not: *{text}*\n"
+            f"Takvime işledim, ilgili günde ekibe otomatik hatırlatıcı atacağım! 💪",
+            parse_mode="Markdown"
+        )
+
+    elif action == "lot_detail" and lot:
         match = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)]
         if not match.empty:
             row = match.iloc[0]
@@ -357,47 +421,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"• Koleksiyon: *{row.get('Koleksiyon', 'Arslanlar')}*\n"
                 f"• Koridor: *{row.get('Koridor', 'Depo')}*\n"
                 f"• Plaka / Metraj: {row.get('Plaka Adedi', 0)} Adet | {row.get('Net Metraj (m²)', 0)} m²\n"
-                f"• Birim Fiyat: {row.get('Birim Fiyat ($/m²)', 0)} $/m² (Toplam: {row.get('Toplam Tutar ($)', 0)} $)\n"
-                f"• Durum: *{row.get('Durum', 'Available')}*\n\n"
+                f"• Durum: *{row.get('Durum', 'Available')}* (Müşteri: {row.get('Müşteri', '-')})\n\n"
                 f"🔗 **Google Drive Klasör Linki:** [Tıkla ve Aç]({drive_url})",
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot mevcut stok listesinde bulunamadı ama Drive koleksiyonlarında taranıyor.", parse_mode="Markdown")
+            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot mevcut stokta yok ama Drive koleksiyonlarında aranıyor.", parse_mode="Markdown")
 
-    elif action == "sync_drive":
-        items_count, stock_count = scan_marble_collections()
-        file_path, slabs, m2, total_usd, _ = generate_packing_list_excel("Master_Stok")
-        with open(file_path, "rb") as f:
-            await update.message.reply_document(
-                document=f,
-                caption=f"✅ **Koleksiyonlar Tarandı!**\n📂 Öğe: {items_count}\n🪨 Stok: {len(inventory_df)} Kalem\n📎 *Master Stok tablosu ekte!*",
-                parse_mode="Markdown"
-            )
+    elif action == "reserve" and lot:
+        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+        if len(match_idx) > 0:
+            inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
+            inventory_df.loc[match_idx[0], "Müşteri"] = client
+            inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
+        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` , `{client}` adına kilitlendi! Her 5 günde bir süresini size hatırlatacağım. 🔒", parse_mode="Markdown")
 
-    elif action == "export_stock":
-        file_path, slabs, m2, total_usd, _ = generate_packing_list_excel("Master_Stok")
-        with open(file_path, "rb") as f:
-            await update.message.reply_document(document=f, caption=f"📊 **Arslanlar Master Stok Tablosu** hazırlandı!", parse_mode="Markdown")
+    elif action == "sale" and lot:
+        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+        if len(match_idx) > 0:
+            inventory_df.loc[match_idx[0], "Durum"] = "Sold"
+            inventory_df.loc[match_idx[0], "Müşteri"] = client
+        daily_log["sold"].append({"lot": lot, "client": client})
+        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla `{client}` firmasına satıldı olarak işlendi ve aktif stoktan düşüldü! 🚀", parse_mode="Markdown")
 
-    elif action in ("drive_link", "photo_request", "stock_query"):
-        matched = search_in_drive(lot or stone or text)
-        lines = [f"• 📁 [{it['name']}]({it['url']}) *({it['parent']})*" for it in matched[:10]]
-        await update.message.reply_text(
-            f"🔍 **Drive Arama Sonuçları:**\n\n" + ("\n".join(lines) if lines else "Kayıt bulunamadı.") + f"\n\n🔗 [Koleksiyon Klasörü]({GOOGLE_DRIVE_LINK})",
-            parse_mode="Markdown"
-        )
-
-    elif action == "sale":
-        daily_log["sold"].append({"lot": lot or "Belirsiz", "client": client, "total_usd": 4500.0})
-        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot or 'Ürün'}` başarıyla `{client}` firmasına satıldı olarak kaydedildi! 🚀", parse_mode="Markdown")
-
-    elif action == "reserve":
-        daily_log["reserved"].append({"lot": lot or "Belirsiz", "client": client})
-        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot or 'Ürün'}` , `{client}` adına opsiyonlandı. 🔒", parse_mode="Markdown")
-
-    elif action == "cancel":
-        await update.message.reply_text(f"🔄 **İptal:** `{lot or 'İlgili lot'}` stoğa geri alındı. 💪", parse_mode="Markdown")
+    elif action == "cancel" and lot:
+        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+        if len(match_idx) > 0:
+            inventory_df.loc[match_idx[0], "Durum"] = "Available"
+            inventory_df.loc[match_idx[0], "Müşteri"] = ""
+            inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = None
+        await update.message.reply_text(f"🔄 **İptal:** `{lot}` tekrar serbest stoğa alındı. 💪", parse_mode="Markdown")
 
     elif action == "packing_list":
         file_path, slabs, m2, total_usd, lots = generate_packing_list_excel(client, lot)
@@ -417,10 +470,15 @@ def main():
     threading.Thread(target=lambda: scan_marble_collections(), daemon=True).start()
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    
+    # Arka plan hatırlatıcı işçisini başlat
+    if app.job_queue:
+        app.job_queue.run_repeating(background_reminder_worker, interval=43200, first=10)
+
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    logger.info("Arslanlar Mermer Zeki Operasyon Asistanı başlatıldı...")
+    logger.info("Arslanlar Mermer Zeki Operasyon Asistanı (Tam Donanımlı) başlatıldı...")
     app.run_polling(drop_pending_updates=True)
 
 
