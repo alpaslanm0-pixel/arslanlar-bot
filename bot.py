@@ -47,13 +47,12 @@ inventory_df = pd.DataFrame([
 ])
 
 daily_log = {"sold": [], "reserved": [], "cancelled": []}
-shipment_schedules = []  # Sevkiyat ve yükleme planları (Örn: {"tarih": "2026-10-20", "detay": "D-7 Exotic Green"})
+shipment_schedules = []
 drive_focused_index = []
 active_group_chats = set()
 is_scanning_drive = False
 
 
-# --- DRIVE VE EXCEL İŞLEME MODÜLÜ ---
 def extract_folder_key(url: str) -> str:
     m = re.search(r"/folders/([a-zA-Z0-9_-]+)", url)
     return m.group(1) if m else ""
@@ -220,7 +219,6 @@ def search_in_drive(query_term: str) -> list:
     return matches if matches else drive_focused_index[:10]
 
 
-# --- YAPAY ZEKA DESTEKLİ ÖĞRENEN ANALİZÖR ---
 def analyze_message(text: str) -> dict:
     stock_summary = inventory_df.head(20).to_dict(orient="records")
     
@@ -236,19 +234,9 @@ def analyze_message(text: str) -> dict:
         "lot": "Lot/Blok kodu (örn: A-283, D-7) veya null",
         "stone": "Taş cinsi veya koleksiyon adı veya null",
         "client": "Müşteri/Firma adı veya null",
-        "quantity": "Miktar veya tarih detayı (örn: salı günü) veya null",
+        "quantity": "Miktar veya tarih detayı veya null",
         "reply": "Mehmet Morkoç'un üslubuna uygun, iş bitirici ve samimi Türkçe yanıt"
     }}
-
-    Kurallar:
-    - Sevkiyat veya yükleme planı belirtiliyorsa (örn: "salı günü d7 yüklenecek") -> "shipment_plan"
-    - "sattık", "satıldı" -> "sale"
-    - "rezerve", "ayır" -> "reserve"
-    - "iptal", "vazgeçti" -> "cancel"
-    - "çeki listesi" -> "packing_list"
-    - "tara" -> "sync_drive"
-    - "stok" -> "export_stock"
-    - Lot detayı soruluyorsa -> "lot_detail"
 
     Mesaj: "{text}"
     """
@@ -266,7 +254,7 @@ def fallback_parser(text: str) -> dict:
     lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
 
     if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme", "gidecek"]):
-        return {"action": "shipment_plan", "lot": lot, "stone": None, "client": None, "quantity": text, "reply": f"Sevkiyat ve yükleme planını takvime işliyorum patron! 🚛"}
+        return {"action": "shipment_plan", "lot": lot, "stone": None, "client": None, "quantity": text, "reply": f"Sevkiyat ve yükleme planını takvime işledim patron! 🚛"}
     elif any(k in t_lower for k in ["tara", "senkronize"]):
         return {"action": "sync_drive", "lot": lot, "stone": None, "client": None, "reply": "Koleksiyonları tarıyorum! ⚡"}
     elif any(k in t_lower for k in ["tüm stok", "genel stok"]):
@@ -283,7 +271,6 @@ def fallback_parser(text: str) -> dict:
         return {"action": "stock_query", "lot": None, "stone": None, "client": None, "reply": "Stok durumunu inceliyorum! 🔍"}
 
 
-# --- TELEGRAM EXCEL YÜKLEME ---
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global inventory_df
     if update.effective_chat:
@@ -348,16 +335,12 @@ def build_daily_report_text() -> str:
     )
 
 
-# --- 5 GÜNDE BİR REZERVE HATIRLATICI & SEVKİYAT ALARMI ---
 async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
-    """Arka planda 5 günü geçen rezervasyonları ve güncel sevkiyatları kontrol eder."""
     global inventory_df, shipment_schedules
     while True:
         try:
             tz = pytz.timezone("Europe/Istanbul")
             now = datetime.now(tz)
-            
-            # 1. Rezerve Süresi Kontrolü (Her 5 günde bir uyarı)
             for idx, row in inventory_df.iterrows():
                 if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
                     res_date = pd.to_datetime(row["Rezerve_Tarihi"])
@@ -368,7 +351,7 @@ async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
                         alert_msg = (
                             f"⚠️ **REZERVE SÜRESİ HATIRLATMASI!**\n"
                             f"• **Lot {lot_no}**, *{client_name}* adına rezerve edileli **{days_passed} gün** oldu.\n"
-                            f"Müşteriyle görüşüldü mü? Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
+                            f"Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
                         )
                         for chat_id in active_group_chats:
                             try:
@@ -377,12 +360,10 @@ async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
                                 pass
         except Exception as e:
             logger.error(f"Hatırlatıcı işçi hatası: {e}")
-            
         import time as t
-        t.sleep(43200) # 12 saatte bir kontrol eder
+        t.sleep(43200)
 
 
-# --- ANA MESAJ YÖNETİCİSİ ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global inventory_df, shipment_schedules
     if not update.message or not update.message.text:
@@ -403,12 +384,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "shipment_plan":
         shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
-        await update.message.reply_text(
-            f"🚛 **Sevkiyat Planı Kaydedildi!**\n"
-            f"• Not: *{text}*\n"
-            f"Takvime işledim, ilgili günde ekibe otomatik hatırlatıcı atacağım! 💪",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text(f"🚛 **Sevkiyat Planı Kaydedildi!**\n• *{text}*", parse_mode="Markdown")
 
     elif action == "lot_detail" and lot:
         match = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)]
@@ -422,7 +398,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"• Koridor: *{row.get('Koridor', 'Depo')}*\n"
                 f"• Plaka / Metraj: {row.get('Plaka Adedi', 0)} Adet | {row.get('Net Metraj (m²)', 0)} m²\n"
                 f"• Durum: *{row.get('Durum', 'Available')}* (Müşteri: {row.get('Müşteri', '-')})\n\n"
-                f"🔗 **Google Drive Klasör Linki:** [Tıkla ve Aç]({drive_url})",
+                f"🔗 [Drive Klasörünü Aç]({drive_url})",
                 parse_mode="Markdown"
             )
         else:
@@ -434,7 +410,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
             inventory_df.loc[match_idx[0], "Müşteri"] = client
             inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
-        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` , `{client}` adına kilitlendi! Her 5 günde bir süresini size hatırlatacağım. 🔒", parse_mode="Markdown")
+        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` , `{client}` adına kilitlendi! Her 5 günde bir hatırlatacağım. 🔒", parse_mode="Markdown")
 
     elif action == "sale" and lot:
         match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
@@ -442,7 +418,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             inventory_df.loc[match_idx[0], "Durum"] = "Sold"
             inventory_df.loc[match_idx[0], "Müşteri"] = client
         daily_log["sold"].append({"lot": lot, "client": client})
-        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla `{client}` firmasına satıldı olarak işlendi ve aktif stoktan düşüldü! 🚀", parse_mode="Markdown")
+        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla `{client}` firmasına satıldı! 🚀", parse_mode="Markdown")
 
     elif action == "cancel" and lot:
         match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
@@ -455,11 +431,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "packing_list":
         file_path, slabs, m2, total_usd, lots = generate_packing_list_excel(client, lot)
         with open(file_path, "rb") as f:
-            await update.message.reply_document(
-                document=f, 
-                caption=f"✅ **{client} İçin Çeki Listesi Hazırlandı!**\n📦 Toplam Plaka: {slabs} | 📐 Metraj: {m2} m²\n💰 Tutar: {total_usd} USD\n📎 *Orijinal şablonunuza uygun hazırlandı!*", 
-                parse_mode="Markdown"
-            )
+            await update.message.reply_document(document=f, caption=f"✅ **{client} İçin Çeki Listesi Hazırlandı!**\n📦 Plaka: {slabs} | 📐 Metraj: {m2} m² | 💰 Tutar: {total_usd} USD", parse_mode="Markdown")
 
     elif action == "daily_report":
         await update.message.reply_text(build_daily_report_text(), parse_mode="Markdown")
@@ -471,14 +443,14 @@ def main():
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    # Arka plan hatırlatıcı işçisini başlat
     if app.job_queue:
         app.job_queue.run_repeating(background_reminder_worker, interval=43200, first=10)
 
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    logger.info("Arslanlar Mermer Zeki Operasyon Asistanı (Tam Donanımlı) başlatıldı...")
+    logger.info("Arslanlar Mermer Zeki Operasyon Asistanı başlatılıyor...")
+    # Çakışmaları önlemek için bekleyen güncellemeleri düşürerek başlatıyoruz
     app.run_polling(drop_pending_updates=True)
 
 
