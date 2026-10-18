@@ -39,7 +39,8 @@ GOOGLE_DRIVE_LINK = os.getenv(
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# --- CANLI MASTER STOK VE AKILLI HAFIZA ---
+# --- KİLİT VE CANLI MASTER STOK ---
+bot_lock = threading.Lock()
 inventory_df = pd.DataFrame([
     {"Lot / Blok No": "A-283", "Taş Cinsi (Selection)": "Violet Breccia", "Koleksiyon": "Arslanlar Collection", "Koridor": "A-1", "Plaka Adedi": 12, "Net Metraj (m²)": 68.4, "Birim Fiyat ($/m²)": 65.0, "Toplam Tutar ($)": 4446.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
     {"Lot / Blok No": "B-12", "Taş Cinsi (Selection)": "Beige", "Koleksiyon": "Arslanlar Series", "Koridor": "B-3", "Plaka Adedi": 18, "Net Metraj (m²)": 95.0, "Birim Fiyat ($/m²)": 42.0, "Toplam Tutar ($)": 3990.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
@@ -256,25 +257,27 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     local_path = f"./stok_{doc.file_name}"
     await file.download_to_drive(local_path)
 
-    try:
-        df = parse_any_excel_file(local_path)
-        if not df.empty:
-            inventory_df = df
-            total_m2 = float(df["Net Metraj (m²)"].sum()) if "Net Metraj (m²)" in df.columns else 0.0
-            total_slabs = int(df["Plaka Adedi"].sum()) if "Plaka Adedi" in df.columns else len(df)
-            await update.message.reply_text(
-                f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm sütun başlıklarını ve formatı** hafızama kazıdım. 📋\n"
-                f"✅ **Toplam Lot:** {len(df)} adet | **Toplam Plaka:** {total_slabs} | **Toplam Metraj:** {round(total_m2, 2)} m²",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("Dosya okundu ancak geçerli veri bulunamadı.")
-    except Exception as e:
-        await update.message.reply_text(f"Dosya işlenirken hata oluştu: {e}")
+    with bot_lock:
+        try:
+            df = parse_any_excel_file(local_path)
+            if not df.empty:
+                inventory_df = df
+                total_m2 = float(df["Net Metraj (m²)"].sum()) if "Net Metraj (m²)" in df.columns else 0.0
+                total_slabs = int(df["Plaka Adedi"].sum()) if "Plaka Adedi" in df.columns else len(df)
+                await update.message.reply_text(
+                    f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm sütun başlıklarını ve formatı** hafızama kazıdım. 📋\n"
+                    f"✅ **Toplam Lot:** {len(df)} adet | **Toplam Plaka:** {total_slabs} | **Toplam Metraj:** {round(total_m2, 2)} m²",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text("Dosya okundu ancak geçerli veri bulunamadı.")
+        except Exception as e:
+            await update.message.reply_text(f"Dosya işlenirken hata oluştu: {e}")
 
 
 def generate_packing_list_excel(client_name: str, lot_code: str = None) -> tuple:
-    df = inventory_df.copy()
+    with bot_lock:
+        df = inventory_df.copy()
     filtered = df
     if lot_code:
         m = df[df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot_code)]
@@ -295,7 +298,8 @@ def generate_packing_list_excel(client_name: str, lot_code: str = None) -> tuple
 def build_daily_report_text() -> str:
     tz = pytz.timezone("Europe/Istanbul")
     today_str = datetime.now(tz).strftime("%d.%m.%Y - %H:%M")
-    avail_count = len(inventory_df[inventory_df.get("Durum", "Available") == "Available"])
+    with bot_lock:
+        avail_count = len(inventory_df[inventory_df.get("Durum", "Available") == "Available"])
     return (
         f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n"
         f"🗓 *Tarih:* {today_str}\n\n"
@@ -312,7 +316,9 @@ async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
         try:
             tz = pytz.timezone("Europe/Istanbul")
             now = datetime.now(tz)
-            for idx, row in inventory_df.iterrows():
+            with bot_lock:
+                df_copy = inventory_df.copy()
+            for idx, row in df_copy.iterrows():
                 if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
                     res_date = pd.to_datetime(row["Rezerve_Tarihi"])
                     days_passed = (now - res_date.tz_localize(tz) if res_date.tzinfo is None else now - res_date).days
@@ -352,11 +358,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(natural_reply, parse_mode="Markdown")
 
     if action == "shipment_plan":
-        shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
+        with bot_lock:
+            shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
         await update.message.reply_text(f"🚛 **Sevkiyat Planı Kaydedildi!**\n• *{text}*", parse_mode="Markdown")
 
     elif action == "lot_detail" and lot:
-        match = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)]
+        with bot_lock:
+            match = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)]
         if not match.empty:
             row = match.iloc[0]
             drive_url = row.get("Google Drive Linki", GOOGLE_DRIVE_LINK)
@@ -374,24 +382,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"⚠️ `{lot}` kodlu lot mevcut stokta yok ama Drive koleksiyonlarında aranıyor.", parse_mode="Markdown")
 
     elif action == "reserve" and lot:
-        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-        if len(match_idx) > 0:
-            inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
-            inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
+        with bot_lock:
+            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+            if len(match_idx) > 0:
+                inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
+                inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
         await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` kilitlendi! Her 5 günde bir hatırlatacağım. 🔒", parse_mode="Markdown")
 
     elif action == "sale" and lot:
-        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-        if len(match_idx) > 0:
-            inventory_df.loc[match_idx[0], "Durum"] = "Sold"
-        daily_log["sold"].append({"lot": lot})
+        with bot_lock:
+            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+            if len(match_idx) > 0:
+                inventory_df.loc[match_idx[0], "Durum"] = "Sold"
+            daily_log["sold"].append({"lot": lot})
         await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla satıldı olarak işlendi! 🚀", parse_mode="Markdown")
 
     elif action == "cancel" and lot:
-        match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-        if len(match_idx) > 0:
-            inventory_df.loc[match_idx[0], "Durum"] = "Available"
-            inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = None
+        with bot_lock:
+            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
+            if len(match_idx) > 0:
+                inventory_df.loc[match_idx[0], "Durum"] = "Available"
+                inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = None
         await update.message.reply_text(f"🔄 **İptal:** `{lot}` tekrar serbest stoğa alındı. 💪", parse_mode="Markdown")
 
     elif action == "packing_list":
