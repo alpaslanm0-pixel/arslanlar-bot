@@ -150,17 +150,23 @@ def analyze_message(text: str) -> dict:
     lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
 
     if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme"]):
-        return {"action": "shipment_plan", "lot": lot, "reply": f"Sevkiyat planını işledim patron! 🚛"}
+        return {"action": "shipment_plan", "lot": lot, "filter": "all", "reply": f"Sevkiyat planını işledim patron! 🚛"}
+    elif any(k in t_lower for k in ["stok", "serbest", "müsait"]):
+        return {"action": "packing_list", "lot": lot, "filter": "stok", "reply": f"Lot {lot} için stoktaki / serbest plakaları süzüyorum! 📋"}
+    elif any(k in t_lower for k in ["yüklenen", "sevk"]):
+        return {"action": "packing_list", "lot": lot, "filter": "yuklenen", "reply": f"Lot {lot} için yüklenen plakaları süzüyorum! 🚛"}
+    elif any(k in t_lower for k in ["rezerv"]):
+        return {"action": "packing_list", "lot": lot, "filter": "rezerv", "reply": f"Lot {lot} için rezervli plakaları süzüyorum! 🔒"}
     elif any(k in t_lower for k in ["çeki", "packing", "liste"]):
-        return {"action": "packing_list", "lot": lot, "reply": "Orijinal plaka detaylı çeki listesini hazırlıyorum! 📄"}
+        return {"action": "packing_list", "lot": lot, "filter": "all", "reply": "Orijinal plaka detaylı çeki listesini hazırlıyorum! 📄"}
     elif any(k in t_lower for k in ["link", "drive", "gönder"]):
-        return {"action": "lot_link", "lot": lot, "reply": f"Aradığın lotun özel bağlantısını getiriyorum! 🔗"}
+        return {"action": "lot_link", "lot": lot, "filter": "all", "reply": f"Aradığın lotun nokta atışı Drive bağlantısını getiriyorum! 🔗"}
     elif lot:
-        return {"action": "lot_detail", "lot": lot, "reply": f"Lot {lot} plaka detaylarını inceliyorum! 🔍"}
+        return {"action": "lot_detail", "lot": lot, "filter": "all", "reply": f"Lot {lot} plaka detaylarını inceliyorum! 🔍"}
     elif any(k in t_lower for k in ["rapor", "özet"]):
-        return {"action": "daily_report", "lot": None, "reply": "Günlük operasyon raporunu getiriyorum! 📊"}
+        return {"action": "daily_report", "lot": None, "filter": "all", "reply": "Günlük operasyon raporunu getiriyorum! 📊"}
     else:
-        return {"action": "chat", "lot": None, "reply": "Emredersiniz patron, talimatınızı aldım! ⚡"}
+        return {"action": "chat", "lot": None, "filter": "all", "reply": "Emredersiniz patron, talimatınızı aldım! ⚡"}
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -184,8 +190,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 master_excel_df = df
                 total_rows = len(df)
                 await update.message.reply_text(
-                    f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm orijinal sütunları, plaka satırlarını ve formatı** eksiksiz hafızama kazıdım. 📋\n"
-                    f"✅ **Toplam {total_rows} satır plaka detayı** yüklendi. Artık çeki listeleri ve sorgular tamamen bu orijinal şablonda çalışacak! ⚡",
+                    f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm orijinal sütunları, plaka satırlarını ve durum sütunlarını (Stok/Yüklendi/Rezerv)** eksiksiz hafızama kazıdım. 📋\n"
+                    f"✅ **Toplam {total_rows} satır plaka detayı** yüklendi. Artık filtrelemeler kusursuz çalışacak! ⚡",
                     parse_mode="Markdown"
                 )
             else:
@@ -194,23 +200,37 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Dosya işlenirken hata oluştu: {e}")
 
 
-def generate_factory_packing_list(lot_code: str = None) -> tuple:
+def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all") -> tuple:
     with bot_lock:
         df = master_excel_df.copy()
         
     filtered = df
-    if lot_code and not df.empty:
-        matching_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
-        if matching_cols:
-            mask = False
-            for col in matching_cols:
-                mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
-            temp_filtered = df[mask]
-            if not temp_filtered.empty:
-                filtered = temp_filtered
+    if not df.empty:
+        # Lot/Blok filtresi
+        if lot_code:
+            matching_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
+            if matching_cols:
+                mask = False
+                for col in matching_cols:
+                    mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
+                filtered = df[mask]
 
-    safe_lot = re.sub(r"[^a-zA-Z0-9_-]", "_", lot_code or "Genel")
-    file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_lot}.xlsx"
+        # Alt filtreler (stok, yüklenen, rezerv)
+        if filter_type == "stok":
+            status_cols = [c for c in filtered.columns if "durum" in c.lower() or "stok" in c.lower()]
+            if status_cols:
+                filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
+        elif filter_type == "yuklenen":
+            status_cols = [c for c in filtered.columns if "durum" in c.lower() or "stok" in c.lower()]
+            if status_cols:
+                filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
+        elif filter_type == "rezerv":
+            res_cols = [c for c in filtered.columns if "rezerv" in c.lower() or "satiş" in c.lower()]
+            if res_cols:
+                filtered = filtered[filtered[res_cols[0]].astype(str).str.lower().str.contains("rezerv", na=False)]
+
+    safe_tag = f"{lot_code or 'Genel'}_{filter_type.upper()}"
+    file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_tag}.xlsx"
     filtered.to_excel(file_name, index=False)
     
     total_slabs = len(filtered)
@@ -231,7 +251,7 @@ def build_daily_report_text() -> str:
     return (
         f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n"
         f"🗓 *Tarih:* {today_str}\n\n"
-        f"📦 **Hafızadaki Plaka Kaydı:** {total_rows} Satır (Orijinal Fabrika Şablonu Aktif).\n"
+        f"📦 **Hafızadaki Plaka Kaydı:** {total_rows} Satır (Detaylı Filtre Motoru Aktif).\n"
         f"🔗 [Google Drive Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
         f"Her şey kontrol altında, iyi çalışmalar! ☕💪"
     )
@@ -249,6 +269,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parsed = analyze_message(text)
     action = parsed.get("action", "chat")
     lot = parsed.get("lot")
+    filter_type = parsed.get("filter", "all")
     natural_reply = parsed.get("reply", "Emredersiniz patron! ⚡")
 
     await update.message.reply_text(natural_reply, parse_mode="Markdown")
@@ -259,10 +280,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🚛 **Sevkiyat Planı Kaydedildi!**\n• *{text}*", parse_mode="Markdown")
 
     elif action == "lot_link" and lot:
-        drive_url = GOOGLE_DRIVE_LINK
+        # Nokta atışı eşleşen Drive bağlantısını bulmaya çalışıyoruz
+        target_url = GOOGLE_DRIVE_LINK
+        for item in drive_focused_index:
+            if normalize_key(lot) in normalize_key(item["name"]):
+                target_url = item["url"]
+                break
         await update.message.reply_text(
-            f"🔗 **Lot {lot} İçin Bağlantı:**\n"
-            f"İstediğiniz lotun özel klasör bağlantısı: [Drive'da Aç]({drive_url})",
+            f"🔗 **Lot {lot} İçin Nokta Atışı Bağlantı:**\n"
+            f"Doğrudan ilgili klasör/dosya bağlantısı: [Drive'da Aç]({target_url})",
             parse_mode="Markdown"
         )
 
@@ -281,27 +307,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
         if not match.empty:
             slab_count = len(match)
+            stok_count = 0
+            yuklenen_count = 0
             total_m2 = 0.0
+            
+            status_cols = [c for c in match.columns if "durum" in c.lower() or "stok" in c.lower()]
+            for idx, row in match.iterrows():
+                if status_cols:
+                    val = str(row[status_cols[0]]).lower()
+                    if "stok" in val:
+                        stok_count += 1
+                    elif "yüklen" in val or "yuklen" in val:
+                        yuklenen_count += 1
             for col in match.columns:
                 if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
                     total_m2 = float(pd.to_numeric(match[col], errors="coerce").sum())
                     break
+
             await update.message.reply_text(
-                f"🪨 **Lot / Blok {lot} Fabrika Detayları:**\n"
+                f"🪨 **Lot / Blok {lot} Detaylı Döküm:**\n"
                 f"• Toplam Plaka: *{slab_count} Adet*\n"
-                f"• Toplam Metraj: *{round(total_m2, 2)} m²*\n"
-                f"• Durum: Orijinal plaka listesinden doğrulandı.",
+                f"• Stokta / Serbest: *{stok_count} Adet*\n"
+                f"• Yüklenen: *{yuklenen_count} Adet*\n"
+                f"• Toplam Metraj: *{round(total_m2, 2)} m²*\n\n"
+                f"Çeki listesi almak için 'A-283 stok listesi' veya 'A-283 yüklenenler' yazabilirsiniz.",
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot hafızadaki listede taranıyor.", parse_mode="Markdown")
+            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot hafızada taranıyor.", parse_mode="Markdown")
 
     elif action == "packing_list":
-        file_path, slabs, m2 = generate_factory_packing_list(lot)
+        file_path, slabs, m2 = generate_filtered_packing_list(lot, filter_type)
         with open(file_path, "rb") as f:
             await update.message.reply_document(
                 document=f, 
-                caption=f"✅ **Orijinal Fabrika Şablonuyla Çeki Listesi Hazırlandı!**\n📦 Plaka Adedi: {slabs} | 📐 Toplam Metraj: {round(m2, 2)} m²\n📎 *Gönderdiğin tablonun sütunları ve plaka satırlarıyla birebir hazırlandı!*", 
+                caption=f"✅ **Filtrelenmiş Çeki Listesi Hazırlandı!** ({filter_type.upper()})\n📦 Plaka Adedi: {slabs} | 📐 Toplam Metraj: {round(m2, 2)} m²\n📎 *İstediğiniz kriterlere göre filtrelenmiştir!*", 
                 parse_mode="Markdown"
             )
 
