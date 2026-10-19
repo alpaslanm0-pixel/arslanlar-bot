@@ -40,7 +40,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 # --- KİLİT VE ORİJİNAL FABRİKA HAFIZASI ---
 bot_lock = threading.Lock()
-master_excel_df = pd.DataFrame()  # Kullanıcının attığı orijinal tablonun birebir kopyası
+master_excel_df = pd.DataFrame()
 
 daily_log = {"sold": [], "reserved": [], "cancelled": []}
 shipment_schedules = []
@@ -59,7 +59,6 @@ def normalize_key(text: str) -> str:
 
 
 def parse_factory_excel(file_path_or_bytes) -> pd.DataFrame:
-    """Kullanıcının attığı detaylı fabrika stok listesini hiçbir sütunu bozmadan okur."""
     try:
         if isinstance(file_path_or_bytes, bytes):
             io_obj = io.BytesIO(file_path_or_bytes)
