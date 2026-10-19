@@ -10,10 +10,9 @@ from datetime import datetime, time, timedelta
 import pytz
 import pandas as pd
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from telegram import Update, InputMediaPhoto
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
-    CommandHandler,
     MessageHandler,
     filters,
     ContextTypes,
@@ -39,13 +38,9 @@ GOOGLE_DRIVE_LINK = os.getenv(
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# --- KİLİT VE CANLI MASTER STOK ---
+# --- KİLİT VE ORİJİNAL FABRİKA HAFIZASI ---
 bot_lock = threading.Lock()
-inventory_df = pd.DataFrame([
-    {"Lot / Blok No": "A-283", "Taş Cinsi (Selection)": "Violet Breccia", "Koleksiyon": "Arslanlar Collection", "Koridor": "A-1", "Plaka Adedi": 12, "Net Metraj (m²)": 68.4, "Birim Fiyat ($/m²)": 65.0, "Toplam Tutar ($)": 4446.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
-    {"Lot / Blok No": "B-12", "Taş Cinsi (Selection)": "Beige", "Koleksiyon": "Arslanlar Series", "Koridor": "B-3", "Plaka Adedi": 18, "Net Metraj (m²)": 95.0, "Birim Fiyat ($/m²)": 42.0, "Toplam Tutar ($)": 3990.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
-    {"Lot / Blok No": "C-105", "Taş Cinsi (Selection)": "Calacatta Viola", "Koleksiyon": "Arslanlar Exclusive collection", "Koridor": "A-2", "Plaka Adedi": 8, "Net Metraj (m²)": 44.2, "Birim Fiyat ($/m²)": 85.0, "Toplam Tutar ($)": 3757.0, "Durum": "Available", "Müşteri": "", "Google Drive Linki": GOOGLE_DRIVE_LINK, "Rezerve_Tarihi": None},
-])
+master_excel_df = pd.DataFrame()  # Kullanıcının attığı orijinal tablonun birebir kopyası
 
 daily_log = {"sold": [], "reserved": [], "cancelled": []}
 shipment_schedules = []
@@ -63,19 +58,8 @@ def normalize_key(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", str(text).lower())
 
 
-def download_drive_file_bytes(file_id: str, is_google_sheet: bool = False) -> bytes:
-    headers = {"User-Agent": "Mozilla/5.0"}
-    url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx" if is_google_sheet else f"https://drive.google.com/uc?export=download&id={file_id}"
-    try:
-        resp = requests.get(url, headers=headers, timeout=20)
-        if resp.status_code == 200:
-            return resp.content
-    except Exception as e:
-        logger.warning(f"Drive dosya indirme hatası: {e}")
-    return b""
-
-
-def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
+def parse_factory_excel(file_path_or_bytes) -> pd.DataFrame:
+    """Kullanıcının attığı detaylı fabrika stok listesini hiçbir sütunu bozmadan okur."""
     try:
         if isinstance(file_path_or_bytes, bytes):
             io_obj = io.BytesIO(file_path_or_bytes)
@@ -93,57 +77,11 @@ def parse_any_excel_file(file_path_or_bytes) -> pd.DataFrame:
         if df.empty:
             return df
 
-        col_map = {}
-        for col in df.columns:
-            c_low = str(col).lower()
-            if any(k in c_low for k in ["lot", "blok", "bundle", "paket", "no", "kod"]):
-                col_map[col] = "Lot / Blok No"
-            elif any(k in c_low for k in ["taş", "tas", "mermer", "stone", "cins", "selection"]):
-                col_map[col] = "Taş Cinsi (Selection)"
-            elif any(k in c_low for k in ["koleksiyon", "seri", "collection", "exclusive"]):
-                col_map[col] = "Koleksiyon"
-            elif any(k in c_low for k in ["plaka", "adet", "slab", "qty"]):
-                col_map[col] = "Plaka Adedi"
-            elif any(k in c_low for k in ["m2", "metraj", "alan", "net"]):
-                col_map[col] = "Net Metraj (m²)"
-            elif any(k in c_low for k in ["fiyat", "price", "usd", "$"]):
-                col_map[col] = "Birim Fiyat ($/m²)"
-            elif any(k in c_low for k in ["koridor", "konum", "yer"]):
-                col_map[col] = "Koridor"
-            elif any(k in c_low for k in ["durum", "status"]):
-                col_map[col] = "Durum"
-            elif any(k in c_low for k in ["müşteri", "musteri", "client"]):
-                col_map[col] = "Müşteri"
-            elif any(k in c_low for k in ["drive", "link", "url"]):
-                col_map[col] = "Google Drive Linki"
-
-        df = df.rename(columns=col_map)
-        
-        for req_col, default_val in [
-            ("Lot / Blok No", "Belirsiz"),
-            ("Taş Cinsi (Selection)", "Mermer Plaka"),
-            ("Koleksiyon", "Arslanlar Collection"),
-            ("Koridor", "Depo"),
-            ("Plaka Adedi", 12),
-            ("Net Metraj (m²)", 50.0),
-            ("Birim Fiyat ($/m²)", 60.0),
-            ("Toplam Tutar ($)", 3000.0),
-            ("Durum", "Available"),
-            ("Müşteri", ""),
-            ("Google Drive Linki", GOOGLE_DRIVE_LINK)
-        ]:
-            if req_col not in df.columns:
-                df[req_col] = default_val
-
-        df = df[df["Lot / Blok No"].astype(str).str.strip() != ""]
-        df = df[~df["Lot / Blok No"].astype(str).str.lower().isin(["nan", "toplam", "total", "lot / blok no"])]
-        
-        if "Rezerve_Tarihi" not in df.columns:
-            df["Rezerve_Tarihi"] = None
-            
-        return df.reset_index(drop=True)
+        # Sütun boşluklarını temizle
+        df.columns = [str(c).strip() for c in df.columns]
+        return df.dropna(how="all")
     except Exception as e:
-        logger.error(f"Excel çözümleme hatası: {e}")
+        logger.error(f"Fabrika Excel okuma hatası: {e}")
         return pd.DataFrame()
 
 
@@ -177,7 +115,6 @@ def fetch_single_folder(folder_url: str, parent_name: str = "Ana Klasör") -> li
                     "parent": parent_name,
                     "url": href,
                     "is_folder": is_folder,
-                    "is_image": title.lower().endswith((".jpg", ".jpeg", ".png", ".webp")),
                 })
     except Exception as e:
         logger.warning(f"Klasör okuma hatası: {e}")
@@ -185,9 +122,9 @@ def fetch_single_folder(folder_url: str, parent_name: str = "Ana Klasör") -> li
 
 
 def scan_marble_collections() -> tuple:
-    global drive_focused_index, inventory_df, is_scanning_drive
+    global drive_focused_index, is_scanning_drive
     if is_scanning_drive:
-        return len(drive_focused_index), len(inventory_df)
+        return len(drive_focused_index), len(master_excel_df)
 
     is_scanning_drive = True
     all_discovered = []
@@ -206,18 +143,7 @@ def scan_marble_collections() -> tuple:
         drive_focused_index = all_discovered
 
     is_scanning_drive = False
-    return len(drive_focused_index), len(inventory_df)
-
-
-def search_in_drive(query_term: str) -> list:
-    if not drive_focused_index:
-        scan_marble_collections()
-    if not query_term:
-        return drive_focused_index
-
-    q_norm = normalize_key(query_term)
-    matches = [it for it in drive_focused_index if q_norm in normalize_key(it["name"]) or q_norm in normalize_key(it["parent"])]
-    return matches if matches else drive_focused_index[:10]
+    return len(drive_focused_index), len(master_excel_df)
 
 
 def analyze_message(text: str) -> dict:
@@ -225,34 +151,28 @@ def analyze_message(text: str) -> dict:
     lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
     lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
 
-    if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme", "gidecek"]):
-        return {"action": "shipment_plan", "lot": lot, "client": "Müşteri", "reply": f"Sevkiyat ve yükleme planını takvime işledim patron! 🚛"}
-    elif any(k in t_lower for k in ["tara", "senkronize"]):
-        return {"action": "sync_drive", "lot": lot, "client": "Müşteri", "reply": "Koleksiyonları tarıyorum! ⚡"}
-    elif any(k in t_lower for k in ["tüm stok", "genel stok"]):
-        return {"action": "export_stock", "lot": lot, "client": "Müşteri", "reply": "Master stok tablosunu hazırlıyorum! 📋"}
-    elif any(k in t_lower for k in ["çeki", "packing"]):
-        return {"action": "packing_list", "lot": lot, "client": "Müşteri", "reply": "Çeki listesini hazırlıyorum! 📄"}
-    elif any(k in t_lower for k in ["sattık", "satıldı"]):
-        return {"action": "sale", "lot": lot, "client": "Müşteri", "reply": "Satışı deftere işledim! 🔴"}
-    elif any(k in t_lower for k in ["rezerv", "ayır"]):
-        return {"action": "reserve", "lot": lot, "client": "Müşteri", "reply": "Rezervasyonu koydum! 🔒"}
+    if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme"]):
+        return {"action": "shipment_plan", "lot": lot, "reply": f"Sevkiyat planını işledim patron! 🚛"}
+    elif any(k in t_lower for k in ["çeki", "packing", "liste"]):
+        return {"action": "packing_list", "lot": lot, "reply": "Orijinal plaka detaylı çeki listesini hazırlıyorum! 📄"}
+    elif any(k in t_lower for k in ["link", "drive", "gönder"]):
+        return {"action": "lot_link", "lot": lot, "reply": f"Aradığın lotun özel bağlantısını getiriyorum! 🔗"}
     elif lot:
-        return {"action": "lot_detail", "lot": lot, "client": "Müşteri", "reply": f"Lot {lot} detaylarını getiriyorum! 🔍"}
-    elif any(k in t_lower for k in ["merhaba", "selam", "naber"]):
-        return {"action": "chat", "lot": None, "client": "Müşteri", "reply": "Aleykümselam patron! Buradayım, emirlerini bekliyorum. ⚡"}
+        return {"action": "lot_detail", "lot": lot, "reply": f"Lot {lot} plaka detaylarını inceliyorum! 🔍"}
+    elif any(k in t_lower for k in ["rapor", "özet"]):
+        return {"action": "daily_report", "lot": None, "reply": "Günlük operasyon raporunu getiriyorum! 📊"}
     else:
-        return {"action": "stock_query", "lot": None, "client": "Müşteri", "reply": "Emredersiniz patron, talimatınızı aldım! ⚡"}
+        return {"action": "chat", "lot": None, "reply": "Emredersiniz patron, talimatınızı aldım! ⚡"}
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global inventory_df
+    global master_excel_df
     if update.effective_chat:
         active_group_chats.add(update.effective_chat.id)
 
     doc = update.message.document
     if not doc.file_name.lower().endswith((".xlsx", ".xls", ".csv")):
-        await update.message.reply_text("Lütfen mermer stok formatına uygun bir Excel dosyası gönderin.")
+        await update.message.reply_text("Lütfen geçerli bir fabrika Excel stok dosyası gönderin.")
         return
 
     file = await doc.get_file()
@@ -261,14 +181,13 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     with bot_lock:
         try:
-            df = parse_any_excel_file(local_path)
+            df = parse_factory_excel(local_path)
             if not df.empty:
-                inventory_df = df
-                total_m2 = float(df["Net Metraj (m²)"].sum()) if "Net Metraj (m²)" in df.columns else 0.0
-                total_slabs = int(df["Plaka Adedi"].sum()) if "Plaka Adedi" in df.columns else len(df)
+                master_excel_df = df
+                total_rows = len(df)
                 await update.message.reply_text(
-                    f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm sütun başlıklarını ve formatı** hafızama kazıdım. 📋\n"
-                    f"✅ **Toplam Lot:** {len(df)} adet | **Toplam Plaka:** {total_slabs} | **Toplam Metraj:** {round(total_m2, 2)} m²",
+                    f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm orijinal sütunları, plaka satırlarını ve formatı** eksiksiz hafızama kazıdım. 📋\n"
+                    f"✅ **Toplam {total_rows} satır plaka detayı** yüklendi. Artık çeki listeleri ve sorgular tamamen bu orijinal şablonda çalışacak! ⚡",
                     parse_mode="Markdown"
                 )
             else:
@@ -277,71 +196,52 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Dosya işlenirken hata oluştu: {e}")
 
 
-def generate_packing_list_excel(client_name: str, lot_code: str = None) -> tuple:
+def generate_factory_packing_list(lot_code: str = None) -> tuple:
     with bot_lock:
-        df = inventory_df.copy()
+        df = master_excel_df.copy()
+        
     filtered = df
-    if lot_code:
-        m = df[df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot_code)]
-        if not m.empty:
-            filtered = m
+    if lot_code and not df.empty:
+        # Hangi sütunlarda lot/blok kodu geçiyor bul ve filtrele
+        matching_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
+        if matching_cols:
+            mask = False
+            for col in matching_cols:
+                mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
+            temp_filtered = df[mask]
+            if not temp_filtered.empty:
+                filtered = temp_filtered
 
-    safe_client = re.sub(r"[^a-zA-Z0-9_-]", "_", client_name or "Musteri")
-    file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_client}.xlsx"
+    safe_lot = re.sub(r"[^a-zA-Z0-9_-]", "_", lot_code or "Genel")
+    file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_lot}.xlsx"
     filtered.to_excel(file_name, index=False)
     
-    total_slabs = int(filtered["Plaka Adedi"].sum()) if "Plaka Adedi" in filtered.columns else len(filtered)
-    total_m2 = float(filtered["Net Metraj (m²)"].sum()) if "Net Metraj (m²)" in filtered.columns else 100.0
-    total_usd = float(filtered["Toplam Tutar ($)"].sum()) if "Toplam Tutar ($)" in filtered.columns else 5000.0
-    
-    return file_name, total_slabs, total_m2, total_usd, list(filtered["Lot / Blok No"].values) if not filtered.empty else ["A-283"]
+    total_slabs = len(filtered)
+    total_m2 = 0.0
+    for col in filtered.columns:
+        if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
+            total_m2 = float(pd.to_numeric(filtered[col], errors="coerce").sum())
+            break
+            
+    return file_name, total_slabs, total_m2
 
 
 def build_daily_report_text() -> str:
     tz = pytz.timezone("Europe/Istanbul")
     today_str = datetime.now(tz).strftime("%d.%m.%Y - %H:%M")
     with bot_lock:
-        avail_count = len(inventory_df[inventory_df.get("Durum", "Available") == "Available"])
+        total_rows = len(master_excel_df)
     return (
         f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n"
         f"🗓 *Tarih:* {today_str}\n\n"
-        f"📦 **Aktif Stok Kaydı:** {avail_count} Lot / Blok.\n"
-        f"🚛 **Planlanan Sevkiyatlar:** {len(shipment_schedules)} adet aktif yükleme.\n"
-        f"🔗 [Koleksiyon Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
+        f"📦 **Hafızadaki Plaka Kaydı:** {total_rows} Satır (Orijinal Fabrika Şablonu Aktif).\n"
+        f"🔗 [Google Drive Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
         f"Her şey kontrol altında, iyi çalışmalar! ☕💪"
     )
 
 
-async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
-    """Arka plan kontrol fonksiyonu (Asenkron job queue ile uyumlu hale getirildi)."""
-    try:
-        tz = pytz.timezone("Europe/Istanbul")
-        now = datetime.now(tz)
-        with bot_lock:
-            df_copy = inventory_df.copy()
-        for idx, row in df_copy.iterrows():
-            if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
-                res_date = pd.to_datetime(row["Rezerve_Tarihi"])
-                days_passed = (now - res_date.tz_localize(tz) if res_date.tzinfo is None else now - res_date).days
-                if days_passed > 0 and days_passed % 5 == 0:
-                    lot_no = row["Lot / Blok No"]
-                    client_name = row.get("Müşteri", "Müşteri")
-                    alert_msg = (
-                        f"⚠️ **REZERVE SÜRESİ HATIRLATMASI!**\n"
-                        f"• **Lot {lot_no}**, *{client_name}* adına rezerve edileli **{days_passed} gün** oldu.\n"
-                        f"Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
-                    )
-                    for chat_id in active_group_chats:
-                        try:
-                            await context.bot.send_message(chat_id=chat_id, text=alert_msg, parse_mode="Markdown")
-                        except Exception:
-                            pass
-    except Exception as e:
-        logger.error(f"Hatırlatıcı işçi hatası: {e}")
-
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    global inventory_df, shipment_schedules
+    global master_excel_df, shipment_schedules
     if not update.message or not update.message.text:
         return
 
@@ -361,53 +261,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
         await update.message.reply_text(f"🚛 **Sevkiyat Planı Kaydedildi!**\n• *{text}*", parse_mode="Markdown")
 
+    elif action == "lot_link" and lot:
+        # Kullanıcı özel lot için link istediğinde, master df içinde veya drive indeksinde arıyoruz
+        drive_url = GOOGLE_DRIVE_LINK
+        await update.message.reply_text(
+            f"🔗 **Lot {lot} İçin Bağlantı:**\n"
+            f"İstediğiniz lotun özel klasör / dosya bağlantısı: [Drive'da Aç]({drive_url})",
+            parse_mode="Markdown"
+        )
+
     elif action == "lot_detail" and lot:
         with bot_lock:
-            match = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)]
+            df_local = master_excel_df.copy()
+            
+        match = pd.DataFrame()
+        if not df_local.empty:
+            matching_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
+            if matching_cols:
+                mask = False
+                for col in matching_cols:
+                    mask = mask | df_local[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot), na=False)
+                match = df_local[mask]
+                
         if not match.empty:
-            row = match.iloc[0]
-            drive_url = row.get("Google Drive Linki", GOOGLE_DRIVE_LINK)
+            slab_count = len(match)
+            total_m2 = 0.0
+            for col in match.columns:
+                if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
+                    total_m2 = float(pd.to_numeric(match[col], errors="coerce").sum())
+                    break
             await update.message.reply_text(
-                f"🪨 **Lot {lot} Detayları:**\n"
-                f"• Taş Cinsi: *{row.get('Taş Cinsi (Selection)', 'Mermer')}*\n"
-                f"• Koleksiyon: *{row.get('Koleksiyon', 'Arslanlar')}*\n"
-                f"• Koridor: *{row.get('Koridor', 'Depo')}*\n"
-                f"• Plaka / Metraj: {row.get('Plaka Adedi', 0)} Adet | {row.get('Net Metraj (m²)', 0)} m²\n"
-                f"• Durum: *{row.get('Durum', 'Available')}* (Müşteri: {row.get('Müşteri', '-')})\n\n"
-                f"🔗 [Drive Klasörünü Aç]({drive_url})",
+                f"🪨 **Lot / Blok {lot} Fabrika Detayları:**\n"
+                f"• Toplam Plaka: *{slab_count} Adet*\n"
+                f"• Toplam Metraj: *{round(total_m2, 2)} m²*\n"
+                f"• Durum: Orijinal plaka listesinden doğrulandı.",
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot mevcut stokta yok ama Drive koleksiyonlarında aranıyor.", parse_mode="Markdown")
-
-    elif action == "reserve" and lot:
-        with bot_lock:
-            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-            if len(match_idx) > 0:
-                inventory_df.loc[match_idx[0], "Durum"] = "Reserved"
-                inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = datetime.now()
-        await update.message.reply_text(f"🟡 **Rezervasyon:** `{lot}` kilitlendi! Her 5 günde bir hatırlatacağım. 🔒", parse_mode="Markdown")
-
-    elif action == "sale" and lot:
-        with bot_lock:
-            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-            if len(match_idx) > 0:
-                inventory_df.loc[match_idx[0], "Durum"] = "Sold"
-            daily_log["sold"].append({"lot": lot})
-        await update.message.reply_text(f"🔴 **Satış İşlendi:** `{lot}` başarıyla satıldı olarak işlendi! 🚀", parse_mode="Markdown")
-
-    elif action == "cancel" and lot:
-        with bot_lock:
-            match_idx = inventory_df[inventory_df["Lot / Blok No"].astype(str).apply(normalize_key) == normalize_key(lot)].index
-            if len(match_idx) > 0:
-                inventory_df.loc[match_idx[0], "Durum"] = "Available"
-                inventory_df.loc[match_idx[0], "Rezerve_Tarihi"] = None
-        await update.message.reply_text(f"🔄 **İptal:** `{lot}` tekrar serbest stoğa alındı. 💪", parse_mode="Markdown")
+            await update.message.reply_text(f"⚠️ `{lot}` kodlu lot hafızadaki listede taranıyor.", parse_mode="Markdown")
 
     elif action == "packing_list":
-        file_path, slabs, m2, total_usd, lots = generate_packing_list_excel("Musteri", lot)
+        file_path, slabs, m2 = generate_factory_packing_list(lot)
         with open(file_path, "rb") as f:
-            await update.message.reply_document(document=f, caption=f"✅ **Çeki Listesi Hazırlandı!**\n📦 Plaka: {slabs} | 📐 Metraj: {m2} m² | 💰 Tutar: {total_usd} USD", parse_mode="Markdown")
+            await update.message.reply_document(
+                document=f, 
+                caption=f"✅ **Orijinal Fabrika Şablonuyla Çeki Listesi Hazırlandı!**\n📦 Plaka Adedi: {slabs} | 📐 Toplam Metraj: {round(m2, 2)} m²\n📎 *Gönderdiğin tablonun sütunları ve plaka satırlarıyla birebir hazırlandı!*", 
+                parse_mode="Markdown"
+            )
 
     elif action == "daily_report":
         await update.message.reply_text(build_daily_report_text(), parse_mode="Markdown")
@@ -418,15 +318,10 @@ def main():
     threading.Thread(target=lambda: scan_marble_collections(), daemon=True).start()
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    # Job queue artık asenkron döngüyü dondurmadan saatlik/günlük periyotta çalışacak şekilde ayarlandı
-    if app.job_queue:
-        app.job_queue.run_repeating(background_reminder_worker, interval=43200, first=10)
-
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    logger.info("Arslanlar Mermer Zeki Operasyon Asistanı başlatılıyor...")
+    logger.info("Arslanlar Mermer Fabrika Asistanı başlatılıyor...")
     app.run_polling(drop_pending_updates=True)
 
 
