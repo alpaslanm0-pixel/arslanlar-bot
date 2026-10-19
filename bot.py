@@ -313,34 +313,31 @@ def build_daily_report_text() -> str:
 
 
 async def background_reminder_worker(context: ContextTypes.DEFAULT_TYPE):
-    global inventory_df, shipment_schedules
-    while True:
-        try:
-            tz = pytz.timezone("Europe/Istanbul")
-            now = datetime.now(tz)
-            with bot_lock:
-                df_copy = inventory_df.copy()
-            for idx, row in df_copy.iterrows():
-                if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
-                    res_date = pd.to_datetime(row["Rezerve_Tarihi"])
-                    days_passed = (now - res_date.tz_localize(tz) if res_date.tzinfo is None else now - res_date).days
-                    if days_passed > 0 and days_passed % 5 == 0:
-                        lot_no = row["Lot / Blok No"]
-                        client_name = row.get("Müşteri", "Müşteri")
-                        alert_msg = (
-                            f"⚠️ **REZERVE SÜRESİ HATIRLATMASI!**\n"
-                            f"• **Lot {lot_no}**, *{client_name}* adına rezerve edileli **{days_passed} gün** oldu.\n"
-                            f"Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
-                        )
-                        for chat_id in active_group_chats:
-                            try:
-                                await context.bot.send_message(chat_id=chat_id, text=alert_msg, parse_mode="Markdown")
-                            except Exception:
-                                pass
-        except Exception as e:
-            logger.error(f"Hatırlatıcı işçi hatası: {e}")
-        import time as t
-        t.sleep(43200)
+    """Arka plan kontrol fonksiyonu (Asenkron job queue ile uyumlu hale getirildi)."""
+    try:
+        tz = pytz.timezone("Europe/Istanbul")
+        now = datetime.now(tz)
+        with bot_lock:
+            df_copy = inventory_df.copy()
+        for idx, row in df_copy.iterrows():
+            if row.get("Durum") == "Reserved" and row.get("Rezerve_Tarihi"):
+                res_date = pd.to_datetime(row["Rezerve_Tarihi"])
+                days_passed = (now - res_date.tz_localize(tz) if res_date.tzinfo is None else now - res_date).days
+                if days_passed > 0 and days_passed % 5 == 0:
+                    lot_no = row["Lot / Blok No"]
+                    client_name = row.get("Müşteri", "Müşteri")
+                    alert_msg = (
+                        f"⚠️ **REZERVE SÜRESİ HATIRLATMASI!**\n"
+                        f"• **Lot {lot_no}**, *{client_name}* adına rezerve edileli **{days_passed} gün** oldu.\n"
+                        f"Satış kesinleşiyorsa 'SOLD' yapalım, değilse stoğa geri alalım!"
+                    )
+                    for chat_id in active_group_chats:
+                        try:
+                            await context.bot.send_message(chat_id=chat_id, text=alert_msg, parse_mode="Markdown")
+                        except Exception:
+                            pass
+    except Exception as e:
+        logger.error(f"Hatırlatıcı işçi hatası: {e}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -422,6 +419,7 @@ def main():
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
+    # Job queue artık asenkron döngüyü dondurmadan saatlik/günlük periyotta çalışacak şekilde ayarlandı
     if app.job_queue:
         app.job_queue.run_repeating(background_reminder_worker, interval=43200, first=10)
 
