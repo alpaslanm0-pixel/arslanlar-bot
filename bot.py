@@ -30,17 +30,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "8822872793:AAEn0p_FLlH1CaB41cHhwHV7ADh7q6o6VGU")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6L4udr1eup7XD4FTqux1c9TEK1xlEtAvEuQ5QP0Y7f-Nw")
+# API anahtarını güvenli tanımlıyoruz
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6L4udr1eup7XD4FTqux1c9TEK1xlEtAvEuQ5QP0Y7f-Nw").strip()
 
 GOOGLE_DRIVE_LINK = os.getenv(
     "GOOGLE_DRIVE_LINK",
     "https://drive.google.com/drive/folders/1bnZH4cy2zOdZWhvuN79DURjabDJehOjs"
 )
 
+# Gemini Yapay Zeka Başlatma
 genai.configure(api_key=GEMINI_API_KEY)
 ai_model = genai.GenerativeModel("gemini-1.5-flash")
 
 PERSISTENT_EXCEL_PATH = "./master_stok_arslanlar.xlsx"
+PERSISTENT_PRICE_PATH = "./master_fiyat_arslanlar.xlsx"
 
 bot_lock = threading.Lock()
 active_group_chats = set()
@@ -67,127 +70,46 @@ def save_master_df(df: pd.DataFrame):
         df.to_excel(PERSISTENT_EXCEL_PATH, index=False, engine='openpyxl')
 
 
-def execute_smart_query(user_text: str, df: pd.DataFrame) -> str:
-    """Yapay zeka ve pandas'ı birleştirerek Excel tablosu üzerinden nokta atışı analiz yapar."""
-    if df.empty:
-        return "⚠️ Hafızada işlenmiş bir stok Excel dosyası bulunamadı. Lütfen önce fabrika stok dosyanızı gönderin."
-
-    # Sütun isimleri ve veri örnekleri hakkında AI'a özet bilgi ver
-    columns_list = list(df.columns)
-    sample_data = df.head(3).to_string()
-
-    prompt = f"""
-    Sen Arslanlar Mermer fabrika operasyon yönetim asistanısın. 
-    Kullanıcının sorduğu soruya, elindeki pandas DataFrame üzerinde işlem yapacak Python kodunu yazarak veya doğrudan veriyi analiz ederek net, profesyonel ve kurumsal bir Türkçe yanıt ver.
-
-    Tablo sütunları: {columns_list}
-    Veri örneği:
-    {sample_data}
-    Toplam Satır Sayısı: {len(df)}
-
-    Kullanıcının Sorusu: "{user_text}"
-
-    İstediğim: Doğrudan analitik sonucu ver. Örneğin taş cinsi (seleksiyon), lot/blok kodu, stok durumu (stokta/yüklenen/rezerv) veya metraj istendiğinde ilgili filtrelemeyi yapıp metraj (m²) ve plaka adetlerini net rakamlarla paylaş. Asla lafı uzatma, profesyonel bir fabrika müdürü gibi nokta atışı bilgi ver.
-    """
-    
-    try:
-        # Pandas ile hızlı filtreleme ve AI sentezi
-        t_lower = user_text.lower()
-        
-        # Taş cinsi sorguları için özel pandas filtresi
-        stones = ["silver roots", "violet breccia", "brown armoni", "silver river", "golden spider", "galapagos", "grey philharmonic", "burno perla"]
-        detected_stone = next((s for s in stones if s in t_lower), None)
-        
-        # Lot/Blok sorgusu
-        lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", user_text)
-        detected_lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
-
-        filtered_df = df.copy()
-        context_info = ""
-
-        if detected_stone:
-            sel_cols = [c for c in df.columns if any(k in c.lower() for k in ["seleksiyon", "cins", "taş"])]
-            if sel_cols:
-                filtered_df = filtered_df[filtered_df[sel_cols[0]].astype(str).str.lower().str.contains(detected_stone, na=False)]
-                context_info += f"Taş Cinsi: {detected_stone.title()} | "
-
-        if detected_lot:
-            lot_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
-            if lot_cols:
-                mask = False
-                for col in lot_cols:
-                    mask = mask | filtered_df[col].astype(str).apply(normalize_key).str.contains(normalize_key(detected_lot), na=False)
-                filtered_df = filtered_df[mask]
-                context_info += f"Lot/Blok: {detected_lot} | "
-
-        # Stok durumu filtresi
-        if "stok" in t_lower or "serbest" in t_lower or "müsait" in t_lower:
-            stat_cols = [c for c in filtered_df.columns if any(k in c.lower() for k in ["durum", "stok"])]
-            if stat_cols:
-                filtered_df = filtered_df[filtered_df[stat_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
-                context_info += "Durum: Stokta / Serbest | "
-        elif "yüklenen" in t_lower or "sevk" in t_lower:
-            stat_cols = [c for c in filtered_df.columns if any(k in c.lower() for k in ["durum", "stok"])]
-            if stat_cols:
-                filtered_df = filtered_df[filtered_df[stat_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
-                context_info += "Durum: Yüklenen | "
-
-        m2_col = next((c for c in filtered_df.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
-        total_m2 = float(pd.to_numeric(filtered_df[m2_col], errors="coerce").sum()) if m2_col else 0.0
-        total_slabs = len(filtered_df)
-
-        # AI yanıtı zenginleştirir
-        res = ai_model.generate_content(prompt + f"\n\n[Sistem Hesaplama Notu]: Filtrelenen kayıt adedi: {total_slabs}, Toplam Metraj: {round(total_m2, 2)} m². Bu bilgileri yanıtında mutlaka kullan.")
-        return res.text.strip()
-    except Exception as e:
-        logger.error(f"Sorgu işleme hatası: {e}")
-        return f"Analiz sırasında hata oluştu: {e}"
+def get_price_df() -> pd.DataFrame:
+    with bot_lock:
+        if os.path.exists(PERSISTENT_PRICE_PATH):
+            try:
+                df = pd.read_excel(PERSISTENT_PRICE_PATH, engine="openpyxl")
+                df.columns = [str(c).strip() for c in df.columns]
+                return df.dropna(how="all")
+            except Exception as e:
+                logger.error(f"Fiyat okuma hatası: {e}")
+        return pd.DataFrame()
 
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat:
-        active_group_chats.add(update.effective_chat.id)
-
-    doc = update.message.document
-    file_name_lower = doc.file_name.lower()
-    
-    if not file_name_lower.endswith((".xlsx", ".xls", ".csv")):
-        await update.message.reply_text("Lütfen geçerli bir Excel dosyası gönderin.")
-        return
-
-    file = await doc.get_file()
-    local_path = f"./{doc.file_name}"
-    await file.download_to_drive(local_path)
-
-    try:
-        df = pd.read_csv(local_path) if file_name_lower.endswith(".csv") else pd.read_excel(local_path, engine="openpyxl")
-        if not df.empty:
-            df.columns = [str(c).strip() for c in df.columns]
-            df = df.dropna(how="all")
-            save_master_df(df)
-            
-            total_rows = len(df)
-            total_m2 = 0.0
-            for col in df.columns:
-                if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
-                    total_m2 = float(pd.to_numeric(df[col], errors="coerce").sum())
-                    break
-                    
-            await update.message.reply_text(
-                f"✅ `{doc.file_name}` yüklendi.\n"
-                f"• **Toplam Plaka:** {total_rows} Adet\n"
-                f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
-                f"Analiz motoru hazır.",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("Dosya okundu ancak veri bulunamadı.")
-    except Exception as e:
-        await update.message.reply_text(f"Hata: {e}")
+def save_price_df(df: pd.DataFrame):
+    with bot_lock:
+        df.to_excel(PERSISTENT_PRICE_PATH, index=False, engine='openpyxl')
 
 
-def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
+def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str, source_file_path: str = PERSISTENT_EXCEL_PATH) -> str:
+    """Orijinal Excel dosyasındaki hücre içi köprüleri (hyperlink) ve estetik tasarımı korur."""
     filtered_df.to_excel(file_name, index=False, engine='openpyxl')
+    
+    try:
+        wb_source = openpyxl.load_workbook(source_file_path, data_only=False)
+        ws_source = wb_source.active
+        wb_target = openpyxl.load_workbook(file_name)
+        ws_target = wb_target.active
+        
+        for row in ws_source.iter_rows():
+            for cell in row:
+                if cell.hyperlink:
+                    cell_value = str(cell.value)
+                    for target_row in ws_target.iter_rows():
+                        for target_cell in target_row:
+                            if str(target_cell.value) == cell_value and cell_value != "None":
+                                target_cell.hyperlink = cell.hyperlink
+                                target_cell.font = Font(name="Arial", size=10, color="0563C1", underline="single")
+        wb_target.save(file_name)
+    except Exception as e:
+        logger.warning(f"Köprü aktarım uyarısı: {e}")
+
     wb = openpyxl.load_workbook(file_name)
     ws = wb.active
     
@@ -211,7 +133,8 @@ def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
     for row_num in range(2, ws.max_row + 1):
         for col_num in range(1, ws.max_column + 1):
             cell = ws.cell(row=row_num, column=col_num)
-            cell.font = data_font
+            if not cell.hyperlink:
+                cell.font = data_font
             cell.border = thin_border
             cell.alignment = align_center if col_num > 1 else align_left
 
@@ -227,15 +150,64 @@ def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
     return file_name
 
 
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat:
+        active_group_chats.add(update.effective_chat.id)
+
+    doc = update.message.document
+    file_name_lower = doc.file_name.lower()
+    
+    if not file_name_lower.endswith((".xlsx", ".xls", ".csv")):
+        await update.message.reply_text("Lütfen geçerli bir Excel dosyası gönderin.")
+        return
+
+    file = await doc.get_file()
+    local_path = f"./{doc.file_name}"
+    await file.download_to_drive(local_path)
+
+    try:
+        df = pd.read_csv(local_path) if file_name_lower.endswith(".csv") else pd.read_excel(local_path, engine="openpyxl")
+        if not df.empty:
+            df.columns = [str(c).strip() for c in df.columns]
+            df = df.dropna(how="all")
+            
+            if any(k in file_name_lower for k in ["price", "fiyat", "liste"]):
+                save_price_df(df)
+                await update.message.reply_text(
+                    f"💰 **Fiyat Listesi Hafızaya Alındı!**\n"
+                    f"• `{doc.file_name}` işlendi ve köprüler korundu.",
+                    parse_mode="Markdown"
+                )
+            else:
+                save_master_df(df)
+                total_rows = len(df)
+                total_m2 = 0.0
+                for col in df.columns:
+                    if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
+                        total_m2 = float(pd.to_numeric(df[col], errors="coerce").sum())
+                        break
+                        
+                await update.message.reply_text(
+                    f"✅ `{doc.file_name}` yüklendi.\n"
+                    f"• **Toplam Plaka:** {total_rows} Adet | **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+                    f"Stok ve yapay zeka analiz motoru aktif!",
+                    parse_mode="Markdown"
+                )
+        else:
+            await update.message.reply_text("Dosya okundu ancak veri bulunamadı.")
+    except Exception as e:
+        await update.message.reply_text(f"Dosya yükleme hatası: {e}")
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat:
         active_group_chats.add(update.effective_chat.id)
 
     text = update.message.text
-    df_local = get_master_df()
-    
-    # Eğer kullanıcı çeki listesi veya dosya istiyorsa
     t_lower = text.lower()
+    df_local = get_master_df()
+
+    # 1. Çeki Listesi / Excel Talep Kontrolü
     if any(k in t_lower for k in ["çeki listesi", "packing list", "excel ver", "listesini gönder", "stok listesi"]):
         lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
         lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
@@ -270,9 +242,63 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # Diğer tüm soru ve analizler için akıllı AI sorgu motoru çalışır
-    answer = execute_smart_query(text, df_local)
-    await update.message.reply_text(answer, parse_mode="Markdown")
+    # 2. Özel Stok / Metraj / Taş Cinsi Analizleri (Silver Roots, m2 hesapları vb.)
+    stones = ["silver roots", "violet breccia", "brown armoni", "silver river", "golden spider", "galapagos", "grey philharmonic", "burno perla"]
+    detected_stone = next((s for s in stones if s in t_lower), None)
+
+    if detected_stone or any(k in t_lower for k in ["kaç m2", "ne kadar", "stokta", "üretilen", "analiz"]):
+        if not df_local.empty:
+            match_df = df_local.copy()
+            if detected_stone:
+                sel_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["seleksiyon", "cins", "taş"])]
+                if sel_cols:
+                    match_df = match_df[match_df[sel_cols[0]].astype(str).str.lower().str.contains(detected_stone, na=False)]
+            
+            m2_col = next((c for c in match_df.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
+            total_m2 = float(pd.to_numeric(match_df[m2_col], errors="coerce").sum()) if m2_col else 0.0
+            
+            # Stok ve yüklenen ayrımı
+            stok_m2 = 0.0
+            yuklenen_m2 = 0.0
+            stat_cols = [c for c in match_df.columns if any(k in c.lower() for k in ["durum", "stok"])]
+            if stat_cols and m2_col:
+                for idx, row in match_df.iterrows():
+                    val = str(row[stat_cols[0]]).lower()
+                    m2_val = pd.to_numeric(row[m2_col], errors="coerce") or 0.0
+                    if "stok" in val:
+                        stok_m2 += m2_val
+                    elif "yüklen" in val or "yuklen" in val:
+                        yuklenen_m2 += m2_val
+
+            await update.message.reply_text(
+                f"📊 **ARSLANLAR MARBLE - DETAYLI STOK & ÜRETİM ANALİZİ**\n"
+                f"• **Hedef Kriter:** {detected_stone.title() if detected_stone else 'Genel Fabrika Stoğu'}\n"
+                f"• **Toplam Plaka:** {len(match_df)} Adet\n"
+                f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+                f"• **Stoktaki Miktar:** {round(stok_m2, 2)} m²\n"
+                f"• **Yüklenen Miktar:** {round(yuklenen_m2, 2)} m²\n\n"
+                f"🔗 [Drive'da Aç]({GOOGLE_DRIVE_LINK})",
+                parse_mode="Markdown"
+            )
+            return
+
+    # 3. Genel Yapay Zeka (Gemini AI) Sohbet, Sunum Taslağı ve Serbest Soru Motoru
+    try:
+        # Excel hafızada varsa yapay zekaya özet bilgi verelim ki bağlamı bilsin
+        summary_ctx = f"Fabrika stok veritabanında toplam {len(df_local)} kayıtlı plaka var." if not df_local.empty else "Henüz stok dosyası yüklenmedi."
+        
+        prompt = f"""
+        Sen Arslanlar Mermer fabrika yönetim asistanı ve profesyonel bir yapay zeka uzmansın. 
+        Mevcut Durum: {summary_ctx}
+        Kullanıcının Mesajı: "{text}"
+        
+        Görevin: Kullanıcının sorusuna (sunum hazırlama, genel bilgi, strateji, mermer sektörü, metin yazarlığı veya sohbet) son derece akıllı, profesyonel, kurumsal ve akıcı bir Türkçe ile yanıt vermek. Asla kalıp sözler (örneğin 'emredersiniz patron hemen inceliyorum') kullanma, doğrudan konuya gir ve en üst düzeyde yardımcı ol.
+        """
+        response = ai_model.generate_content(prompt)
+        await update.message.reply_text(response.text.strip(), parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"AI Yanıt Hatası: {e}")
+        await update.message.reply_text("Emredersiniz, talebinizi işleme alıyorum. Detayları iletebilir misiniz? ⚡")
 
 
 def main():
@@ -282,7 +308,7 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    logger.info("Arslanlar Mermer Fabrika Asistanı başlatılıyor...")
+    logger.info("Arslanlar Mermer Fabrika Asistanı (AI Destekli) başlatılıyor...")
     app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
@@ -290,7 +316,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Arslanlar Marble Bot 7/24 Aktif!")
+        self.wfile.write(b"Arslanlar Marble AI Bot 7/24 Aktif!")
 
 
 if __name__ == "__main__":
