@@ -153,11 +153,11 @@ def analyze_message(text: str) -> dict:
     if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme"]):
         return {"action": "shipment_plan", "lot": lot, "filter": "all", "reply": f"Sevkiyat planını işledim patron! 🚛"}
     elif any(k in t_lower for k in ["stok", "serbest", "müsait"]):
-        return {"action": "packing_list", "lot": lot, "filter": "stok", "reply": f"Stoktaki / serbest plakaları süzüyorum! 📋"}
+        return {"action": "packing_list", "lot": lot, "filter": "stok", "reply": f"Stoktaki / serbest plakaları hazırlıyorum! 📋"}
     elif any(k in t_lower for k in ["yüklenen", "sevk"]):
-        return {"action": "packing_list", "lot": lot, "filter": "yuklenen", "reply": f"Yüklenen plakaları süzüyorum! 🚛"}
+        return {"action": "packing_list", "lot": lot, "filter": "yuklenen", "reply": f"Yüklenen plakaları hazırlıyorum! 🚛"}
     elif any(k in t_lower for k in ["rezerv"]):
-        return {"action": "packing_list", "lot": lot, "filter": "rezerv", "reply": f"Rezervli plakaları süzüyorum! 🔒"}
+        return {"action": "packing_list", "lot": lot, "filter": "rezerv", "reply": f"Rezervli plakaları hazırlıyorum! 🔒"}
     elif any(k in t_lower for k in ["kaç m2", "ne kadar", "toplam m2", "stokta ne var"]):
         return {"action": "total_stock_query", "lot": lot, "filter": "all", "reply": "Tüm stok metraj ve plaka analizini çıkarıyorum! 📊"}
     elif any(k in t_lower for k in ["çeki", "packing", "liste"]):
@@ -271,20 +271,26 @@ def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all
                 mask = False
                 for col in matching_cols:
                     mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
-                filtered = df[mask]
+                temp_filtered = df[mask]
+                if not temp_filtered.empty:
+                    filtered = temp_filtered
 
         if filter_type != "all":
             status_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["durum", "stok"])]
             res_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["rezerv", "satiş", "satis"])]
             
+            sub_filtered = filtered
             if filter_type == "stok" and status_cols:
-                filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
+                sub_filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
             elif filter_type == "yuklenen" and status_cols:
-                filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
+                sub_filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
             elif filter_type == "rezerv" and res_cols:
-                filtered = filtered[filtered[res_cols[0]].astype(str).str.lower().str.contains("rezerv", na=False)]
+                sub_filtered = filtered[filtered[res_cols[0]].astype(str).str.lower().str.contains("rezerv", na=False)]
+            
+            if not sub_filtered.empty:
+                filtered = sub_filtered
 
-    # Eğer filtreleme sonucu boş kalırsa orijinal df'yi koru ki boş dosya gitmesin
+    # Asla boş dosya dönmesin, veri yoksa master df'yi ver
     if filtered.empty:
         filtered = df
 
@@ -333,7 +339,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 total_m2 = float(pd.to_numeric(df_local[col], errors="coerce").sum())
                 break
                 
-        # Stokta olanlar ve yüklenenler ayrımı
         stok_m2 = 0.0
         yuklenen_m2 = 0.0
         status_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["durum", "stok"])]
@@ -402,7 +407,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     total_m2 = float(pd.to_numeric(match[col], errors="coerce").sum())
                     break
 
-            # Nokta atışı Drive linki bul
             target_url = GOOGLE_DRIVE_LINK
             for item in drive_focused_index:
                 if normalize_key(lot) in normalize_key(item["name"]):
@@ -450,7 +454,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
     logger.info("Arslanlar Mermer Fabrika Asistanı başlatılıyor...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
 class DummyHandler(BaseHTTPRequestHandler):
