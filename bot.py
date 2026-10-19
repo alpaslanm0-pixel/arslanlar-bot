@@ -38,10 +38,10 @@ GOOGLE_DRIVE_LINK = os.getenv(
 )
 
 genai.configure(api_key=GEMINI_API_KEY)
+# Gemini Flash modeli ile akıllı dil işleme ve veri analizi
 ai_model = genai.GenerativeModel("gemini-1.5-flash")
 
 PERSISTENT_EXCEL_PATH = "./master_stok_arslanlar.xlsx"
-PERSISTENT_PRICE_PATH = "./master_fiyat_arslanlar.xlsx"
 
 bot_lock = threading.Lock()
 active_group_chats = set()
@@ -166,10 +166,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
                     
             await update.message.reply_text(
-                f"✅ `{doc.file_name}` yüklendi[cite: 14].\n"
-                f"• **Toplam Plaka:** {total_rows} Adet[cite: 14]\n"
-                f"• **Toplam Metraj:** {round(total_m2, 2)} m²[cite: 14]\n"
-                f"Stok analiz motoru tam kapasite aktif!",
+                f"✅ `{doc.file_name}` başarıyla analiz motoruna yüklendi.\n"
+                f"• **Toplam Plaka:** {total_rows} Adet\n"
+                f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+                f"Yapay zeka asistanı tam kapasite aktif!",
                 parse_mode="Markdown"
             )
         else:
@@ -186,7 +186,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     t_lower = text.lower()
     df_local = get_master_df()
 
-    # 1. Çeki Listesi / Excel Talep Kontrolü
+    # 1. Çeki Listesi / Excel Dosyası Talebi
     if any(k in t_lower for k in ["çeki listesi", "packing list", "excel ver", "listesini gönder", "stok listesi"]):
         lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
         lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
@@ -221,7 +221,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # 2. Doğrudan Taş Cinsi / Metraj / Stok Analiz Motoru (Asla hata yapmaz)
+    # 2. Saf Python Veri Filtreleme Motoru (Silver Roots, metrajlar, stok sorguları için kusursuz eşleşme)
     stones = ["silver roots", "violet breccia", "brown armoni", "silver river", "golden spider", "galapagos", "grey philharmonic", "burno perla"]
     detected_stone = next((s for s in stones if s in t_lower), None)
 
@@ -229,9 +229,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not df_local.empty:
             match_df = df_local.copy()
             if detected_stone:
-                sel_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["seleksiyon", "cins", "taş"])]
-                if sel_cols:
-                    match_df = match_df[match_df[sel_cols[0]].astype(str).str.lower().str.contains(detected_stone, na=False)]
+                mask = match_df.astype(str).apply(lambda x: x.str.lower().str.contains(detected_stone, na=False)).any(axis=1)
+                match_df = match_df[mask]
             
             m2_col = next((c for c in match_df.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
             total_m2 = float(pd.to_numeric(match_df[m2_col], errors="coerce").sum()) if m2_col else 0.0
@@ -249,8 +248,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         yuklenen_m2 += m2_val
 
             await update.message.reply_text(
-                f"📊 **ARSLANLAR MARBLE - STOK ANALİZİ**\n"
-                f"• **Kriter:** {detected_stone.title() if detected_stone else 'Genel Fabrika Stoğu'}\n"
+                f"📊 **ARSLANLAR MARBLE - DETAYLI ANALİZ RAPORU**\n"
+                f"• **Sorgu Kriteri:** {detected_stone.title() if detected_stone else 'Genel Fabrika Stoğu'}\n"
                 f"• **Toplam Plaka:** {len(match_df)} Adet\n"
                 f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
                 f"• **Stoktaki Miktar:** {round(stok_m2, 2)} m²\n"
@@ -260,21 +259,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # 3. Genel Sohbet / Sunum Taslağı / Diğer Sorular İçin Doğrudan Gemini AI
+    # 3. Gerçek Gemini AI Zekası (Sunum hazırlama, genel sohbet, strateji, mermer sektörü vb. her soruya akıllı yanıt)
     try:
         summary_ctx = f"Fabrika stok veritabanında toplam {len(df_local)} kayıtlı plaka var." if not df_local.empty else "Henüz stok dosyası yüklenmedi."
+        
         prompt = f"""
-        Sen Arslanlar Mermer fabrika yönetim asistanı ve profesyonel bir yapay zeka uzmansın. 
-        Mevcut Durum: {summary_ctx}
+        Sen Arslanlar Mermer fabrika yönetim asistanı ve üst düzey bir yapay zeka uzmansın. 
+        Mevcut Sistem Durumu: {summary_ctx}
         Kullanıcının Mesajı: "{text}"
         
-        Görevin: Kullanıcının sorusuna son derece akıllı, profesyonel ve kurumsal bir Türkçe ile yanıt vermek. Asla kalıp sözler kullanma, doğrudan konuya gir.
+        Görevin: Kullanıcının sorduğu soruya (sunum hazırlama, genel strateji, mermer ihracatı, teknik bilgi veya serbest sohbet) son derece akıllı, profesyonel, kurumsal, akıcı ve detaylı bir Türkçe ile yanıt vermek. Asla kalıp sözler veya tekrara düşen robotik cümleler kullanma. Doğrudan konuya gir, bir yapay zeka uzantısı gibi en üst düzeyde yardımcı ol.
         """
         response = ai_model.generate_content(prompt)
         await update.message.reply_text(response.text.strip(), parse_mode="Markdown")
     except Exception as e:
         logger.error(f"AI Yanıt Hatası: {e}")
-        # Hata durumunda bile sessiz kalmaz, doğrudan genel stok özetini basar
         total_rows = len(df_local)
         await update.message.reply_text(
             f"📊 **Fabrika Durum Özeti**\n• Hafızada kayıtlı plaka satırı: {total_rows}\n🔗 [Drive'da Aç]({GOOGLE_DRIVE_LINK})",
@@ -289,7 +288,7 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
-    logger.info("Arslanlar Mermer Fabrika Asistanı başlatılıyor...")
+    logger.info("Arslanlar Mermer Fabrika AI Asistanı başlatılıyor...")
     app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
@@ -297,7 +296,7 @@ class DummyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"Arslanlar Marble Bot 7/24 Aktif!")
+        self.wfile.write(b"Arslanlar Marble AI Bot 7/24 Aktif!")
 
 
 if __name__ == "__main__":
