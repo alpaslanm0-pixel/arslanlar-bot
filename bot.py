@@ -44,7 +44,7 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 # --- KİLİT VE ORİJİNAL FABRİKA HAFIZASI ---
 bot_lock = threading.Lock()
 master_excel_df = pd.DataFrame()
-price_list_df = pd.DataFrame()  # Price list entegrasyonu için ayrılmış hafıza
+price_list_df = pd.DataFrame()
 
 daily_log = {"sold": [], "reserved": [], "cancelled": []}
 shipment_schedules = []
@@ -131,16 +131,12 @@ def scan_marble_collections() -> tuple:
     is_scanning_drive = True
     all_discovered = []
     root_items = fetch_single_folder(GOOGLE_DRIVE_LINK, "Ana Klasör")
-    target_keywords = ["collection", "exclusive", "series", "arslanlar"]
-
     for item in root_items:
-        if item["is_folder"] or True:  # Tüm alt öğeleri tarayıp indeksle
-            collection_name = item["name"]
-            all_discovered.append(item)
-            if item["is_folder"]:
-                sub_items = fetch_single_folder(item["url"], collection_name)
-                for sub in sub_items:
-                    all_discovered.append(sub)
+        all_discovered.append(item)
+        if item["is_folder"]:
+            sub_items = fetch_single_folder(item["url"], item["name"])
+            for sub in sub_items:
+                all_discovered.append(sub)
 
     if all_discovered:
         drive_focused_index = all_discovered
@@ -157,17 +153,19 @@ def analyze_message(text: str) -> dict:
     if any(k in t_lower for k in ["yüklenecek", "sevkiyat", "yükleme"]):
         return {"action": "shipment_plan", "lot": lot, "filter": "all", "reply": f"Sevkiyat planını işledim patron! 🚛"}
     elif any(k in t_lower for k in ["stok", "serbest", "müsait"]):
-        return {"action": "packing_list", "lot": lot, "filter": "stok", "reply": f"Lot {lot} için stoktaki / serbest plakaları hazırlıyorum! 📋"}
+        return {"action": "packing_list", "lot": lot, "filter": "stok", "reply": f"Stoktaki / serbest plakaları süzüyorum! 📋"}
     elif any(k in t_lower for k in ["yüklenen", "sevk"]):
-        return {"action": "packing_list", "lot": lot, "filter": "yuklenen", "reply": f"Lot {lot} için yüklenen plakaları hazırlıyorum! 🚛"}
+        return {"action": "packing_list", "lot": lot, "filter": "yuklenen", "reply": f"Yüklenen plakaları süzüyorum! 🚛"}
     elif any(k in t_lower for k in ["rezerv"]):
-        return {"action": "packing_list", "lot": lot, "filter": "rezerv", "reply": f"Lot {lot} için rezervli plakaları hazırlıyorum! 🔒"}
+        return {"action": "packing_list", "lot": lot, "filter": "rezerv", "reply": f"Rezervli plakaları süzüyorum! 🔒"}
+    elif any(k in t_lower for k in ["kaç m2", "ne kadar", "toplam m2", "stokta ne var"]):
+        return {"action": "total_stock_query", "lot": lot, "filter": "all", "reply": "Tüm stok metraj ve plaka analizini çıkarıyorum! 📊"}
     elif any(k in t_lower for k in ["çeki", "packing", "liste"]):
         return {"action": "packing_list", "lot": lot, "filter": "all", "reply": "Profesyonel çeki listesini hazırlıyorum! 📄"}
     elif any(k in t_lower for k in ["link", "drive", "gönder"]):
         return {"action": "lot_link", "lot": lot, "filter": "all", "reply": f"Nokta atışı Drive bağlantısını getiriyorum! 🔗"}
     elif lot:
-        return {"action": "lot_detail", "lot": lot, "filter": "all", "reply": f"Lot {lot} plaka detaylarını inceliyorum! 🔍"}
+        return {"action": "lot_detail", "lot": lot, "filter": "all", "reply": f"Lot {lot} detaylarını inceliyorum! 🔍"}
     elif any(k in t_lower for k in ["rapor", "özet"]):
         return {"action": "daily_report", "lot": None, "filter": "all", "reply": "Günlük operasyon raporunu getiriyorum! 📊"}
     else:
@@ -194,20 +192,24 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             df = parse_factory_excel(local_path)
             if not df.empty:
-                # Fiyat listesi mi yoksa ana stok listesi mi olduğunu anla
                 if any(k in file_name_lower for k in ["price", "fiyat", "liste"]):
                     price_list_df = df
                     await update.message.reply_text(
-                        f"💰 **Fiyat Listesi (Price List) Yüklendi!**\n"
-                        f"• `{doc.file_name}` başarıyla hafızaya alındı. Çeki listelerinde birim fiyatlar bu listeden otomatik çekilecek.",
+                        f"💰 **Fiyat Listesi Yüklendi!**\n• `{doc.file_name}` hafızaya alındı.",
                         parse_mode="Markdown"
                     )
                 else:
                     master_excel_df = df
                     total_rows = len(df)
+                    total_m2 = 0.0
+                    for col in df.columns:
+                        if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
+                            total_m2 = float(pd.to_numeric(df[col], errors="coerce").sum())
+                            break
                     await update.message.reply_text(
-                        f"Eyvallah Mehmet hocam! `{doc.file_name}` dosyasındaki **tüm plaka satırları, sütunlar ve durumlar** hafızaya kazındı. 📋\n"
-                        f"✅ **Toplam {total_rows} satır plaka detayı** yüklendi. Artık kurumsal ve estetik çeki listeleri hazır!",
+                        f"Eyvallah Mehmet hocam! `{doc.file_name}` yüklendi. 📋\n"
+                        f"✅ **Toplam Satır:** {total_rows} | **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+                        f"Tüm sütunlar ve plaka detayları kusursuz kaydedildi! ⚡",
                         parse_mode="Markdown"
                     )
             else:
@@ -217,26 +219,20 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
-    """Excel çıktısını kurumsal, şık ve estetik bir görünüme kavuşturur."""
     filtered_df.to_excel(file_name, index=False, engine='openpyxl')
-    
     wb = openpyxl.load_workbook(file_name)
     ws = wb.active
     
-    # Stil tanımları
-    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid") # Koyu kurumsal mavi
+    header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
     header_font = Font(name="Arial", size=11, bold=True, color="FFFFFF")
     data_font = Font(name="Arial", size=10)
     thin_border = Border(
-        left=Side(style='thin', color='D9D9D9'),
-        right=Side(style='thin', color='D9D9D9'),
-        top=Side(style='thin', color='D9D9D9'),
-        bottom=Side(style='thin', color='D9D9D9')
+        left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9')
     )
     align_center = Alignment(horizontal='center', vertical='center')
     align_left = Alignment(horizontal='left', vertical='center')
 
-    # Başlık satırını biçimlendir
     for col_num in range(1, ws.max_column + 1):
         cell = ws.cell(row=1, column=col_num)
         cell.fill = header_fill
@@ -244,7 +240,6 @@ def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
         cell.alignment = align_center
         cell.border = thin_border
 
-    # Veri satırlarını biçimlendir
     for row_num in range(2, ws.max_row + 1):
         for col_num in range(1, ws.max_column + 1):
             cell = ws.cell(row=row_num, column=col_num)
@@ -252,7 +247,6 @@ def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
             cell.border = thin_border
             cell.alignment = align_center if col_num > 2 else align_left
 
-    # Sütun genişliklerini otomatik ayarla
     for col in ws.columns:
         max_len = 0
         col_letter = get_column_letter(col[0].column)
@@ -269,7 +263,7 @@ def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all
     with bot_lock:
         df = master_excel_df.copy()
         
-    filtered = df
+    filtered = df.copy()
     if not df.empty:
         if lot_code:
             matching_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
@@ -279,23 +273,23 @@ def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all
                     mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
                 filtered = df[mask]
 
-        if filter_type == "stok":
-            status_cols = [c for c in filtered.columns if "durum" in c.lower() or "stok" in c.lower()]
-            if status_cols:
+        if filter_type != "all":
+            status_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["durum", "stok"])]
+            res_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["rezerv", "satiş", "satis"])]
+            
+            if filter_type == "stok" and status_cols:
                 filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
-        elif filter_type == "yuklenen":
-            status_cols = [c for c in filtered.columns if "durum" in c.lower() or "stok" in c.lower()]
-            if status_cols:
+            elif filter_type == "yuklenen" and status_cols:
                 filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
-        elif filter_type == "rezerv":
-            res_cols = [c for c in filtered.columns if "rezerv" in c.lower() or "satiş" in c.lower()]
-            if res_cols:
+            elif filter_type == "rezerv" and res_cols:
                 filtered = filtered[filtered[res_cols[0]].astype(str).str.lower().str.contains("rezerv", na=False)]
+
+    # Eğer filtreleme sonucu boş kalırsa orijinal df'yi koru ki boş dosya gitmesin
+    if filtered.empty:
+        filtered = df
 
     safe_tag = f"{lot_code or 'Genel'}_{filter_type.upper()}"
     file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_tag}.xlsx"
-    
-    # Şık Excel formatında kaydet
     generate_styled_excel(filtered, file_name)
     
     total_slabs = len(filtered)
@@ -306,20 +300,6 @@ def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all
             break
             
     return file_name, total_slabs, total_m2
-
-
-def build_daily_report_text() -> str:
-    tz = pytz.timezone("Europe/Istanbul")
-    today_str = datetime.now(tz).strftime("%d.%m.%Y - %H:%M")
-    with bot_lock:
-        total_rows = len(master_excel_df)
-    return (
-        f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n"
-        f"🗓 *Tarih:* {today_str}\n\n"
-        f"📦 **Hafızadaki Plaka Kaydı:** {total_rows} Satır (Kurumsal Şablon Aktif).\n"
-        f"🔗 [Google Drive Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
-        f"Her şey kontrol altında, iyi çalışmalar! ☕💪"
-    )
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,20 +319,53 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(natural_reply, parse_mode="Markdown")
 
-    if action == "shipment_plan":
+    if action == "total_stock_query":
         with bot_lock:
-            shipment_schedules.append({"detay": text, "zaman": datetime.now().strftime("%d.%m.%Y")})
-        await update.message.reply_text(f"🚛 **Sevkiyat Planı Kaydedildi!**\n• *{text}*", parse_mode="Markdown")
+            df_local = master_excel_df.copy()
+        if df_local.empty:
+            await update.message.reply_text("⚠️ Henüz hafızaya bir stok Excel dosyası yüklemediniz! Lütfen önce dosya gönderin.", parse_mode="Markdown")
+            return
+            
+        total_rows = len(df_local)
+        total_m2 = 0.0
+        for col in df_local.columns:
+            if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
+                total_m2 = float(pd.to_numeric(df_local[col], errors="coerce").sum())
+                break
+                
+        # Stokta olanlar ve yüklenenler ayrımı
+        stok_m2 = 0.0
+        yuklenen_m2 = 0.0
+        status_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["durum", "stok"])]
+        m2_col = next((c for c in df_local.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
+        
+        if status_cols and m2_col:
+            for idx, row in df_local.iterrows():
+                val = str(row[status_cols[0]]).lower()
+                m2_val = pd.to_numeric(row[m2_col], errors="coerce") or 0.0
+                if "stok" in val:
+                    stok_m2 += m2_val
+                elif "yüklen" in val or "yuklen" in val:
+                    yuklenen_m2 += m2_val
+
+        await update.message.reply_text(
+            f"📊 **ARSLANLAR MARBLE - GENEL STOK ANALİZİ**\n\n"
+            f"• **Toplam Plaka Sayısı:** {total_rows} Adet\n"
+            f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+            f"• **Depodaki / Stoktaki Miktar:** {round(stok_m2, 2)} m²\n"
+            f"• **Yüklenen / Sevk Edilen Miktar:** {round(yuklenen_m2, 2)} m²\n\n"
+            f"İstediğiniz özel bir lot veya filtre için 'A-283 stok listesi' yazabilirsiniz.",
+            parse_mode="Markdown"
+        )
 
     elif action == "lot_link" and lot:
-        # Nokta atışı eşleşen Drive bağlantısını bul
         target_url = GOOGLE_DRIVE_LINK
         for item in drive_focused_index:
-            if normalize_key(lot) in normalize_key(item["name"]):
+            if lot and normalize_key(lot) in normalize_key(item["name"]):
                 target_url = item["url"]
                 break
         await update.message.reply_text(
-            f"🔗 **Lot {lot} İçin Nokta Atışı Bağlantı:**\n"
+            f"🔗 **Lot {lot or 'Genel'} İçin Nokta Atışı Bağlantı:**\n"
             f"Doğrudan ilgili klasör/dosya bağlantısı: [Drive'da Aç]({target_url})",
             parse_mode="Markdown"
         )
@@ -376,7 +389,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             yuklenen_count = 0
             total_m2 = 0.0
             
-            status_cols = [c for c in match.columns if "durum" in c.lower() or "stok" in c.lower()]
+            status_cols = [c for c in match.columns if any(k in c.lower() for k in ["durum", "stok"])]
             for idx, row in match.iterrows():
                 if status_cols:
                     val = str(row[status_cols[0]]).lower()
@@ -389,13 +402,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     total_m2 = float(pd.to_numeric(match[col], errors="coerce").sum())
                     break
 
+            # Nokta atışı Drive linki bul
+            target_url = GOOGLE_DRIVE_LINK
+            for item in drive_focused_index:
+                if normalize_key(lot) in normalize_key(item["name"]):
+                    target_url = item["url"]
+                    break
+
             await update.message.reply_text(
                 f"🪨 **Lot / Blok {lot} Detaylı Döküm:**\n"
                 f"• Toplam Plaka: *{slab_count} Adet*\n"
                 f"• Stokta / Serbest: *{stok_count} Adet*\n"
                 f"• Yüklenen: *{yuklenen_count} Adet*\n"
                 f"• Toplam Metraj: *{round(total_m2, 2)} m²*\n\n"
-                f"Çeki listesi almak için 'A-283 stok listesi' veya 'A-283 yüklenenler' yazabilirsiniz.",
+                f"🔗 [Drive'da İlgili Klasörü Aç]({target_url})\n\n"
+                f"Çeki listesi almak için 'A-283 stok listesi' yazabilirsiniz.",
                 parse_mode="Markdown"
             )
         else:
@@ -411,7 +432,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     elif action == "daily_report":
-        await update.message.reply_text(build_daily_report_text(), parse_mode="Markdown")
+        await update.message.reply_text(
+            f"📊 **ARSLANLAR MARBLE - GÜNLÜK OPERASYON RAPORU**\n\n"
+            f"📦 **Hafızadaki Plaka Kaydı:** {len(master_excel_df)} Satır.\n"
+            f"🔗 [Google Drive Klasörü]({GOOGLE_DRIVE_LINK})\n\n"
+            f"Her şey kontrol altında, iyi çalışmalar! ☕💪",
+            parse_mode="Markdown"
+        )
 
 
 def main():
