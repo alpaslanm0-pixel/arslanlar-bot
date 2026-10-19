@@ -38,11 +38,9 @@ GOOGLE_DRIVE_LINK = os.getenv(
 )
 
 genai.configure(api_key=GEMINI_API_KEY)
-# Gemini 1.5 Flash modeli ile sınırsız ve akıllı doğal dil işleme
 ai_model = genai.GenerativeModel("gemini-1.5-flash")
 
 PERSISTENT_EXCEL_PATH = "./master_stok_arslanlar.xlsx"
-PERSISTENT_PRICE_PATH = "./master_fiyat_arslanlar.xlsx"
 
 bot_lock = threading.Lock()
 active_group_chats = set()
@@ -69,39 +67,81 @@ def save_master_df(df: pd.DataFrame):
         df.to_excel(PERSISTENT_EXCEL_PATH, index=False, engine='openpyxl')
 
 
-def smart_ai_analyze(user_text: str, df_summary: str) -> dict:
-    """Gemini yapay zekasını kullanarak kullanıcının niyetini ve sorduğu lot/kriteri nokta atışı çözer."""
+def execute_smart_query(user_text: str, df: pd.DataFrame) -> str:
+    """Yapay zeka ve pandas'ı birleştirerek Excel tablosu üzerinden nokta atışı analiz yapar."""
+    if df.empty:
+        return "⚠️ Hafızada işlenmiş bir stok Excel dosyası bulunamadı. Lütfen önce fabrika stok dosyanızı gönderin."
+
+    # Sütun isimleri ve veri örnekleri hakkında AI'a özet bilgi ver
+    columns_list = list(df.columns)
+    sample_data = df.head(3).to_string()
+
     prompt = f"""
-    Sen Arslanlar Mermer fabrika yönetim botusun. Kullanıcı sana Telegram'dan bir mesaj yazdı.
-    Hafızadaki Excel verisinin özeti: {df_summary}
-    
-    Kullanıcının mesajı: "{user_text}"
-    
-    Bu mesaja göre kullanıcının ne yapmak istediğini analiz et ve sadece şu JSON formatında yanıt ver (başka hiçbir şey yazma):
-    {{
-      "intent": "packing_list" (çeki listesi, stok listesi, serbest plakalar isteniyorsa), "total_stock" (genel stok, toplam m2 soruluyorsa), "stone_query" (belli bir taş cinsi soruluyorsa), "lot_detail" (belli bir lot detayı soruluyorsa), "chat" (genel sohbet veya diğer durumlar),
-      "lot": "Bulunduğu lot kodu (örn: A-283, A-371) yoksa null",
-      "filter_type": "stok" (stokta/serbest olanlar), "yuklenen" (yüklenenler), "rezerv" (rezervliler), "all" (tümü),
-      "stone_name": "Taş cinsi adı (örn: silver roots, violet breccia) yoksa null",
-      "reply_text": "Kullanıcıya verilecek profesyonel ve net Türkçe yanıt"
-    }}
+    Sen Arslanlar Mermer fabrika operasyon yönetim asistanısın. 
+    Kullanıcının sorduğu soruya, elindeki pandas DataFrame üzerinde işlem yapacak Python kodunu yazarak veya doğrudan veriyi analiz ederek net, profesyonel ve kurumsal bir Türkçe yanıt ver.
+
+    Tablo sütunları: {columns_list}
+    Veri örneği:
+    {sample_data}
+    Toplam Satır Sayısı: {len(df)}
+
+    Kullanıcının Sorusu: "{user_text}"
+
+    İstediğim: Doğrudan analitik sonucu ver. Örneğin taş cinsi (seleksiyon), lot/blok kodu, stok durumu (stokta/yüklenen/rezerv) veya metraj istendiğinde ilgili filtrelemeyi yapıp metraj (m²) ve plaka adetlerini net rakamlarla paylaş. Asla lafı uzatma, profesyonel bir fabrika müdürü gibi nokta atışı bilgi ver.
     """
+    
     try:
-        response = ai_model.generate_content(prompt)
-        text_resp = response.text.strip()
-        # JSON temizleme
-        cleaned = re.sub(r"^```json\s*|\s*```$", "", text_resp, flags=re.MULTILINE).strip()
-        return json.loads(cleaned)
+        # Pandas ile hızlı filtreleme ve AI sentezi
+        t_lower = user_text.lower()
+        
+        # Taş cinsi sorguları için özel pandas filtresi
+        stones = ["silver roots", "violet breccia", "brown armoni", "silver river", "golden spider", "galapagos", "grey philharmonic", "burno perla"]
+        detected_stone = next((s for s in stones if s in t_lower), None)
+        
+        # Lot/Blok sorgusu
+        lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", user_text)
+        detected_lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
+
+        filtered_df = df.copy()
+        context_info = ""
+
+        if detected_stone:
+            sel_cols = [c for c in df.columns if any(k in c.lower() for k in ["seleksiyon", "cins", "taş"])]
+            if sel_cols:
+                filtered_df = filtered_df[filtered_df[sel_cols[0]].astype(str).str.lower().str.contains(detected_stone, na=False)]
+                context_info += f"Taş Cinsi: {detected_stone.title()} | "
+
+        if detected_lot:
+            lot_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
+            if lot_cols:
+                mask = False
+                for col in lot_cols:
+                    mask = mask | filtered_df[col].astype(str).apply(normalize_key).str.contains(normalize_key(detected_lot), na=False)
+                filtered_df = filtered_df[mask]
+                context_info += f"Lot/Blok: {detected_lot} | "
+
+        # Stok durumu filtresi
+        if "stok" in t_lower or "serbest" in t_lower or "müsait" in t_lower:
+            stat_cols = [c for c in filtered_df.columns if any(k in c.lower() for k in ["durum", "stok"])]
+            if stat_cols:
+                filtered_df = filtered_df[filtered_df[stat_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
+                context_info += "Durum: Stokta / Serbest | "
+        elif "yüklenen" in t_lower or "sevk" in t_lower:
+            stat_cols = [c for c in filtered_df.columns if any(k in c.lower() for k in ["durum", "stok"])]
+            if stat_cols:
+                filtered_df = filtered_df[filtered_df[stat_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
+                context_info += "Durum: Yüklenen | "
+
+        m2_col = next((c for c in filtered_df.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
+        total_m2 = float(pd.to_numeric(filtered_df[m2_col], errors="coerce").sum()) if m2_col else 0.0
+        total_slabs = len(filtered_df)
+
+        # AI yanıtı zenginleştirir
+        res = ai_model.generate_content(prompt + f"\n\n[Sistem Hesaplama Notu]: Filtrelenen kayıt adedi: {total_slabs}, Toplam Metraj: {round(total_m2, 2)} m². Bu bilgileri yanıtında mutlaka kullan.")
+        return res.text.strip()
     except Exception as e:
-        logger.error(f"AI Analiz Hatası: {e}")
-        # Hata durumunda akıllı varsayılan
-        return {
-            "intent": "total_stock",
-            "lot": None,
-            "filter_type": "all",
-            "stone_name": None,
-            "reply_text": "Emredersiniz patron, hemen inceliyorum! ⚡"
-        }
+        logger.error(f"Sorgu işleme hatası: {e}")
+        return f"Analiz sırasında hata oluştu: {e}"
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -134,15 +174,16 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     break
                     
             await update.message.reply_text(
-                f"Eyvallah Mehmet hocam! `{doc.file_name}` başarıyla işlendi. 📋\n"
-                f"✅ **Toplam Plaka:** {total_rows} Adet | **Toplam Metraj:** {round(total_m2, 2)} m²\n"
-                f"Yapay zeka motoru ve kalıcı hafıza aktif! Artık dilediğin her şeyi sorabilirsin. ⚡",
+                f"✅ `{doc.file_name}` yüklendi.\n"
+                f"• **Toplam Plaka:** {total_rows} Adet\n"
+                f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
+                f"Analiz motoru hazır.",
                 parse_mode="Markdown"
             )
         else:
-            await update.message.reply_text("Dosya okundu ancak geçerli veri bulunamadı.")
+            await update.message.reply_text("Dosya okundu ancak veri bulunamadı.")
     except Exception as e:
-        await update.message.reply_text(f"Dosya işlenirken hata oluştu: {e}")
+        await update.message.reply_text(f"Hata: {e}")
 
 
 def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
@@ -186,54 +227,6 @@ def generate_styled_excel(filtered_df: pd.DataFrame, file_name: str) -> str:
     return file_name
 
 
-def generate_filtered_packing_list(lot_code: str = None, filter_type: str = "all") -> tuple:
-    df = get_master_df()
-    if df.empty:
-        return "", 0, 0.0
-        
-    filtered = df.copy()
-    if lot_code:
-        matching_cols = [c for c in df.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
-        if matching_cols:
-            mask = False
-            for col in matching_cols:
-                mask = mask | df[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot_code), na=False)
-            temp_filtered = df[mask]
-            if not temp_filtered.empty:
-                filtered = temp_filtered
-
-    if filter_type != "all":
-        status_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["durum", "stok"])]
-        res_cols = [c for c in filtered.columns if any(k in c.lower() for k in ["rezerv", "satiş", "satis"])]
-        
-        sub_filtered = filtered
-        if filter_type == "stok" and status_cols:
-            sub_filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("stok", na=False)]
-        elif filter_type == "yuklenen" and status_cols:
-            sub_filtered = filtered[filtered[status_cols[0]].astype(str).str.lower().str.contains("yüklen|yuklen", na=False)]
-        elif filter_type == "rezerv" and res_cols:
-            sub_filtered = filtered[filtered[res_cols[0]].astype(str).str.lower().str.contains("rezerv", na=False)]
-        
-        if not sub_filtered.empty:
-            filtered = sub_filtered
-
-    if filtered.empty:
-        filtered = df
-
-    safe_tag = f"{lot_code or 'Genel'}_{filter_type.upper()}"
-    file_name = f"Arslanlar_Marble_Ceki_Listesi_{safe_tag}.xlsx"
-    generate_styled_excel(filtered, file_name)
-    
-    total_slabs = len(filtered)
-    total_m2 = 0.0
-    for col in filtered.columns:
-        if any(k in col.lower() for k in ["m2", "metraj", "alan"]):
-            total_m2 = float(pd.to_numeric(filtered[col], errors="coerce").sum())
-            break
-            
-    return file_name, total_slabs, total_m2
-
-
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat:
         active_group_chats.add(update.effective_chat.id)
@@ -241,83 +234,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     df_local = get_master_df()
     
-    df_summary = f"Toplam {len(df_local)} satır plaka verisi mevcut." if not df_local.empty else "Henüz veri yüklenmedi."
-    
-    # Yapay zeka ile mesajı analiz et
-    analysis = smart_ai_analyze(text, df_summary)
-    
-    intent = analysis.get("intent", "total_stock")
-    lot = analysis.get("lot")
-    filter_type = analysis.get("filter_type", "all")
-    stone_name = analysis.get("stone_name")
-    reply_text = analysis.get("reply_text", "Emredersiniz patron! ⚡")
-
-    await update.message.reply_text(reply_text, parse_mode="Markdown")
-
-    if intent == "total_stock" or df_local.empty:
-        if df_local.empty:
-            await update.message.reply_text("⚠️ Henüz hafızaya bir stok Excel dosyası yüklemediniz!", parse_mode="Markdown")
-            return
-            
-        total_rows = len(df_local)
-        total_m2 = 0.0
-        m2_col = next((c for c in df_local.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
-        if m2_col:
-            total_m2 = float(pd.to_numeric(df_local[m2_col], errors="coerce").sum())
-                
-        stok_m2 = 0.0
-        yuklenen_m2 = 0.0
-        status_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["durum", "stok"])]
+    # Eğer kullanıcı çeki listesi veya dosya istiyorsa
+    t_lower = text.lower()
+    if any(k in t_lower for k in ["çeki listesi", "packing list", "excel ver", "listesini gönder", "stok listesi"]):
+        lot_match = re.search(r"\b([a-zA-Z]{1,3}[- ]?\d+|\d+[a-zA-Z]?)\b", text)
+        lot = lot_match.group(1).upper().replace(" ", "-") if lot_match else None
         
-        if status_cols and m2_col:
-            for idx, row in df_local.iterrows():
-                val = str(row[status_cols[0]]).lower()
-                m2_val = pd.to_numeric(row[m2_col], errors="coerce") or 0.0
-                if "stok" in val:
-                    stok_m2 += m2_val
-                elif "yüklen" in val or "yuklen" in val:
-                    yuklenen_m2 += m2_val
+        filter_type = "stok" if "stok" in t_lower or "serbest" in t_lower else ("yuklenen" if "yüklen" in t_lower else "all")
+        
+        filtered = df_local.copy()
+        if lot and not df_local.empty:
+            matching_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["blok", "lot", "fabrika", "kod"])]
+            if matching_cols:
+                mask = False
+                for col in matching_cols:
+                    mask = mask | df_local[col].astype(str).apply(normalize_key).str.contains(normalize_key(lot), na=False)
+                filtered = df_local[mask]
 
-        await update.message.reply_text(
-            f"📊 **ARSLANLAR MARBLE - GENEL STOK ANALİZİ**\n\n"
-            f"• **Toplam Plaka Sayısı:** {total_rows} Adet\n"
-            f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n"
-            f"• **Depodaki / Stoktaki Miktar:** {round(stok_m2, 2)} m²\n"
-            f"• **Yüklenen / Sevk Edilen Miktar:** {round(yuklenen_m2, 2)} m²",
-            parse_mode="Markdown"
-        )
+        if filtered.empty:
+            filtered = df_local
 
-    elif intent == "stone_query" and stone_name:
-        selection_cols = [c for c in df_local.columns if any(k in c.lower() for k in ["seleksiyon", "cins", "taş"])]
-        match_df = df_local
-        if selection_cols:
-            mask = df_local[selection_cols[0]].astype(str).str.lower().str.contains(stone_name, na=False)
-            match_df = df_local[mask]
-            
+        file_name = f"Arslanlar_Marble_Ceki_Listesi_{lot or 'Genel'}.xlsx"
+        generate_styled_excel(filtered, file_name)
+        
         total_m2 = 0.0
-        m2_col = next((c for c in match_df.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
+        m2_col = next((c for c in filtered.columns if any(k in c.lower() for k in ["m2", "metraj", "alan"])), None)
         if m2_col:
-            total_m2 = float(pd.to_numeric(match_df[m2_col], errors="coerce").sum())
-            
-        await update.message.reply_text(
-            f"🪨 **{stone_name.title()} Stok Analizi:**\n"
-            f"• **Toplam Plaka:** {len(match_df)} Adet\n"
-            f"• **Toplam Metraj:** {round(total_m2, 2)} m²\n\n"
-            f"🔗 [Drive'da İlgili Klasörü Aç]({GOOGLE_DRIVE_LINK})",
-            parse_mode="Markdown"
-        )
+            total_m2 = float(pd.to_numeric(filtered[m2_col], errors="coerce").sum())
 
-    elif intent == "packing_list" or intent == "lot_detail":
-        file_path, slabs, m2 = generate_filtered_packing_list(lot, filter_type)
-        if slabs > 0 and file_path:
-            with open(file_path, "rb") as f:
-                await update.message.reply_document(
-                    document=f, 
-                    caption=f"✅ **Kurumsal ve Estetik Çeki Listesi Hazırlandı!** (Lot: {lot or 'Genel'} | {filter_type.upper()})\n📦 Plaka Adedi: {slabs} | 📐 Toplam Metraj: {round(m2, 2)} m²\n🔗 [Drive'da İlgili Klasörü Aç]({GOOGLE_DRIVE_LINK})", 
-                    parse_mode="Markdown"
-                )
-        else:
-            await update.message.reply_text("⚠️ Seçilen kriterlere uygun plaka bulunamadı.", parse_mode="Markdown")
+        with open(file_name, "rb") as f:
+            await update.message.reply_document(
+                document=f, 
+                caption=f"✅ **Kurumsal Çeki Listesi Hazırlandı**\n📦 Adet: {len(filtered)} | 📐 Toplam: {round(total_m2, 2)} m²\n🔗 [Drive'da Aç]({GOOGLE_DRIVE_LINK})", 
+                parse_mode="Markdown"
+            )
+        return
+
+    # Diğer tüm soru ve analizler için akıllı AI sorgu motoru çalışır
+    answer = execute_smart_query(text, df_local)
+    await update.message.reply_text(answer, parse_mode="Markdown")
 
 
 def main():
