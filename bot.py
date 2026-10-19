@@ -239,8 +239,10 @@ def analyze_message(text: str) -> dict:
         return {"action": "reserve", "lot": lot, "client": "Müşteri", "reply": "Rezervasyonu koydum! 🔒"}
     elif lot:
         return {"action": "lot_detail", "lot": lot, "client": "Müşteri", "reply": f"Lot {lot} detaylarını getiriyorum! 🔍"}
+    elif any(k in t_lower for k in ["merhaba", "selam", "naber"]):
+        return {"action": "chat", "lot": None, "client": "Müşteri", "reply": "Aleykümselam patron! Buradayım, emirlerini bekliyorum. ⚡"}
     else:
-        return {"action": "stock_query", "lot": None, "client": "Müşteri", "reply": "Stok durumunu inceliyorum! 🔍"}
+        return {"action": "stock_query", "lot": None, "client": "Müşteri", "reply": "Emredersiniz patron, talimatınızı aldım! ⚡"}
 
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
