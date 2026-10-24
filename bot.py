@@ -2,13 +2,14 @@ import os
 import io
 import re
 import json
-import time
+import base64
 import logging
 import asyncio
 import threading
 from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
+import requests
 import pandas as pd
 import openpyxl
 from flask import Flask
@@ -20,11 +21,9 @@ from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     MessageHandler,
-    CommandHandler,
     filters,
 )
 
-import google.generativeai as genai
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
@@ -41,9 +40,14 @@ logger = logging.getLogger("ArslanlarArgonBot")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GOOGLE_SA_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-DEFAULT_DRIVE_LINK = os.getenv(
-    "DEFAULT_DRIVE_LINK", "https://drive.google.com"
+
+# Render'daki GOOGLE_DRIVE_LINK veya DEFAULT_DRIVE_LINK değişkenini otomatik tanır
+DEFAULT_DRIVE_LINK = (
+    os.getenv("GOOGLE_DRIVE_LINK")
+    or os.getenv("DEFAULT_DRIVE_LINK")
+    or "https://drive.google.com"
 ).strip()
+
 EXCEL_FILE_PATH = os.getenv("EXCEL_FILE_PATH", "stok.xlsx").strip()
 
 HYPERLINKS_DB_FILE = "hyperlinks_db.json"
@@ -110,6 +114,7 @@ DEFAULT_STONE_DNA = {
         "keywords": ["dekart", "antrasit", "gri"],
     },
 }
+
 
 # =====================================================================
 # 2. YARDIMCI FONKSİYONLAR VE NORMALİZASYON MOTORU
@@ -225,14 +230,9 @@ class DriveExplorer:
         save_json_file(HYPERLINKS_DB_FILE, self.hyperlinks_db)
 
     def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Aranan lot veya taş adına göre Drive'da klasör ID ve webViewLink döner.
-        Bulamazsa (None, None) döner.
-        """
         norm_key = normalize_lot_code(query_term)
         raw_clean = query_term.strip().replace("'", "")
 
-        # 1. Önce yerel hafızaya bak (eğer klasör ID içeriyorsa çıkar)
         if norm_key in self.hyperlinks_db:
             cached_url = self.hyperlinks_db[norm_key]
             folder_id = self._extract_folder_id_from_url(cached_url)
@@ -242,7 +242,6 @@ class DriveExplorer:
         if not self.service:
             return None, None
 
-        # 2. Esnek arama adayları oluştur ('A-283', 'A283', 'A 283')
         candidates = [raw_clean, norm_key]
         if "-" in norm_key:
             candidates.append(norm_key.replace("-", " "))
@@ -270,7 +269,6 @@ class DriveExplorer:
                 )
                 files = res.get("files", [])
                 if files:
-                    # En iyi eşleşmeyi seç (tam eşleşme varsa öncelik ver)
                     best = files[0]
                     for f in files:
                         if normalize_lot_code(f["name"]) == norm_key:
@@ -289,10 +287,6 @@ class DriveExplorer:
         return None, None
 
     def get_folder_images(self, folder_id: str, max_images: int = 3) -> List[bytes]:
-        """
-        Belirtilen Drive klasörünün (veya bir alt klasörünün) içindeki
-        vitrin fotoğraflarını indirip byte listesi olarak döner.
-        """
         if not self.service or not folder_id:
             return []
 
@@ -316,7 +310,6 @@ class DriveExplorer:
             )
             files = res.get("files", [])
 
-            # Eğer ana lot klasöründe doğrudan fotoğraf yoksa, içindeki ilk alt klasöre bak
             if not files:
                 sub_q = (
                     f"'{folder_id}' in parents and trashed = false "
@@ -403,7 +396,6 @@ class InventoryEngine:
             return
 
         try:
-            # 1. Openpyxl ile hücre içi köprüleri (hyperlinks) yakala
             wb = openpyxl.load_workbook(self.excel_path, data_only=True)
             for sheet in wb.sheetnames:
                 ws = wb[sheet]
@@ -413,7 +405,6 @@ class InventoryEngine:
                             key = normalize_lot_code(str(cell.value))
                             self.drive.save_custom_link(key, cell.hyperlink.target)
 
-            # 2. Pandas ile tüm sayfaları oku ve normalize et
             xls = pd.ExcelFile(self.excel_path)
             stones_agg: Dict[str, Dict[str, Any]] = {}
             lots_agg: Dict[str, Dict[str, Any]] = {}
@@ -423,7 +414,6 @@ class InventoryEngine:
                 if df.empty:
                     continue
 
-                # Sütun isimlerini normalize et
                 col_map = {col: normalize_turkish_key(col) for col in df.columns}
                 stone_col = self._find_col(
                     col_map, ["TAS", "CINS", "URUN", "MERMER", "STONE", "MATERIAL", "AD"]
@@ -452,7 +442,6 @@ class InventoryEngine:
                     raw_stone = row.get(stone_col) if stone_col else None
                     norm_stone = normalize_turkish_key(raw_stone)
 
-                    # Kara liste ve geçersiz satır kontrolü (Örn: SERKAN ÇELİK filtrelenir)
                     if (
                         not norm_stone
                         or norm_stone in BLACKLIST_NAMES
@@ -464,7 +453,6 @@ class InventoryEngine:
                     raw_lot = row.get(lot_col) if lot_col else None
                     norm_lot = normalize_lot_code(raw_lot) if pd.notna(raw_lot) else ""
 
-                    # Eğer A-283 gibi bilinen bir lotun özel taş adı varsa eşleştir
                     if norm_lot in self.stone_dna_db and norm_stone in ["", "BELIRSIZ"]:
                         norm_stone = self.stone_dna_db[norm_lot]["stone_name"]
 
@@ -482,7 +470,6 @@ class InventoryEngine:
                         else ""
                     )
 
-                    # Taş bazlı tekilleştirilmiş toplama (SILVER ROOTS & SİLVER ROOTS birleşir)
                     if norm_stone not in stones_agg:
                         stones_agg[norm_stone] = {
                             "stone_name": norm_stone,
@@ -526,7 +513,6 @@ class InventoryEngine:
         return None
 
     def get_context_snapshot(self) -> str:
-        """Yapay zekaya verilecek temizlenmiş ve sıralanmış canlı stok özeti."""
         lines = ["=== ARSLANLAR MARBLE CANLI STOK VE ÜRETİM ÖZETİ ==="]
         if self.stones_summary:
             sorted_stones = sorted(
@@ -562,15 +548,19 @@ class InventoryEngine:
 
 
 # =====================================================================
-# 5. YAPAY ZEKA ORKESTRATÖRÜ (GATEKEEPER + VISION + 3 DİL)
+# 5. YAPAY ZEKA ORKESTRATÖRÜ (DOĞRUDAN REST API - AQ. AUTH KEY UYUMLU)
 # =====================================================================
 class ArgonBrain:
     def __init__(self, api_key: str, inventory: InventoryEngine, drive: DriveExplorer):
+        self.api_key = api_key
         self.inventory = inventory
         self.drive = drive
         self.chat_memory: Dict[int, deque] = {}
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        # Senin gönderdiğin cURL çıktısındaki resmi endpoint:
+        self.endpoint = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-flash-latest:generateContent"
+        )
 
     def add_memory(self, chat_id: int, sender: str, text: str) -> None:
         if chat_id not in self.chat_memory:
@@ -582,6 +572,56 @@ class ArgonBrain:
             return "Önceki sohbet kaydı yok."
         return "\n".join(self.chat_memory[chat_id])
 
+    def _call_gemini_rest(
+        self, prompt_text: str, image_bytes: Optional[bytes] = None
+    ) -> Dict[str, Any]:
+        parts: List[Dict[str, Any]] = [{"text": prompt_text}]
+
+        if image_bytes:
+            try:
+                pil_img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+                buf = io.BytesIO()
+                pil_img.save(buf, format="JPEG", quality=85)
+                b64_data = base64.b64encode(buf.getvalue()).decode("utf-8")
+                parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": b64_data,
+                        }
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Görsel base64'e çevrilemedi: {e}")
+
+        payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "temperature": 0.25,
+                "responseMimeType": "application/json",
+            },
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "X-goog-api-key": self.api_key,
+        }
+
+        resp = requests.post(
+            self.endpoint, headers=headers, json=payload, timeout=45
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+
+        data = resp.json()
+        raw_text = (
+            data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        )
+        # Markdown JSON bloğu varsa temizle
+        raw_text = re.sub(r"^```json\s*", "", raw_text)
+        raw_text = re.sub(r"\s*```$", "", raw_text)
+        return json.loads(raw_text)
+
     async def evaluate_and_respond(
         self,
         chat_id: int,
@@ -591,21 +631,10 @@ class ArgonBrain:
         bot_mentioned: bool,
         image_bytes: Optional[bytes] = None,
     ) -> Dict[str, Any]:
-        """
-        Gelen mesajı veya mermer fotoğrafını analiz eder ve katı JSON formatında
-        karar döner:
-        {
-          "should_reply": true/false,
-          "language": "tr" | "uk" | "en",
-          "reply_text": "...",
-          "matched_queries": ["A-283", "SILVER ROOTS"],
-          "send_photos": true/false
-        }
-        """
         catalog_context = self.inventory.get_context_snapshot()
         recent_history = self.get_memory_text(chat_id)
 
-        system_instruction = f"""
+        full_prompt = f"""
 Sen Arslanlar Marble (Arslanlar Mermer) şirketinin kıdemli dijital satış ve operasyon uzmanısın.
 Adın Argon. Grupta veya özel sohbette gerçek bir insan uzman gibi davranırsın. Komutlarla değil, doğal konuşmayla çalışırsın.
 
@@ -636,6 +665,12 @@ SON SOHBET GEÇMİŞİ (BAĞLAM):
 
 {catalog_context}
 
+GELEN MESAJ BİLGİSİ:
+- Grup Sohbeti mi: {is_group}
+- Bot Etiketlendi mi: {bot_mentioned}
+- Gönderen: {user_name}
+- Mesaj: {user_text or '[Görsel Gönderildi]'}
+
 ÇIKTI FORMATI (SADECE GEÇERLİ BİR JSON DÖNDÜR):
 {{
   "should_reply": true,
@@ -646,35 +681,13 @@ SON SOHBET GEÇMİŞİ (BAĞLAM):
 }}
 """
 
-        user_prompt = (
-            f"Grup Sohbeti mi: {is_group}\n"
-            f"Bot Etiketlendi mi: {bot_mentioned}\n"
-            f"Gönderen: {user_name}\n"
-            f"Mesaj: {user_text or '[Görsel Gönderildi]'}"
-        )
-
-        contents: List[Any] = [system_instruction, user_prompt]
-        if image_bytes:
-            try:
-                pil_img = Image.open(io.BytesIO(image_bytes))
-                contents.append(pil_img)
-            except Exception as e:
-                logger.warning(f"Görsel PIL formatına çevrilemedi: {e}")
-
         try:
-            response = await asyncio.to_thread(
-                self.model.generate_content,
-                contents,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                    temperature=0.25,
-                ),
+            result = await asyncio.to_thread(
+                self._call_gemini_rest, full_prompt, image_bytes
             )
-            raw_json = response.text.strip()
-            result = json.loads(raw_json)
             return result
         except Exception as e:
-            logger.error(f"Gemini analiz hatası: {e}")
+            logger.error(f"Gemini REST analiz hatası: {e}")
             return {
                 "should_reply": False,
                 "language": "tr",
@@ -691,7 +704,6 @@ drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(EXCEL_FILE_PATH, drive_explorer)
 argon_brain = ArgonBrain(GEMINI_API_KEY, inventory_engine, drive_explorer)
 
-# Çift mesaj (Duplicate) önleyici kilit
 PROCESSED_MESSAGES: deque = deque(maxlen=500)
 
 
@@ -702,13 +714,11 @@ async def handle_incoming_message(
     if not message or not update.effective_chat:
         return
 
-    # 1. Çift Mesaj Kilidi (Aynı mesajın iki kere işlenmesini kesin olarak engeller)
     unique_msg_key = f"{update.effective_chat.id}:{message.message_id}"
     if unique_msg_key in PROCESSED_MESSAGES:
         return
     PROCESSED_MESSAGES.append(unique_msg_key)
 
-    # Botun kendi mesajlarını yoksay
     if message.from_user and message.from_user.is_bot:
         return
 
@@ -719,7 +729,6 @@ async def handle_incoming_message(
     )
     user_text = (message.text or message.caption or "").strip()
 
-    # Manuel link öğretme kısayolu (Örn: "A-283 linki: https://drive.google.com/...")
     link_teach_match = re.search(
         r"([A-Za-z0-9-_]+)\s+linki\s*:\s*(https?://\S+)", user_text, re.IGNORECASE
     )
@@ -733,7 +742,6 @@ async def handle_incoming_message(
         )
         return
 
-    # Bot etiketlendi mi veya bota yanıt (reply) mı verildi?
     bot_username = context.bot.username or ""
     bot_mentioned = False
     if bot_username and f"@{bot_username.lower()}" in user_text.lower():
@@ -745,7 +753,6 @@ async def handle_incoming_message(
     ):
         bot_mentioned = True
 
-    # Fotoğraf var mı kontrol et
     image_bytes: Optional[bytes] = None
     if message.photo:
         try:
@@ -755,16 +762,13 @@ async def handle_incoming_message(
         except Exception as e:
             logger.error(f"Telegram fotoğraf indirme hatası: {e}")
 
-    # Boş mesajları atla
     if not user_text and not image_bytes:
         return
 
-    # Sohbet geçmişine kullanıcı mesajını ekle
     argon_brain.add_memory(
         chat_id, user_name, user_text if user_text else "[Mermer Fotoğrafı Gönderdi]"
     )
 
-    # AI Gatekeeper & Analiz
     decision = await argon_brain.evaluate_and_respond(
         chat_id=chat_id,
         user_name=user_name,
@@ -775,7 +779,6 @@ async def handle_incoming_message(
     )
 
     if not decision.get("should_reply", False):
-        # Geyik muhabbeti veya alakasız mesaj -> Tamamen sessiz kal!
         return
 
     reply_text = decision.get("reply_text", "").strip()
@@ -785,31 +788,29 @@ async def handle_incoming_message(
     if not reply_text:
         return
 
-    # Eşleşen lot/taşlar için Google Drive alt klasör linklerini ve görsellerini bul
     drive_links_section: List[str] = []
     media_group_items: List[InputMediaPhoto] = []
     newly_cached_keys: List[Tuple[str, int]] = []
+    last_folder_link: Optional[str] = None
 
     for query in matched_queries[:3]:
         norm_q = normalize_lot_code(query)
         folder_id, folder_link = drive_explorer.find_folder(norm_q)
 
         if folder_link:
-            drive_links_section.append(f"📂 **{norm_q} Drive:** {folder_link}")
+            last_folder_link = folder_link
+            drive_links_section.append(f"📂 {norm_q} Drive: {folder_link}")
         elif norm_q in inventory_engine.lots_index:
             drive_links_section.append(
-                f"📂 **{norm_q} Genel Drive:** {DEFAULT_DRIVE_LINK}"
+                f"📂 {norm_q} Genel Drive: {DEFAULT_DRIVE_LINK}"
             )
 
-        # Eğer görsel gönderimi istendiyse (veya fotoğraf eşleştirildiyse)
         if send_photos:
-            # 1. Önce 0.1 saniyelik Telegram file_id önbelleğine bak
             cached_file_ids = drive_explorer.visual_cache.get(norm_q, [])
             if cached_file_ids:
                 for fid in cached_file_ids[:2]:
                     media_group_items.append(InputMediaPhoto(media=fid))
             elif folder_id:
-                # 2. Önbellekte yoksa Drive alt klasöründen indir
                 await context.bot.send_chat_action(
                     chat_id=chat_id, action=ChatAction.UPLOAD_PHOTO
                 )
@@ -820,19 +821,15 @@ async def handle_incoming_message(
                     media_group_items.append(InputMediaPhoto(media=img_b))
                     newly_cached_keys.append((norm_q, len(media_group_items) - 1))
 
-    # Yanıt metnine nokta atışı Drive alt klasör linklerini ekle
     if drive_links_section:
         links_block = "\n".join(drive_links_section)
-        if folder_link and folder_link not in reply_text:
+        if not last_folder_link or last_folder_link not in reply_text:
             reply_text = f"{reply_text}\n\n{links_block}"
 
-    # Hafızaya botun yanıtını kaydet
     argon_brain.add_memory(chat_id, "Argon (Bot)", reply_text)
 
-    # Eğer vitrin fotoğrafları bulunduysa Albüm (MediaGroup) olarak gönder
     if media_group_items:
         try:
-            # İlk fotoğrafın altına açıklamayı (caption) ekle (1024 karakter sınırı)
             short_caption = (
                 reply_text[:1020] + "..." if len(reply_text) > 1024 else reply_text
             )
@@ -844,7 +841,6 @@ async def handle_incoming_message(
                 media=media_group_items[:10]
             )
 
-            # Yeni yüklenen fotoğrafların Telegram file_id'lerini 0.1s hız için kaydet
             for norm_q, idx in newly_cached_keys:
                 if idx < len(sent_messages) and sent_messages[idx].photo:
                     fid = sent_messages[idx].photo[-1].file_id
@@ -853,14 +849,12 @@ async def handle_incoming_message(
                         drive_explorer.visual_cache[norm_q].append(fid)
             save_json_file(VISUAL_CACHE_FILE, drive_explorer.visual_cache)
 
-            # Eğer metin 1024 karakterden uzunsa devamını ayrı mesaj olarak at
             if len(reply_text) > 1024:
                 await message.reply_text(reply_text)
             return
         except Exception as e:
             logger.error(f"Albüm gönderme hatası, metne dönülüyor: {e}")
 
-    # Görsel yoksa veya gönderilemediyse doğrudan metin olarak yanıtla
     await message.reply_text(reply_text, disable_web_page_preview=False)
 
 
@@ -884,12 +878,10 @@ def main():
     if not TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN ortam değişkeni eksik!")
 
-    # Render port kontrolü için arka planda Flask başlat
     threading.Thread(target=run_flask, daemon=True).start()
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Tüm metin ve fotoğrafları tek bir akıllı orkestratörde topla (Çakışmayı önler)
     application.add_handler(
         MessageHandler(
             (filters.TEXT | filters.PHOTO) & (~filters.COMMAND),
@@ -897,8 +889,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Arslanlar Marble Argon Master Bot başlatılıyor...")
-    # drop_pending_updates=True ile eski asılı kalmış mesajları temizleyerek başla
+    logger.info("🚀 Arslanlar Marble Argon Master Bot (REST Mode) başlatılıyor...")
     application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
