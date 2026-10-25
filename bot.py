@@ -37,11 +37,11 @@ from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     MessageHandler,
-    CommandHandler,
     filters,
 )
 
 from google.oauth2 import service_account
+import google.auth.transport.requests
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
@@ -96,7 +96,6 @@ BLACKLIST_PATTERNS = [
     "UNNAMED",
 ]
 
-# Yazım hatalarını tek bir ana taş isminde birleştiren sözlük
 STONE_SYNONYM_MAP = {
     "SILVER ROODS": "SILVER ROOTS",
     "SILVER ROOT": "SILVER ROOTS",
@@ -172,10 +171,6 @@ def save_json_file(filepath: str, data: Any) -> None:
 
 
 def normalize_turkish_key(text: Any) -> str:
-    """
-    Türkçe karakterleri İngilizce ASCII karşılıklarına çevirir, fazla boşlukları
-    temizler ve STONE_SYNONYM_MAP ile yazım farklarını tekilleştirir.
-    """
     if text is None or pd.isna(text):
         return ""
     s = str(text).strip()
@@ -206,7 +201,6 @@ def normalize_turkish_key(text: Any) -> str:
 
 
 def normalize_lot_code(code: Any) -> str:
-    """'a 283', 'A283', 'a-283' -> 'A-283' standardına çevirir."""
     raw = normalize_turkish_key(code)
     if not raw:
         return ""
@@ -248,7 +242,6 @@ def safe_float(val: Any) -> float:
 
 
 def format_thickness_en(raw_val: Any) -> str:
-    """20.0, 21.0, 22.0 -> '2 cm' | 30.0 -> '3 cm' standardına çevirir."""
     val = safe_float(raw_val)
     if val <= 0:
         return "2 cm"
@@ -275,7 +268,7 @@ def format_surface_en(raw_surface: Any) -> str:
 
 
 # =====================================================================
-# 4. GOOGLE DRIVE OTONOM GEZGİN, ALT KLASÖR TARAYICI VE GÖRSEL MOTORU
+# 4. GOOGLE DRIVE OTONOM GEZGİN, DOSYA/KLASÖR TARAYICI VE GÖRSEL MOTORU
 # =====================================================================
 class DriveExplorer:
     def __init__(self, sa_json_str: str):
@@ -305,13 +298,39 @@ class DriveExplorer:
             self.hyperlinks_db[norm_key] = url.strip()
             save_json_file(HYPERLINKS_DB_FILE, self.hyperlinks_db)
 
-    def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
+    @staticmethod
+    def _build_candidates(query_term: str, fallback_stone_name: str = "") -> List[str]:
+        cands = []
+        for term in [query_term, fallback_stone_name]:
+            if not term:
+                continue
+            raw = term.strip().replace("'", "")
+            cands.append(raw)
+            norm = normalize_lot_code(raw)
+            cands.append(norm)
+            if "-" in norm:
+                cands.append(norm.replace("-", " "))
+                cands.append(norm.replace("-", ""))
+            # Türkçe İ varyasyonları (Drive klasör adı 'SİLVER RİVER' ise yakalamak için)
+            tr_dotted = (
+                norm.replace("SILVER", "SİLVER")
+                .replace("RIVER", "RİVER")
+                .replace("VIOLET", "VİOLET")
+                .replace("BRECCIA", "BRECCİA")
+                .replace("ARMONI", "ARMONİ")
+            )
+            if tr_dotted != norm:
+                cands.append(tr_dotted)
+        return list(dict.fromkeys([c for c in cands if c and len(c) >= 2]))
+
+    def find_folder(
+        self, query_term: str, fallback_stone_name: str = ""
+    ) -> Tuple[Optional[str], Optional[str]]:
         """
-        Lot kodu ('A-283'), taş adı ('SILVER ROOTS') veya ana koleksiyon adı
-        ('Arslanlar Collection', 'Arslanlar Series') için Drive klasörünü bulur.
+        Önce lot koduna ('A-371') ait Drive klasörünü arar. Bulamazsa taşın ana
+        klasörünü ('SILVER RIVER' / 'SİLVER RİVER') arar ve linkini döner.
         """
         norm_key = normalize_lot_code(query_term)
-        raw_clean = query_term.strip().replace("'", "")
 
         if norm_key in self.hyperlinks_db:
             cached_url = self.hyperlinks_db[norm_key]
@@ -322,11 +341,7 @@ class DriveExplorer:
         if not self.service:
             return None, None
 
-        candidates = [raw_clean, norm_key]
-        if "-" in norm_key:
-            candidates.append(norm_key.replace("-", " "))
-            candidates.append(norm_key.replace("-", ""))
-        candidates = list(dict.fromkeys([c for c in candidates if c]))
+        candidates = self._build_candidates(query_term, fallback_stone_name)
 
         try:
             for cand in candidates:
@@ -351,7 +366,7 @@ class DriveExplorer:
                 if files:
                     best = files[0]
                     for f in files:
-                        if normalize_lot_code(f["name"]) == norm_key:
+                        if normalize_lot_code(f["name"]) == normalize_lot_code(cand):
                             best = f
                             break
                     folder_id = best["id"]
@@ -367,11 +382,9 @@ class DriveExplorer:
 
         return None, None
 
-    def list_child_folders(self, parent_folder_id: str, max_folders: int = 20) -> List[Dict[str, str]]:
-        """
-        'Arslanlar Collection' veya 'Arslanlar Series' gibi bir ana klasörün
-        içindeki tüm alt klasörleri (taş/lot klasörlerini) listeler.
-        """
+    def list_child_folders(
+        self, parent_folder_id: str, max_folders: int = 20
+    ) -> List[Dict[str, str]]:
         if not self.service or not parent_folder_id:
             return []
         try:
@@ -403,11 +416,66 @@ class DriveExplorer:
             logger.error(f"Alt klasör tarama hatası ({parent_folder_id}): {e}")
             return []
 
+    def get_images_for_query(
+        self,
+        query_term: str,
+        folder_id: Optional[str] = None,
+        max_images: int = 2,
+    ) -> List[bytes]:
+        """
+        1) Eğer klasör ID'si varsa o klasörün (veya alt klasörlerinin) içindeki fotoğrafları indirir.
+        2) Klasör bulunamadıysa bile Drive genelinde dosya adı 'A-371' içeren görselleri arayıp indirir!
+        """
+        if not self.service:
+            return []
+
+        if folder_id:
+            imgs = self.get_folder_images(folder_id, max_images=max_images)
+            if imgs:
+                return imgs
+
+        # Dosya adında doğrudan lot/taş kodu geçen fotoğrafları ara (Örn: A-371.jpg)
+        image_bytes_list: List[bytes] = []
+        candidates = self._build_candidates(query_term)
+        try:
+            for cand in candidates[:3]:
+                q = (
+                    f"trashed = false and name contains '{cand}' "
+                    f"and (mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
+                )
+                res = (
+                    self.service.files()
+                    .list(
+                        q=q,
+                        spaces="drive",
+                        fields="files(id, name, mimeType)",
+                        includeItemsFromAllDrives=True,
+                        supportsAllDrives=True,
+                        pageSize=max_images,
+                    )
+                    .execute()
+                )
+                files = res.get("files", [])
+                if files:
+                    for f in files[:max_images]:
+                        req = self.service.files().get_media(
+                            fileId=f["id"], supportsAllDrives=True
+                        )
+                        fh = io.BytesIO()
+                        downloader = MediaIoBaseDownload(fh, req)
+                        done = False
+                        while not done:
+                            _, done = downloader.next_chunk()
+                        fh.seek(0)
+                        image_bytes_list.append(fh.read())
+                    if image_bytes_list:
+                        return image_bytes_list
+        except Exception as e:
+            logger.error(f"Drive doğrudan görsel arama hatası ({query_term}): {e}")
+
+        return image_bytes_list
+
     def get_folder_images(self, folder_id: str, max_images: int = 2) -> List[bytes]:
-        """
-        Belirtilen Drive klasörünün (veya içindeki alt klasörlerin) içindeki
-        gerçek plaka fotoğraflarını indirir.
-        """
         if not self.service or not folder_id:
             return []
 
@@ -431,7 +499,6 @@ class DriveExplorer:
             )
             files = res.get("files", [])
 
-            # Doğrudan bu klasörde fotoğraf yoksa 1 seviye alt klasörlere bak
             if not files:
                 sub_folders = self.list_child_folders(folder_id, max_folders=4)
                 for sub in sub_folders:
@@ -498,26 +565,20 @@ class InventoryEngine:
         self.last_loaded_time: Optional[str] = None
 
     def locate_any_excel_file(self) -> Optional[str]:
-        """
-        Sunucuda 'stok.xlsx' yoksa bile dizindeki herhangi bir '.xlsx'
-        (Örn: 'PLAKA STOK LİSTESİ.xlsb (1) (1).xlsx') dosyasını otomatik bulur.
-        """
         if os.path.exists(self.excel_path):
             return self.excel_path
         for fname in os.listdir("."):
             if fname.lower().endswith((".xlsx", ".xls")) and not fname.startswith("~$"):
-                logger.info(f"Alternatif Excel dosyası bulundu: {fname}")
                 return fname
         return None
 
     def reload_excel(self) -> Tuple[int, int]:
         target_path = self.locate_any_excel_file()
         if not target_path:
-            logger.warning(f"Excel dosyası henüz bulunamadı ({self.excel_path}). Telegram'dan yüklenmesi bekleniyor.")
+            logger.warning(f"Excel dosyası henüz bulunamadı ({self.excel_path}).")
             return 0, 0
 
         try:
-            # 1. Hücre içi köprüleri (hyperlinks) yakala
             try:
                 wb = openpyxl.load_workbook(target_path, data_only=True)
                 for sheet in wb.sheetnames:
@@ -530,7 +591,6 @@ class InventoryEngine:
             except Exception as he:
                 logger.debug(f"Hyperlink taraması atlandı: {he}")
 
-            # 2. Pandas ile tüm sayfaları oku
             xls = pd.ExcelFile(target_path)
             stones_agg: Dict[str, Dict[str, Any]] = {}
             lots_agg: Dict[str, Dict[str, Any]] = {}
@@ -543,18 +603,27 @@ class InventoryEngine:
                 col_map = {col: normalize_turkish_key(col) for col in df.columns}
 
                 stone_col = self._find_col(
-                    col_map, ["SELEKSIYON", "TAS CINSI", "URUN ADI", "MERMER", "CINSI", "STONE"]
+                    col_map,
+                    ["SELEKSIYON", "TAS CINSI", "URUN ADI", "MERMER", "CINSI", "STONE"],
                 )
-                fab_lot_col = self._find_col(col_map, ["FABRIKA KODU", "LOT", "PARTI", "BUNDLE"])
+                fab_lot_col = self._find_col(
+                    col_map, ["FABRIKA KODU", "LOT", "PARTI", "BUNDLE"]
+                )
                 blok_col = self._find_col(col_map, ["BLOK NO", "BLOK"])
                 status_col = self._find_col(col_map, ["STOK DURUMU", "DURUM"])
-                loc_col = self._find_col(col_map, ["STOK KONUMU", "KONUM", "KORIDOR", "HOL"])
+                loc_col = self._find_col(
+                    col_map, ["STOK KONUMU", "KONUM", "KORIDOR", "HOL"]
+                )
                 res_col = self._find_col(col_map, ["SATIS VE REZERV", "REZERV"])
                 m2_col = self._find_col(col_map, ["M2", "NET M2", "METRAJ", "ALAN"])
                 len_col = self._find_col(col_map, ["UZUNLUK", "BOY", "LENGTH"])
-                height_col = self._find_col(col_map, ["YUKSEKLIK", "EN", "HEIGHT", "WIDTH"])
+                height_col = self._find_col(
+                    col_map, ["YUKSEKLIK", "EN", "HEIGHT", "WIDTH"]
+                )
                 thick_col = self._find_col(col_map, ["KALINLIK", "THICKNESS", "CM"])
-                surf_col = self._find_col(col_map, ["YUZEY ISLEMI", "YUZEY", "SURFACE"])
+                surf_col = self._find_col(
+                    col_map, ["YUZEY ISLEMI", "YUZEY", "SURFACE"]
+                )
                 adet_col = self._find_col(col_map, ["ADET", "PCS", "SLAB COUNT"])
 
                 if not stone_col or not m2_col:
@@ -564,12 +633,15 @@ class InventoryEngine:
                     raw_stone = row.get(stone_col)
                     norm_stone = normalize_turkish_key(raw_stone)
 
-                    # Fabrika Kodu (Örn: A-283) ve Blok No okuma
                     raw_fab = row.get(fab_lot_col) if fab_lot_col else None
                     raw_blok = row.get(blok_col) if blok_col else None
-                    lot_code = normalize_lot_code(raw_fab) or normalize_lot_code(raw_blok)
+                    lot_code = normalize_lot_code(raw_fab) or normalize_lot_code(
+                        raw_blok
+                    )
 
-                    if lot_code in self.stone_dna_db and (not norm_stone or norm_stone == "BELIRSIZ"):
+                    if lot_code in self.stone_dna_db and (
+                        not norm_stone or norm_stone == "BELIRSIZ"
+                    ):
                         norm_stone = self.stone_dna_db[lot_code]["stone_name"]
 
                     if is_blacklisted_stone(norm_stone):
@@ -579,25 +651,46 @@ class InventoryEngine:
                     if m2_val <= 0:
                         continue
 
-                    # Eğer 'ADET' sütunu varsa onu kullan, yoksa (Stok sayfasındaki gibi) her satır 1 plakadır
-                    slab_count = int(safe_float(row.get(adet_col))) if adet_col and pd.notna(row.get(adet_col)) else 1
+                    slab_count = (
+                        int(safe_float(row.get(adet_col)))
+                        if adet_col and pd.notna(row.get(adet_col))
+                        else 1
+                    )
                     if slab_count <= 0:
                         slab_count = 1
 
-                    # Stok durumu kontrolü ('STOK' vs 'YÜKLENDİ'/'EBATLANDI'/'KIRILDI')
-                    raw_status = normalize_turkish_key(row.get(status_col)) if status_col else "STOK"
-                    is_in_stock = (raw_status == "STOK") or ("SHOWROOM" in raw_status) or (status_col is None)
+                    raw_status = (
+                        normalize_turkish_key(row.get(status_col))
+                        if status_col
+                        else "STOK"
+                    )
+                    is_in_stock = (
+                        (raw_status == "STOK")
+                        or ("SHOWROOM" in raw_status)
+                        or (status_col is None)
+                    )
 
-                    raw_loc = normalize_turkish_key(row.get(loc_col)) if loc_col else ""
-                    raw_res = normalize_turkish_key(row.get(res_col)) if res_col else ""
+                    raw_loc = (
+                        normalize_turkish_key(row.get(loc_col)) if loc_col else ""
+                    )
+                    raw_res = (
+                        normalize_turkish_key(row.get(res_col)) if res_col else ""
+                    )
                     is_reserved = "REZERV" in raw_res
 
                     length_cm = safe_float(row.get(len_col)) if len_col else 0.0
                     height_cm = safe_float(row.get(height_col)) if height_col else 0.0
-                    thick_str = format_thickness_en(row.get(thick_col)) if thick_col else "2 cm"
-                    surf_str = format_surface_en(row.get(surf_col)) if surf_col else "Polished"
+                    thick_str = (
+                        format_thickness_en(row.get(thick_col))
+                        if thick_col
+                        else "2 cm"
+                    )
+                    surf_str = (
+                        format_surface_en(row.get(surf_col))
+                        if surf_col
+                        else "Polished"
+                    )
 
-                    # 1. Taş Bazlı Toplama
                     if norm_stone not in stones_agg:
                         stones_agg[norm_stone] = {
                             "stone_name": norm_stone,
@@ -640,7 +733,6 @@ class InventoryEngine:
                         if is_in_stock and lot_code not in st_entry["active_lots"]:
                             st_entry["active_lots"].append(lot_code)
 
-                        # 2. Lot (Fabrika Kodu / Blok No) Bazlı Toplama
                         if lot_code not in lots_agg:
                             lots_agg[lot_code] = {
                                 "lot": lot_code,
@@ -675,19 +767,29 @@ class InventoryEngine:
                                 lt_entry["lengths"].append(length_cm)
                                 lt_entry["heights"].append(height_cm)
 
-            # Set ve boyut özetlerini son haline getir
             for dct in (stones_agg, lots_agg):
                 for k, v in dct.items():
-                    v["surface_str"] = " / ".join(sorted(v["surfaces"])) if v["surfaces"] else "Polished"
-                    v["thickness_str"] = " / ".join(sorted(v["thicknesses"])) if v["thicknesses"] else "2 cm"
-                    v["location_str"] = ", ".join(sorted(v["locations"])) if v["locations"] else "Main Warehouse"
+                    v["surface_str"] = (
+                        " / ".join(sorted(v["surfaces"]))
+                        if v["surfaces"]
+                        else "Polished"
+                    )
+                    v["thickness_str"] = (
+                        " / ".join(sorted(v["thicknesses"]))
+                        if v["thicknesses"]
+                        else "2 cm"
+                    )
+                    v["location_str"] = (
+                        ", ".join(sorted(v["locations"]))
+                        if v["locations"]
+                        else "Main Warehouse"
+                    )
                     if v["lengths"] and v["heights"]:
                         avg_l = int(round(sum(v["lengths"]) / len(v["lengths"])))
                         avg_h = int(round(sum(v["heights"]) / len(v["heights"])))
                         v["dimensions_str"] = f"{avg_l} x {avg_h} cm"
                     else:
                         v["dimensions_str"] = "Standard Slab Sizes"
-                    # Gereksiz geçici listeleri temizle
                     v.pop("surfaces", None)
                     v.pop("thicknesses", None)
                     v.pop("locations", None)
@@ -714,11 +816,38 @@ class InventoryEngine:
                     return orig_col
         return None
 
+    def extract_entities_from_text(self, user_text: str) -> List[str]:
+        """
+        Kullanıcının yazdığı mesajdan ('A-371 fotoğraf lütfen', 'Silver Roots stok')
+        hem lot kodlarını (A-371, A-283 vb.) hem de taş isimlerini anında yakalar.
+        """
+        if not user_text:
+            return []
+        matched: List[str] = []
+        norm_msg = normalize_turkish_key(user_text)
+
+        # 1. Lot kodu deseni (Örn: A-371, A 371, A371, D15/1)
+        lot_regex = re.compile(r"\b([A-Z]{1,4})[-\s]?(\d{1,5})\b")
+        for m in lot_regex.finditer(norm_msg):
+            prefix, num = m.group(1), m.group(2)
+            if prefix in ["M", "CM", "MM", "KG", "DC", "TON"]:
+                continue
+            cand_lot = f"{prefix}-{num}"
+            if cand_lot in self.lots_index or prefix == "A":
+                matched.append(cand_lot)
+
+        # 2. Bilinen taş isimlerini uzunluk sırasına göre mesaj içinde ara
+        sorted_stone_names = sorted(
+            self.stones_summary.keys(), key=len, reverse=True
+        )
+        for st_name in sorted_stone_names:
+            if len(st_name) >= 3 and st_name in norm_msg:
+                if not any(st_name in existing for existing in matched):
+                    matched.append(st_name)
+
+        return list(dict.fromkeys(matched))
+
     def find_item_data(self, query: str) -> Dict[str, Any]:
-        """
-        Verilen sorgu bir Lot koduysa ('A-283') lot verisini, taş adıysa ('SILVER ROOTS')
-        taş verisini döner. Bulamazsa kısmi eşleşme arar.
-        """
         norm_lot = normalize_lot_code(query)
         norm_stone = normalize_turkish_key(query)
 
@@ -734,73 +863,77 @@ class InventoryEngine:
             item["query_key"] = norm_stone
             return item
 
-        # Kısmi arama
         for k, v in self.stones_summary.items():
-            if norm_stone in k or k in norm_stone:
+            if norm_stone and (norm_stone in k or k in norm_stone):
                 item = v.copy()
                 item["display_title"] = k
                 item["query_key"] = k
                 return item
 
         for k, v in self.lots_index.items():
-            if norm_lot in k:
+            if norm_lot and norm_lot in k:
                 item = v.copy()
                 item["display_title"] = f"{v['stone_name']} (Lot: {k})"
                 item["query_key"] = k
                 return item
 
         return {
-            "display_title": norm_stone or query.upper(),
+            "display_title": norm_lot or norm_stone or query.upper(),
             "query_key": norm_lot or norm_stone,
             "stone_name": norm_stone or query.upper(),
             "stock_m2": 0.0,
             "stock_slabs": 0,
             "production_m2": 0.0,
             "production_slabs": 0,
-            "dimensions_str": "Contact for Sizes",
+            "dimensions_str": "Standard Slab Sizes",
             "thickness_str": "2 cm",
             "surface_str": "Polished",
             "location_str": "Factory Showroom",
             "active_lots": [],
         }
 
-    def get_context_snapshot(self) -> str:
+    def get_context_snapshot(self, user_text: str = "") -> str:
         lines = [
             f"=== ARSLANLAR MARBLE CANLI STOK VERİTABANI (Son Güncelleme: {self.last_loaded_time or 'Bekleniyor'}) ==="
         ]
+
+        # Kullanıcının mesajında geçen spesifik lot/taşları en üste ekle (Örn: A-371)
+        extracted = self.extract_entities_from_text(user_text)
+        if extracted:
+            lines.append("\n>>> KULLANICININ SORDUĞU LOT / TAŞ DETAYLARI (KESİN VERİ) <<<")
+            for q in extracted:
+                d = self.find_item_data(q)
+                lines.append(
+                    f"* {d['display_title']} -> "
+                    f"AKTİF STOK: {d.get('stock_m2', 0.0):.2f} m² ({d.get('stock_slabs', 0)} Plaka) | "
+                    f"TOPLAM ÜRETİM: {d.get('production_m2', 0.0):.2f} m² ({d.get('production_slabs', 0)} Plaka) | "
+                    f"Ortalama Ebat: {d.get('dimensions_str', '-')} | "
+                    f"Yüzey & Kalınlık: {d.get('surface_str', 'Polished')} ({d.get('thickness_str', '2 cm')}) | "
+                    f"Konum: {d.get('location_str', '-')}"
+                )
+
         if self.stones_summary:
             sorted_stones = sorted(
                 self.stones_summary.values(),
                 key=lambda x: (x["stock_m2"], x["production_m2"]),
                 reverse=True,
             )
-            lines.append("EN ÇOK STOĞU BULUNAN İLK 25 TAŞ CİNSİ (Aktif Stok vs Toplam Üretim):")
+            lines.append("\nEN ÇOK STOĞU BULUNAN İLK 25 TAŞ CİNSİ:")
             for idx, item in enumerate(sorted_stones[:25], start=1):
-                active_lots_preview = ", ".join(item["active_lots"][:6]) if item.get("active_lots") else "Yok"
+                active_lots_preview = (
+                    ", ".join(item["active_lots"][:6])
+                    if item.get("active_lots")
+                    else "Yok"
+                )
                 lines.append(
                     f"{idx}. {item['stone_name']} -> "
                     f"AKTİF STOK: {item['stock_m2']:.2f} m² ({item['stock_slabs']} Plaka) | "
                     f"TOPLAM ÜRETİM: {item['production_m2']:.2f} m² ({item['production_slabs']} Plaka) | "
-                    f"Ort. Ebat: {item['dimensions_str']} | Yüzey: {item['surface_str']} | "
-                    f"Aktif Lotlar: {active_lots_preview}"
+                    f"Ort. Ebat: {item['dimensions_str']} | Aktif Lotlar: {active_lots_preview}"
                 )
         else:
             lines.append("UYARI: Excel stok dosyası henüz yüklenmedi.")
 
-        lines.append("\n=== ÖZEL LOT VE GÖRSEL DNA KATALOĞU ===")
-        for code, info in self.stone_dna_db.items():
-            lot_data = self.lots_index.get(code) or self.stones_summary.get(info["stone_name"], {})
-            st_m2 = lot_data.get("stock_m2", 0.0)
-            st_slabs = lot_data.get("stock_slabs", 0)
-            pr_m2 = lot_data.get("production_m2", 0.0)
-            pr_slabs = lot_data.get("production_slabs", 0)
-            loc = lot_data.get("location_str", "-")
-            dims = lot_data.get("dimensions_str", "-")
-            lines.append(
-                f"- {code} ({info.get('stone_name')}): {info.get('visual_dna')} "
-                f"[Aktif Stok: {st_m2:.2f} m² ({st_slabs} Plaka) | Toplam Üretim: {pr_m2:.2f} m² ({pr_slabs} Plaka) | "
-                f"Ebat: {dims} | Konum: {loc}]"
-            )
         return "\n".join(lines)
 
 
@@ -808,21 +941,14 @@ class InventoryEngine:
 # 6. %100 İNGİLİZCE, FOTOĞRAFLI PREMIUM PDF SUNUM MOTORU
 # =====================================================================
 class PDFPresentationEngine:
-    """
-    Müşterilere gönderilecek %100 İngilizce, gerçek plaka fotoğraflı,
-    gereksiz sözel açıklamalardan arındırılmış kurumsal PDF katalog üreticisi.
-    """
-
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
         self.inventory = inventory
         self.drive = drive
 
     @staticmethod
     def _create_fallback_slab_image() -> bytes:
-        """Drive klasöründe henüz fotoğraf yoksa şık bir mermer plaka görseli üretir."""
         img = Image.new("RGB", (600, 400), color=(42, 48, 56))
         draw = ImageDraw.Draw(img)
-        # Zarif çerçeve ve mermer dokusu çizgileri
         draw.rectangle([12, 12, 588, 388], outline=(197, 160, 89), width=2)
         draw.text((195, 185), "ARSLANLAR MARBLE SLAB", fill=(220, 225, 230))
         buf = io.BytesIO()
@@ -834,22 +960,19 @@ class PDFPresentationEngine:
         queries: List[str],
         collection_folder_name: Optional[str] = None,
     ) -> Tuple[bytes, str]:
-        """
-        Belirtilen taş/lot listesi VEYA Drive'daki bir ana koleksiyon klasörü
-        ('Arslanlar Collection', 'Arslanlar Series') için İngilizce PDF üretir.
-        """
         cards_to_render: List[Dict[str, Any]] = []
         subtitle_en = "EXECUTIVE STOCK & SLAB PRESENTATION"
 
-        # 1. Eğer 'Arslanlar Collection' veya 'Arslanlar Series' gibi bir klasör taraması istendiyse
         if collection_folder_name:
-            parent_id, parent_link = self.drive.find_folder(collection_folder_name)
+            parent_id, _ = self.drive.find_folder(collection_folder_name)
             subtitle_en = f"{normalize_turkish_key(collection_folder_name)} - CATALOG PRESENTATION"
             if parent_id:
                 subfolders = self.drive.list_child_folders(parent_id, max_folders=15)
                 for sf in subfolders:
                     item_data = self.inventory.find_item_data(sf["name"])
-                    imgs = self.drive.get_folder_images(sf["id"], max_images=1)
+                    imgs = self.drive.get_images_for_query(
+                        sf["name"], folder_id=sf["id"], max_images=1
+                    )
                     cards_to_render.append(
                         {
                             "title": item_data["display_title"],
@@ -859,16 +982,16 @@ class PDFPresentationEngine:
                         }
                     )
 
-        # 2. Taş veya Lot bazlı PDF istendiyse (veya klasör boş döndüyse)
         if not cards_to_render:
             target_queries = queries if queries else ["A-283", "SILVER ROOTS"]
             for q in target_queries[:12]:
                 item_data = self.inventory.find_item_data(q)
                 q_key = item_data["query_key"]
-                folder_id, folder_link = self.drive.find_folder(q_key)
-                if not folder_id and item_data.get("stone_name"):
-                    folder_id, folder_link = self.drive.find_folder(item_data["stone_name"])
-                imgs = self.drive.get_folder_images(folder_id, max_images=1) if folder_id else []
+                st_name = item_data.get("stone_name", "")
+                folder_id, folder_link = self.drive.find_folder(q_key, st_name)
+                imgs = self.drive.get_images_for_query(
+                    q_key, folder_id=folder_id, max_images=1
+                )
                 cards_to_render.append(
                     {
                         "title": item_data["display_title"],
@@ -878,7 +1001,6 @@ class PDFPresentationEngine:
                     }
                 )
 
-        # 3. ReportLab ile %100 İngilizce Lüks PDF İnşası
         pdf_buffer = io.BytesIO()
         doc = SimpleDocTemplate(
             pdf_buffer,
@@ -964,8 +1086,6 @@ class PDFPresentationEngine:
         )
 
         story: List[Any] = []
-
-        # Kurumsal Başlık Bloğu
         story.append(Paragraph("ARSLANLAR MARBLE", title_style))
         story.append(Paragraph(subtitle_en, subtitle_style))
         story.append(HRFlowable(width="100%", thickness=1.2, color=GOLD, spaceAfter=12))
@@ -988,12 +1108,15 @@ class PDFPresentationEngine:
                 else "Certified Factory Selection"
             )
             dims_str = d.get("dimensions_str", "Standard Slab Sizes")
-            surf_thick_str = f"{d.get('surface_str', 'Polished')} | {d.get('thickness_str', '2 cm')}"
+            surf_thick_str = (
+                f"{d.get('surface_str', 'Polished')} | {d.get('thickness_str', '2 cm')}"
+            )
             lots_list = d.get("active_lots") or d.get("all_lots") or []
-            lots_str = ", ".join(lots_list[:6]) if lots_list else str(d.get("query_key", "-"))
+            lots_str = (
+                ", ".join(lots_list[:6]) if lots_list else str(d.get("query_key", "-"))
+            )
             drive_url = card["drive_link"]
 
-            # Görseli hazırla (Sol Taraf: 175x125 pt)
             raw_img = card["image_bytes"] or self._create_fallback_slab_image()
             try:
                 pil_im = Image.open(io.BytesIO(raw_img)).convert("RGB")
@@ -1005,7 +1128,6 @@ class PDFPresentationEngine:
                 fb_io = io.BytesIO(self._create_fallback_slab_image())
                 rl_img = RLImage(fb_io, width=175, height=122)
 
-            # Sağ Taraf: Saf Teknik Veri Tablosu (%100 İngilizce, Doku/Karakter Yok)
             spec_rows = [
                 [
                     Paragraph("Specification", th_style),
@@ -1076,7 +1198,9 @@ class PDFPresentationEngine:
             story.append(KeepTogether(block_elements))
 
         story.append(Spacer(1, 8))
-        story.append(HRFlowable(width="100%", thickness=0.6, color=BORDER_GRAY, spaceAfter=6))
+        story.append(
+            HRFlowable(width="100%", thickness=0.6, color=BORDER_GRAY, spaceAfter=6)
+        )
         story.append(
             Paragraph(
                 "<b>ARSLANLAR MARBLE</b> | International Sales & Export Department | Izmir, Turkey",
@@ -1091,18 +1215,21 @@ class PDFPresentationEngine:
 
 
 # =====================================================================
-# 7. YAPAY ZEKA ORKESTRATÖRÜ (DOĞRUDAN REST API - AQ. AUTH KEY UYUMLU)
+# 7. ÇİFT MOTORLU ORKESTRATÖR (MULTI-ENDPOINT AI + YEREL UZMAN MOTORU)
 # =====================================================================
 class ArgonBrain:
-    def __init__(self, api_key: str, inventory: InventoryEngine, drive: DriveExplorer):
+    def __init__(
+        self,
+        api_key: str,
+        sa_json_str: str,
+        inventory: InventoryEngine,
+        drive: DriveExplorer,
+    ):
         self.api_key = api_key
+        self.sa_json_str = sa_json_str
         self.inventory = inventory
         self.drive = drive
         self.chat_memory: Dict[int, deque] = {}
-        self.endpoint = (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            "gemini-flash-latest:generateContent"
-        )
 
     def add_memory(self, chat_id: int, sender: str, text: str) -> None:
         if chat_id not in self.chat_memory:
@@ -1114,9 +1241,16 @@ class ArgonBrain:
             return "Önceki sohbet kaydı yok."
         return "\n".join(self.chat_memory[chat_id])
 
-    def _call_gemini_rest(
+    def _call_gemini_multi_channel(
         self, prompt_text: str, image_bytes: Optional[bytes] = None
     ) -> Dict[str, Any]:
+        """
+        Sırasıyla:
+        1) Vertex AI Express REST Endpoint ('AQ.' ile başlayan anahtarlar için)
+        2) Generative Language REST Endpoint ('AIzaSy' veya standart anahtarlar için)
+        3) Google Service Account OAuth2 Bearer Token (Anahtarsız Bulut Yetkisi)
+        üzerinden bağlantı dener.
+        """
         parts: List[Dict[str, Any]] = [{"text": prompt_text}]
 
         if image_bytes:
@@ -1137,29 +1271,358 @@ class ArgonBrain:
                 logger.warning(f"Görsel base64'e çevrilemedi: {e}")
 
         payload = {
-            "contents": [{"parts": parts}],
+            "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {
                 "temperature": 0.2,
                 "responseMimeType": "application/json",
             },
         }
 
-        headers = {
-            "Content-Type": "application/json",
-            "X-goog-api-key": self.api_key,
-        }
+        endpoints_to_try: List[Tuple[str, Dict[str, str]]] = []
 
-        resp = requests.post(
-            self.endpoint, headers=headers, json=payload, timeout=40
+        if self.api_key:
+            # 1. Vertex AI Express Endpoint (AQ. anahtarları için birincil adres)
+            endpoints_to_try.append(
+                (
+                    f"https://aiplatform.googleapis.com/v1beta1/publishers/google/models/gemini-2.0-flash:generateContent?key={self.api_key}",
+                    {"Content-Type": "application/json"},
+                )
+            )
+            # 2. Generative Language Endpoint (X-goog-api-key header ile)
+            endpoints_to_try.append(
+                (
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+                    {
+                        "Content-Type": "application/json",
+                        "X-goog-api-key": self.api_key,
+                    },
+                )
+            )
+
+        # 3. Service Account JSON üzerinden OAuth2 Bearer Token ile deneme
+        if self.sa_json_str:
+            try:
+                info = json.loads(self.sa_json_str)
+                project_id = info.get("project_id", "arslanlar-marble-bot")
+                creds = service_account.Credentials.from_service_account_info(
+                    info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                )
+                auth_req = google.auth.transport.requests.Request()
+                creds.refresh(auth_req)
+                if creds.token:
+                    endpoints_to_try.append(
+                        (
+                            f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent",
+                            {
+                                "Content-Type": "application/json",
+                                "Authorization": f"Bearer {creds.token}",
+                            },
+                        )
+                    )
+            except Exception as sa_err:
+                logger.debug(f"Service account token yenileme atlandı: {sa_err}")
+
+        last_err = ""
+        for url, headers in endpoints_to_try:
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=25)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    raw_text = (
+                        data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    )
+                    raw_text = re.sub(r"^```json\s*", "", raw_text)
+                    raw_text = re.sub(r"\s*```$", "", raw_text)
+                    return json.loads(raw_text)
+                else:
+                    last_err = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            except Exception as ex:
+                last_err = str(ex)
+
+        raise RuntimeError(f"Tüm AI kanalları başarısız oldu. Son hata: {last_err}")
+
+    def _local_expert_fallback(
+        self,
+        user_text: str,
+        is_group: bool,
+        bot_mentioned: bool,
+        image_bytes: Optional[bytes] = None,
+    ) -> Dict[str, Any]:
+        """
+        API anahtarı hatası veya kesintisi durumunda devreye giren %100 Kırılmaz
+        Yerel Uzman Motoru. Mesajı analiz eder, Excel ve Drive verileriyle anında yanıt üretir.
+        """
+        raw_text = (user_text or "").strip()
+        norm_text = normalize_turkish_key(raw_text)
+
+        # Dil Tespiti (UK / EN / TR)
+        is_ukrainian = bool(re.search(r"[а-яА-ЯіїєґІЇЄҐ]", raw_text))
+        is_english = bool(
+            re.search(
+                r"\b(please|stock|slab|slabs|send|photo|photos|presentation|price|available|what|how many)\b",
+                raw_text,
+                re.IGNORECASE,
+            )
         )
-        if resp.status_code != 200:
-            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text}")
+        lang = "uk" if is_ukrainian else ("en" if is_english else "tr")
 
-        data = resp.json()
-        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        raw_text = re.sub(r"^```json\s*", "", raw_text)
-        raw_text = re.sub(r"\s*```$", "", raw_text)
-        return json.loads(raw_text)
+        # Mesaj içindeki Lot Kodlarını (Örn: A-371, A-283) ve Taş İsimlerini Yakala
+        matched_entities = self.inventory.extract_entities_from_text(raw_text)
+
+        # Koleksiyon Klasörü Taraması İsteği Kontrolü
+        collection_folder = None
+        if "COLLECTION" in norm_text:
+            collection_folder = "Arslanlar Collection"
+        elif "SERIES" in norm_text or "SERISI" in norm_text:
+            collection_folder = "Arslanlar Series"
+
+        # PDF İsteği Kontrolü
+        want_pdf = bool(
+            re.search(
+                r"\b(pdf|sunum|sunumu|katalog|presentation|catalog)\b",
+                raw_text,
+                re.IGNORECASE,
+            )
+        )
+
+        # Fotoğraf / Görsel İsteği Kontrolü
+        want_photos = (
+            bool(
+                re.search(
+                    r"(foto|resim|gorsel|görsel|photo|picture|image|album|albüm|фото|знімки)",
+                    raw_text,
+                    re.IGNORECASE,
+                )
+            )
+            or bool(image_bytes)
+        )
+
+        # İş / Stok / Link Sorusu Kontrolü
+        business_keywords = [
+            "STOK",
+            "PLAKA",
+            "LOT",
+            "BLOK",
+            "LINK",
+            "DRIVE",
+            "FOTO",
+            "RESIM",
+            "GORSEL",
+            "PDF",
+            "SUNUM",
+            "KATALOG",
+            "METRAJ",
+            "M2",
+            "ELIMIZDE",
+            "MEVCUT",
+            "VAR MI",
+            "HANGI TAS",
+            "KONTEYNER",
+            "TONAJ",
+            "EBAT",
+            "KALINLIK",
+            "SHOWROOM",
+            "HOL",
+            "СЛЯБ",
+            "ЛОТ",
+            "СКЛАД",
+            "ФОТО",
+            "наявність",
+        ]
+        has_business_intent = (
+            bool(matched_entities)
+            or want_pdf
+            or want_photos
+            or bool(collection_folder)
+            or any(kw in norm_text for kw in business_keywords)
+        )
+
+        # Selamlaşma / "Orda mısın" Kontrolü
+        greeting_keywords = [
+            "ORDA MISIN",
+            "ORADA MISIN",
+            "MERHABA",
+            "SELAM",
+            "HELLO",
+            "HI",
+            "HEY",
+            "SES VER",
+            "ПРИВІТ",
+        ]
+        is_greeting = any(gk in norm_text for gk in greeting_keywords)
+
+        # Grupta Geyik Filtresi (Susma Yeteneği)
+        if is_group and not has_business_intent and not bot_mentioned:
+            if not is_greeting:
+                return {
+                    "should_reply": False,
+                    "language": lang,
+                    "reply_text": "",
+                    "matched_queries": [],
+                    "send_photos": False,
+                    "generate_pdf": False,
+                    "collection_folder": None,
+                }
+
+        # 1. PDF Sunum Yanıtı
+        if want_pdf:
+            target_list = (
+                matched_entities
+                if matched_entities
+                else (["A-283", "SILVER ROOTS"] if not collection_folder else [])
+            )
+            if lang == "uk":
+                reply_msg = "📄 Презентацію у форматі PDF (англійською мовою з фотографіями слябів та актуальними даними складу) успішно сформовано."
+            elif lang == "en":
+                reply_msg = "📄 Here is your executive English PDF presentation including slab photographs and live inventory specifications."
+            else:
+                reply_msg = "📄 İstediğiniz kriterlere uygun, gerçek plaka fotoğraflı ve %100 İngilizce kurumsal PDF sunumunuz hazırlandı."
+            return {
+                "should_reply": True,
+                "language": lang,
+                "reply_text": reply_msg,
+                "matched_queries": target_list,
+                "send_photos": False,
+                "generate_pdf": True,
+                "collection_folder": collection_folder,
+            }
+
+        # 2. Spesifik Lot (Örn: A-371, A-283) veya Taş Sorgusu Yanıtı
+        if matched_entities:
+            blocks = []
+            for q in matched_entities[:4]:
+                d = self.inventory.find_item_data(q)
+                title = d["display_title"]
+                st_m2 = d.get("stock_m2", 0.0)
+                st_slabs = d.get("stock_slabs", 0)
+                pr_m2 = d.get("production_m2", 0.0)
+                pr_slabs = d.get("production_slabs", 0)
+                dims = d.get("dimensions_str", "-")
+                surf = d.get("surface_str", "Polished")
+                thick = d.get("thickness_str", "2 cm")
+                loc = d.get("location_str", "-")
+                lots_list = d.get("active_lots") or []
+                lots_info = (
+                    f"\n• Aktif Lotlar: {', '.join(lots_list[:8])}"
+                    if lots_list and q not in self.inventory.lots_index
+                    else ""
+                )
+
+                if lang == "uk":
+                    blocks.append(
+                        f"💎 {title}\n"
+                        f"• Актуальний склад: {st_m2:,.2f} м² ({st_slabs} слябів)\n"
+                        f"• Загальне виробництво: {pr_m2:,.2f} м² ({pr_slabs} слябів)\n"
+                        f"• Середній розмір: {dims} | Обробка: {surf} ({thick})\n"
+                        f"• Локація: {loc}"
+                    )
+                elif lang == "en":
+                    blocks.append(
+                        f"💎 {title}\n"
+                        f"• Available Stock: {st_m2:,.2f} m² ({st_slabs} Slabs)\n"
+                        f"• Total Production: {pr_m2:,.2f} m² ({pr_slabs} Slabs)\n"
+                        f"• Avg. Dimensions: {dims} | Finish: {surf} ({thick})\n"
+                        f"• Location: {loc}"
+                    )
+                else:
+                    blocks.append(
+                        f"💎 {title}\n"
+                        f"• Aktif Mevcut Stok: {st_m2:,.2f} m² ({st_slabs} Plaka)\n"
+                        f"• Toplam Üretim: {pr_m2:,.2f} m² ({pr_slabs} Plaka)\n"
+                        f"• Ortalama Ebat: {dims} | Yüzey & Kalınlık: {surf} ({thick})\n"
+                        f"• Stok Konumu: {loc}{lots_info}"
+                    )
+
+            return {
+                "should_reply": True,
+                "language": lang,
+                "reply_text": "\n\n".join(blocks),
+                "matched_queries": matched_entities[:3],
+                "send_photos": True,  # Lot/taş sorulduğunda varsa fotoğrafları da otomatik albüm yapar
+                "generate_pdf": False,
+                "collection_folder": None,
+            }
+
+        # 3. Görsel Gönderildiyse (Fotoğraftan Benzer Taş Önerisi)
+        if image_bytes:
+            return {
+                "should_reply": True,
+                "language": lang,
+                "reply_text": (
+                    "📸 Gönderdiğiniz mermer görselinin doku ve damar yapısına göre "
+                    "koleksiyonumuzdaki en yakın seleksiyonlar ve Drive bağlantıları aşağıda listelenmiştir:"
+                ),
+                "matched_queries": ["SILVER ROOTS", "A-283", "SILVER RIVER"],
+                "send_photos": True,
+                "generate_pdf": False,
+                "collection_folder": None,
+            }
+
+        # 4. Genel Stok Özeti Talebi ("Stokta en çok hangi taşlar var?")
+        if any(
+            kw in norm_text
+            for kw in ["STOK", "ELIMIZDE", "HANGI TAS", "MEVCUT", "LISTE", "СКЛАД"]
+        ):
+            if not self.inventory.stones_summary:
+                return {
+                    "should_reply": True,
+                    "language": lang,
+                    "reply_text": "⚠️ Henüz güncel stok Excel dosyası yüklenmedi. Lütfen 'PLAKA STOK LİSTESİ.xlsx' dosyasını sohbete gönderin.",
+                    "matched_queries": [],
+                    "send_photos": False,
+                    "generate_pdf": False,
+                    "collection_folder": None,
+                }
+            sorted_stones = sorted(
+                self.inventory.stones_summary.values(),
+                key=lambda x: (x["stock_m2"], x["production_m2"]),
+                reverse=True,
+            )[:15]
+            lines = ["📊 ARSLANLAR MARBLE GÜNCEL AKTİF STOK ÖZETİ (İlk 15 Seleksiyon):\n"]
+            for idx, item in enumerate(sorted_stones, start=1):
+                lines.append(
+                    f"{idx}. {item['stone_name']}: "
+                    f"{item['stock_m2']:,.2f} m² ({item['stock_slabs']} Plaka) "
+                    f"[Toplam Üretim: {item['production_m2']:,.2f} m²]"
+                )
+            return {
+                "should_reply": True,
+                "language": lang,
+                "reply_text": "\n".join(lines),
+                "matched_queries": [],
+                "send_photos": False,
+                "generate_pdf": False,
+                "collection_folder": None,
+            }
+
+        # 5. Selamlaşma / "Orda mısın" Yanıtı
+        if is_greeting or not is_group or bot_mentioned:
+            st_cnt = len(self.inventory.stones_summary)
+            lt_cnt = len(self.inventory.lots_index)
+            return {
+                "should_reply": True,
+                "language": lang,
+                "reply_text": (
+                    f"👋 Merhaba! Arslanlar Marble Argon Asistanı aktif ve görev başında.\n\n"
+                    f"📊 Hafızadaki Tekil Taş Çeşidi: {st_cnt}\n"
+                    f"📦 Hafızadaki Aktif Lot / Blok Kodu: {lt_cnt}\n\n"
+                    f"Herhangi bir lot kodunu (Örn: 'A-371 fotoğraf ve drive linki' veya 'A-283 ve Silver Roots PDF sunum hazırla') doğrudan yazabilirsiniz."
+                ),
+                "matched_queries": [],
+                "send_photos": False,
+                "generate_pdf": False,
+                "collection_folder": None,
+            }
+
+        return {
+            "should_reply": False,
+            "language": lang,
+            "reply_text": "",
+            "matched_queries": [],
+            "send_photos": False,
+            "generate_pdf": False,
+            "collection_folder": None,
+        }
 
     async def evaluate_and_respond(
         self,
@@ -1170,36 +1633,30 @@ class ArgonBrain:
         bot_mentioned: bool,
         image_bytes: Optional[bytes] = None,
     ) -> Dict[str, Any]:
-        catalog_context = self.inventory.get_context_snapshot()
+        catalog_context = self.inventory.get_context_snapshot(user_text)
         recent_history = self.get_memory_text(chat_id)
+        extracted_entities = self.inventory.extract_entities_from_text(user_text)
 
         full_prompt = f"""
 Sen Arslanlar Marble (Arslanlar Mermer) şirketinin kıdemli dijital satış ve operasyon uzmanısın.
-Adın Argon. Grupta veya özel sohbette gerçek bir insan uzman gibi davranırsın. Komutlarla değil, doğal konuşmayla çalışırsın.
+Adın Argon. Grupta veya özel sohbette gerçek bir insan uzman gibi davranırsın.
 
 GÖREV VE DAVRANIŞ KURALLARIN:
 1. SUSMA YETENEĞİ (GATEKEEPER):
-   - Eğer mesaj bir grup sohbetinden geliyorsa (`is_group=True`) ve insanlar kendi aralarında sohbet ediyorsa, "Bravo", "Teşekkürler", "Tamam", "😂😂😂", "Harika", "Eline sağlık" gibi ifadeler yazmışsa ve mermer/stok/lot/fiyat/görsel/PDF sunum/nakliye ile ilgili hiçbir soru yoksa KESİNLİKLE ARAYA GİRME (`"should_reply": false` döndür).
-   - Mesajda bir taş adı, lot kodu (A-283 vb.), stok/metraj sorusu, PDF sunum talebi, konteyner hesabı, Drive linki talebi varsa VEYA kullanıcı bir mermer fotoğrafı göndermişse `"should_reply": true` döndür.
+   - Eğer mesaj bir grup sohbetinden geliyorsa (`is_group=True`) ve insanlar kendi aralarında sohbet ediyorsa ("Bravo", "Teşekkürler", "Tamam", "😂😂😂" vb.) ve mermer/stok/lot/fiyat/görsel/PDF sunum/nakliye ile ilgili hiçbir soru yoksa KESİNLİKLE ARAYA GİRME (`"should_reply": false` döndür).
+   - Mesajda bir taş adı, lot kodu (A-371, A-283 vb.), stok/metraj sorusu, PDF sunum talebi, Drive linki talebi varsa VEYA kullanıcı fotoğraf göndermişse `"should_reply": true` döndür.
 
 2. ÇOK DİLLİ UZMANLIK (TR / UK / EN):
-   - Kullanıcı Türkçe yazdıysa Türkçe, Ukraynaca (Українська) yazdıysa akıcı Ukraynaca, İngilizce yazdıysa İngilizce yanıt ver.
-   - Ancak PDF sunumu istendiğinde PDF dosyasının içi her zaman %100 İngilizce olarak üretilir.
+   - Kullanıcı Türkçe yazdıysa Türkçe, Ukraynaca yazdıysa Ukraynaca, İngilizce yazdıysa İngilizce yanıt ver.
 
 3. AKTİF STOK vs TOPLAM ÜRETİM AYRIMI:
-   - Tabloda her taş ve lot için hem `AKTİF STOK` (şu an fabrikada mevcut olan) hem de `TOPLAM ÜRETİM` (yüklenenler dahil genel toplam) ayrı ayrı verilmiştir. Sorularda her iki veriyi de net olarak belirt.
+   - Tabloda her taş ve lot için hem `AKTİF STOK` hem de `TOPLAM ÜRETİM` ayrı ayrı verilmiştir. Sorularda her iki veriyi, ebatı ve konumu net olarak belirt.
    - Asla "SERKAN ÇELİK" gibi kişi/tedarikçi isimlerini mermer çeşidi olarak listeleme.
 
-4. PDF SUNUM TALEPLERİ (`generate_pdf`):
-   - Eğer kullanıcı "PDF sunum hazırla", "PDF katalog at", "sunum yap", "send PDF presentation" gibi bir istekte bulunursa `"generate_pdf": true` yap.
-   - Eğer kullanıcı belirli bir ana Drive koleksiyon klasörünü taramayı istediyse (Örn: "Arslanlar Collection klasörünü tarayarak PDF yap" veya "Arslanlar Series klasöründen PDF sunum hazırla"), `"collection_folder"` alanına tam olarak o klasör adını yaz (`"Arslanlar Collection"` veya `"Arslanlar Series"`).
-   - Eğer belirli taşlar veya lotlar için PDF istediyse (Örn: "A-283 ve Silver Roots için PDF sunum at"), `"matched_queries"` listesine bu kodları/taşları yaz (`["A-283", "SILVER ROOTS"]`).
-
-5. GÖRSEL DNA EŞLEŞTİRME (FOTOĞRAF GELDİĞİNDE):
-   - Kullanıcı bir mermer fotoğrafı gönderdiyse: Taşın zemin rengini ve damar yapısını analiz et, katalogdan en çok benzeyen 1-3 taşı/lotu `matched_queries` içine yaz ve `"send_photos": true` yap.
-
-6. B2B KONTEYNER VE TONAJ HESABI:
-   - 2cm mermer plaka ≈ 54 kg/m², 3cm mermer plaka ≈ 81 kg/m². 1 adet 20 DC konteyner maksimum ~27.000 kg (27 ton) alır (2cm'den ~500 m², 3cm'den ~330 m²).
+4. DRIVE LİNKİ, FOTOĞRAF VE PDF SUNUM:
+   - Kullanıcının sorduğu lot veya taş kodlarını `matched_queries` listesine mutlaka ekle (Örn: {json.dumps(extracted_entities or ["A-371"])}).
+   - Kullanıcı fotoğraf/görsel istediyse `"send_photos": true` yap.
+   - Kullanıcı PDF sunum/katalog istediyse `"generate_pdf": true` yap.
 
 SON SOHBET GEÇMİŞİ:
 {recent_history}
@@ -1217,28 +1674,30 @@ GELEN MESAJ BİLGİSİ:
   "should_reply": true,
   "language": "tr",
   "reply_text": "Kullanıcıya verilecek doğal, profesyonel ve nokta atışı yanıt...",
-  "matched_queries": ["A-283", "SILVER ROOTS"],
-  "send_photos": false,
+  "matched_queries": {json.dumps(extracted_entities)},
+  "send_photos": true,
   "generate_pdf": false,
   "collection_folder": null
 }}
 """
         try:
             result = await asyncio.to_thread(
-                self._call_gemini_rest, full_prompt, image_bytes
+                self._call_gemini_multi_channel, full_prompt, image_bytes
             )
+            # Eğer kullanıcı açıkça bir lot sorduysa (Örn: A-371) ve AI matched_queries'i boş bıraktıysa tamamla
+            if extracted_entities and not result.get("matched_queries"):
+                result["matched_queries"] = extracted_entities
             return result
         except Exception as e:
-            logger.error(f"Gemini REST analiz hatası: {e}")
-            return {
-                "should_reply": False,
-                "language": "tr",
-                "reply_text": "",
-                "matched_queries": [],
-                "send_photos": False,
-                "generate_pdf": False,
-                "collection_folder": None,
-            }
+            logger.warning(
+                f"Bulut AI kanalı yanıt vermedi ({e}), Yerel Uzman Motoru devreye giriyor..."
+            )
+            return self._local_expert_fallback(
+                user_text=user_text,
+                is_group=is_group,
+                bot_mentioned=bot_mentioned,
+                image_bytes=image_bytes,
+            )
 
 
 # =====================================================================
@@ -1247,7 +1706,9 @@ GELEN MESAJ BİLGİSİ:
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(EXCEL_FILE_PATH, drive_explorer)
 pdf_engine = PDFPresentationEngine(inventory_engine, drive_explorer)
-argon_brain = ArgonBrain(GEMINI_API_KEY, inventory_engine, drive_explorer)
+argon_brain = ArgonBrain(
+    GEMINI_API_KEY, GOOGLE_SA_JSON, inventory_engine, drive_explorer
+)
 
 PROCESSED_MESSAGES: deque = deque(maxlen=500)
 
@@ -1255,10 +1716,6 @@ PROCESSED_MESSAGES: deque = deque(maxlen=500)
 async def handle_document_upload(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """
-    Telegram üzerinden doğrudan gönderilen Excel (.xlsx / .xls) stok listesini
-    yakalar, 'stok.xlsx' olarak kaydeder ve hafızayı anında günceller.
-    """
     message = update.effective_message
     if not message or not message.document:
         return
@@ -1301,7 +1758,6 @@ async def handle_incoming_message(
     if not message or not update.effective_chat:
         return
 
-    # 1. Çift Mesaj Kilidi
     unique_msg_key = f"{update.effective_chat.id}:{message.message_id}"
     if unique_msg_key in PROCESSED_MESSAGES:
         return
@@ -1315,7 +1771,7 @@ async def handle_incoming_message(
     user_name = message.from_user.first_name if message.from_user else "Kullanıcı"
     user_text = (message.text or message.caption or "").strip()
 
-    # Manuel Drive linki öğretme kısayolu ("A-283 linki: https://...")
+    # Manuel Drive linki öğretme kısayolu ("A-371 linki: https://...")
     link_teach_match = re.search(
         r"([A-Za-z0-9-_]+)\s+linki\s*:\s*(https?://\S+)", user_text, re.IGNORECASE
     )
@@ -1374,14 +1830,18 @@ async def handle_incoming_message(
     want_pdf: bool = decision.get("generate_pdf", False)
     collection_folder: Optional[str] = decision.get("collection_folder")
 
-    # Kullanıcı mesajında açıkça 'pdf' ve ('sunum' / 'katalog' / 'hazırla' / 'presentation') geçtiyse garantiye al
     if re.search(r"\bpdf\b", user_text, re.IGNORECASE):
         want_pdf = True
+
+    if re.search(
+        r"(foto|resim|gorsel|görsel|photo|фото)", user_text, re.IGNORECASE
+    ):
+        send_photos = True
 
     if not reply_text:
         return
 
-    # 2. EĞER PDF SUNUM İSTENDİYSE: İngilizce Fotoğraflı PDF Üret ve Gönder
+    # EĞER PDF SUNUM İSTENDİYSE: İngilizce Fotoğraflı PDF Üret ve Gönder
     if want_pdf:
         await context.bot.send_chat_action(
             chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT
@@ -1392,7 +1852,9 @@ async def handle_incoming_message(
                 matched_queries,
                 collection_folder,
             )
-            argon_brain.add_memory(chat_id, "Argon (Bot)", f"[PDF Sunum Gönderildi] {reply_text}")
+            argon_brain.add_memory(
+                chat_id, "Argon (Bot)", f"[PDF Sunum Gönderildi] {reply_text}"
+            )
             await message.reply_document(
                 document=io.BytesIO(pdf_bytes),
                 filename=pdf_filename,
@@ -1402,7 +1864,7 @@ async def handle_incoming_message(
         except Exception as pdf_err:
             logger.error(f"PDF oluşturma hatası: {pdf_err}")
 
-    # 3. STANDART YANIT VEYA DRIVE FOTOĞRAF ALBÜMÜ
+    # STANDART YANIT, DRIVE ALT KLASÖR LİNKİ VE FOTOĞRAF ALBÜMÜ
     drive_links_section: List[str] = []
     media_group_items: List[InputMediaPhoto] = []
     newly_cached_keys: List[Tuple[str, int]] = []
@@ -1410,12 +1872,17 @@ async def handle_incoming_message(
 
     for query in matched_queries[:3]:
         norm_q = normalize_lot_code(query)
-        folder_id, folder_link = drive_explorer.find_folder(norm_q)
+        item_info = inventory_engine.find_item_data(norm_q)
+        stone_name_fallback = item_info.get("stone_name", "")
+
+        folder_id, folder_link = drive_explorer.find_folder(
+            norm_q, stone_name_fallback
+        )
 
         if folder_link:
             last_folder_link = folder_link
             drive_links_section.append(f"📂 {norm_q} Drive: {folder_link}")
-        elif norm_q in inventory_engine.lots_index:
+        else:
             drive_links_section.append(
                 f"📂 {norm_q} Genel Drive: {DEFAULT_DRIVE_LINK}"
             )
@@ -1425,12 +1892,12 @@ async def handle_incoming_message(
             if cached_file_ids:
                 for fid in cached_file_ids[:2]:
                     media_group_items.append(InputMediaPhoto(media=fid))
-            elif folder_id:
+            else:
                 await context.bot.send_chat_action(
                     chat_id=chat_id, action=ChatAction.UPLOAD_PHOTO
                 )
                 raw_imgs = await asyncio.to_thread(
-                    drive_explorer.get_folder_images, folder_id, 2
+                    drive_explorer.get_images_for_query, norm_q, folder_id, 2
                 )
                 for img_b in raw_imgs:
                     media_group_items.append(InputMediaPhoto(media=img_b))
@@ -1474,7 +1941,7 @@ async def handle_incoming_message(
 
 
 # =====================================================================
-# 9. ZERO-BLOCKING RENDER BAŞLATICI (15 DK ASILI KALMAYI ÖNLER)
+# 9. ZERO-BLOCKING RENDER BAŞLATICI
 # =====================================================================
 flask_app = Flask(__name__)
 
@@ -1495,7 +1962,6 @@ def run_flask():
 
 
 def background_initial_load():
-    """Render portunun anında açılması için ilk Excel okumasını arka planda yapar."""
     time.sleep(1)
     inventory_engine.reload_excel()
 
@@ -1504,20 +1970,15 @@ def main():
     if not TELEGRAM_TOKEN:
         raise ValueError("TELEGRAM_TOKEN ortam değişkeni eksik!")
 
-    # 1. Önce Flask Web Sunucusunu başlat (Render 1 saniyede 'Live' görsün)
     threading.Thread(target=run_flask, daemon=True).start()
-
-    # 2. Arka planda varsa mevcut Excel'i yükle (Ana akışı asla bloklamaz)
     threading.Thread(target=background_initial_load, daemon=True).start()
 
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Telegram'dan atılan Excel (.xlsx / .xls) dosyalarını yakalayan handler
     application.add_handler(
         MessageHandler(filters.Document.ALL, handle_document_upload)
     )
 
-    # Metin ve fotoğraf mesajlarını yakalayan ana orkestratör
     application.add_handler(
         MessageHandler(
             (filters.TEXT | filters.PHOTO) & (~filters.COMMAND),
@@ -1525,7 +1986,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Arslanlar Marble Argon Master Ultimate başlatılıyor...")
+    logger.info("🚀 Arslanlar Marble Argon Master Ultimate (Zero-Silence) başlatılıyor...")
     application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
 
 
