@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import requests
 import pandas as pd
 from flask import Flask
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -50,7 +50,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_PureDrive_Final")
+logger = logging.getLogger("ArgonMaster_Perfect_Final")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -63,7 +63,6 @@ DEFAULT_DRIVE_LINK = (
 ).strip()
 
 HYPERLINKS_DB_FILE = "hyperlinks_db.json"
-VISUAL_CACHE_FILE = "visual_cache.json"
 
 # =====================================================================
 # 2. YARDIMCI FONKSİYONLAR
@@ -96,7 +95,8 @@ def normalize_lot_code(code: Any) -> str:
 def safe_float(val: Any) -> float:
     if pd.isna(val) or val is None: return 0.0
     if isinstance(val, (int, float)): return float(val)
-    s = re.sub(r"[^\d,.-]", "", str(val).strip())
+    s = str(val).strip()
+    s = re.sub(r"[^\d,.-]", "", s)
     if not s: return 0.0
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".") if s.rfind(",") > s.rfind(".") else s.replace(",", "")
@@ -124,14 +124,12 @@ class DriveExplorer:
                 info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
             )
             self.service = build("drive", "v3", credentials=creds, cache_discovery=False)
-            logger.info("Drive API Bağlantısı Başarılı (Pure Drive Engine Aktif).")
+            logger.info("Drive API Bağlantısı Başarılı.")
         except Exception as e:
             logger.error(f"Drive API Başlatma Hatası: {e}")
 
     def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
-        """Sorgulanan Lot, Taş veya Koleksiyon adını Drive'da arar."""
         norm_key = normalize_lot_code(query_term)
-        
         if norm_key in self.hyperlinks_db:
             url = self.hyperlinks_db[norm_key]
             fid = self._extract_folder_id(url)
@@ -167,7 +165,6 @@ class DriveExplorer:
         return None, None
 
     def list_child_folders(self, parent_folder_id: str) -> List[Dict[str, str]]:
-        """Koleksiyon taraması için ana klasörün içindeki alt klasörleri listeler."""
         if not self.service or not parent_folder_id: return []
         try:
             q = f"'{parent_folder_id}' in parents and trashed = false and mimeType = 'application/vnd.google-apps.folder'"
@@ -176,7 +173,7 @@ class DriveExplorer:
         except: return []
 
     def get_excel_from_folder(self, folder_id: str) -> Tuple[Optional[bytes], Optional[str]]:
-        """Klasörün içindeki çeki listesi Excel'ini bulur ve indirir."""
+        """Sadece o taşın klasöründeki orijinal çeki listesini bulur."""
         if not self.service or not folder_id: return None, None
         try:
             q = f"'{folder_id}' in parents and trashed = false and (mimeType contains 'spreadsheet' or mimeType contains 'excel' or name contains '.xls')"
@@ -184,7 +181,6 @@ class DriveExplorer:
             files = res.get("files", [])
             
             if not files:
-                # 1 alt seviyeye de bak
                 for sf in self.list_child_folders(folder_id)[:5]:
                     sq = f"'{sf['id']}' in parents and trashed = false and (mimeType contains 'spreadsheet' or mimeType contains 'excel' or name contains '.xls')"
                     sres = self.service.files().list(q=sq, spaces="drive", fields="files(id, name)", pageSize=2).execute()
@@ -196,38 +192,36 @@ class DriveExplorer:
         except: return None, None
 
     def get_images_structured(self, folder_id: str, query_term: str) -> Tuple[Optional[bytes], Optional[bytes]]:
-        """Telegram Albümü İçin: 1. Foto: Düz Plaka | 2. Foto: Bookmatch (Varsa) veya 2. Plaka"""
+        """TELEGRAM İÇİN: 1. Foto: Plaka, 2. Foto: Bookmatch (Varsa) veya 2. Plaka."""
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs: return None, None
 
-        bookmatch_file, std_files = None, []
+        bm_file, std_files = None, []
         for f in all_imgs:
             fn, pn = f.get("name", "").lower(), f.get("parent_name", "").lower()
             if "bookmatch" in fn or "bm" in fn or "bookmatch" in pn:
-                if not bookmatch_file: bookmatch_file = f
+                if not bm_file: bm_file = f
             else:
                 std_files.append(f)
 
-        img1_bytes = self._download_file(std_files[0]["id"]) if std_files else (self._download_file(bookmatch_file["id"]) if bookmatch_file else None)
-        img2_bytes = None
-        if bookmatch_file and bookmatch_file != (std_files[0] if std_files else None):
-            img2_bytes = self._download_file(bookmatch_file["id"])
+        img1 = self._download_file(std_files[0]["id"]) if std_files else (self._download_file(bm_file["id"]) if bm_file else None)
+        img2 = None
+        if bm_file and bm_file != (std_files[0] if std_files else None):
+            img2 = self._download_file(bm_file["id"])
         elif len(std_files) > 1:
-            img2_bytes = self._download_file(std_files[1]["id"])
-        elif img1_bytes:
-            img2_bytes = img1_bytes
+            img2 = self._download_file(std_files[1]["id"])
+        elif img1:
+            img2 = img1
 
-        return img1_bytes, img2_bytes
+        return img1, img2
 
     def get_best_slab_image(self, folder_id: str, query_term: str) -> Optional[bytes]:
-        """PDF Sunumu İçin: Sadece Düz Plaka Seçer. Bookmatch ASLA PDF'e alınmaz."""
+        """PDF İÇİN: Bookmatch fotoğraflarını ASLA almaz, sadece düz plaka seçer."""
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs: return None
-        
-        # Bookmatch olanları filtrele
         clean_slabs = [f for f in all_imgs if "bookmatch" not in f.get("name", "").lower() and "bm" not in f.get("name", "").lower() and "bookmatch" not in f.get("parent_name", "").lower()]
-        target_file = clean_slabs[0] if clean_slabs else all_imgs[0]
-        return self._download_file(target_file["id"])
+        target = clean_slabs[0] if clean_slabs else all_imgs[0]
+        return self._download_file(target["id"])
 
     def _scan_images(self, folder_id: str, query_term: str) -> List[Dict[str, str]]:
         if not self.service: return []
@@ -237,7 +231,6 @@ class DriveExplorer:
                 q = f"'{folder_id}' in parents and trashed = false and (mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
                 res = self.service.files().list(q=q, spaces="drive", fields="files(id, name)", pageSize=10).execute()
                 all_imgs.extend(res.get("files", []))
-                
                 for sf in self.list_child_folders(folder_id)[:5]:
                     sq = f"'{sf['id']}' in parents and trashed = false and (mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
                     sres = self.service.files().list(q=sq, spaces="drive", fields="files(id, name)", pageSize=5).execute()
@@ -274,14 +267,14 @@ class DriveExplorer:
 
 
 # =====================================================================
-# 4. PURE DECENTRALIZED INVENTORY ENGINE (Otonom Excel Okuyucu)
+# 4. PURE DECENTRALIZED INVENTORY ENGINE (Otonom Klasör Okuyucu)
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
         self.drive = drive
 
     def parse_packing_list_bytes(self, excel_bytes: bytes) -> Dict[str, Any]:
-        """İndirilen Excel'i okur, esnek sütun yapısıyla M2, ebat ve kalınlık çıkarır."""
+        """Sadece hedeflenen Drive Excel dosyasını (Çeki Listesi) okur."""
         try:
             xls = pd.ExcelFile(io.BytesIO(excel_bytes))
             df = pd.DataFrame()
@@ -325,20 +318,13 @@ class InventoryEngine:
             return {"total_m2": 0.0, "total_slabs": 0, "thickness": "-", "surface": "-", "dimensions": "-", "raw_df": None, "mapped_cols": {}}
 
     def get_lot_info(self, query: str, pre_folder_id: str = None, pre_folder_link: str = None) -> Dict[str, Any]:
-        """
-        Klasörde Excel yoksa bile ASLA çökmez; verileri 0 döner ama 
-        Drive klasör linkini ve fotoğraf ID'sini korur ki Telegram'dan fotoğraf atılabilsin.
-        """
+        """Klasörde Excel yoksa bile ASLA çökmez; sıfır döner ama Drive linkini korur."""
         norm_key = normalize_lot_code(query)
-        
-        folder_id = pre_folder_id
-        folder_link = pre_folder_link
-        
-        if not folder_id:
-            folder_id, folder_link = self.drive.find_folder(norm_key)
+        folder_id = pre_folder_id or self.drive.find_folder(norm_key)[0]
+        folder_link = pre_folder_link or self.drive.find_folder(norm_key)[1]
         
         excel_bytes, excel_name = None, None
-        data = {"total_m2": 0.0, "total_slabs": 0, "thickness": "-", "surface": "-", "dimensions": "Contact for Info", "raw_df": None, "mapped_cols": {}}
+        data = {"total_m2": 0.0, "total_slabs": 0, "thickness": "-", "surface": "-", "dimensions": "-", "raw_df": None, "mapped_cols": {}}
 
         if folder_id:
             excel_bytes, excel_name = self.drive.get_excel_from_folder(folder_id)
@@ -350,14 +336,44 @@ class InventoryEngine:
             "query": norm_key,
             "drive_link": folder_link or DEFAULT_DRIVE_LINK,
             "folder_id": folder_id,
-            "excel_name": excel_name or f"PackingList_{norm_key}.xlsx",
+            "excel_name": excel_name or f"{norm_key}_PackingList.xlsx",
             "excel_bytes": excel_bytes,
             "data": data
         }
 
+    def deep_scan_collections(self) -> str:
+        """Devasa Deep Scan Motoru: Tüm koleksiyonları ve Excel dosyalarını otonom tarar."""
+        collections = ["Arslanlar Collection", "Arslanlar Series", "Arslanlar Exclusive Collection"]
+        report_lines = ["🔍 <b>ARGON MASTER - DEEP SCAN EXECUTIVE REPORT</b> 🔍\n"]
+        total_factory_m2 = 0
+        total_factory_slabs = 0
+        
+        for coll in collections:
+            fid, _ = self.drive.find_folder(coll)
+            if not fid: continue
+            
+            report_lines.append(f"📁 <b>{coll.upper()}</b>")
+            sub_folders = self.drive.list_child_folders(fid)
+            coll_m2 = 0
+            
+            for sf in sub_folders:
+                ex_bytes, _ = self.drive.get_excel_from_folder(sf["id"])
+                if ex_bytes:
+                    data = self.parse_packing_list_bytes(ex_bytes)
+                    if data["total_m2"] > 0:
+                        report_lines.append(f"  ├ {sf['name']}: {data['total_m2']:,.2f} m² | {data['total_slabs']} Plaka")
+                        coll_m2 += data["total_m2"]
+                        total_factory_m2 += data["total_m2"]
+                        total_factory_slabs += data["total_slabs"]
+            
+            report_lines.append(f"  └ <i>Koleksiyon Toplamı: {coll_m2:,.2f} m²</i>\n")
+            
+        report_lines.append(f"🌐 <b>FABRİKA GENEL TOPLAMI: {total_factory_m2:,.2f} m² | {total_factory_slabs} Plaka</b>")
+        return "\n".join(report_lines)
+
 
 # =====================================================================
-# 5. KUSURSUZ PDF MOTORU (Sıfır Kayma, Lüks Logo, Koleksiyon Desteği)
+# 5. KUSURSUZ PDF MOTORU (Sıfır Kayma, Logolu, Bookmatch Filtreli)
 # =====================================================================
 class PDFPresentationEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -366,8 +382,7 @@ class PDFPresentationEngine:
 
     @staticmethod
     def _create_luxury_logo() -> bytes:
-        """PDF başlığı için premium Arslanlar Marble logosu oluşturur."""
-        img = Image.new("RGB", (500, 100), color=(255, 255, 255))
+        img = Image.new("RGB", (600, 100), color=(255, 255, 255))
         draw = ImageDraw.Draw(img)
         draw.text((20, 20), "ARSLANLAR MARBLE", fill=(20, 33, 61))
         draw.text((20, 60), "P R E M I U M   C O L L E C T I O N", fill=(197, 160, 89))
@@ -376,91 +391,65 @@ class PDFPresentationEngine:
         return buf.getvalue()
 
     def generate_presentation_pdf(self, queries: List[str], collection_folder_name: str = None) -> Tuple[bytes, str]:
-        """
-        Gerek spesifik taşlar, gerekse de devasa bir koleksiyon klasörü için
-        (Örn: Arslanlar Collection) baştan sona kusursuz lüks PDF üretir.
-        """
         cards = []
         pdf_title = "EXECUTIVE STOCK & SLAB PRESENTATION"
 
-        # 1. Koleksiyon Klasörü Taraması (Deep Scan)
         if collection_folder_name:
             pdf_title = f"{normalize_turkish_key(collection_folder_name)} - CATALOG PRESENTATION"
             parent_id, _ = self.drive.find_folder(collection_folder_name)
             if parent_id:
                 subfolders = self.drive.list_child_folders(parent_id)
                 for sf in subfolders:
-                    # Klasöre gir, Excel'i oku (yoksa 0 m2 olarak geçer ama fotoyu alır)
                     info = self.inventory.get_lot_info(sf["name"], sf["id"], sf["link"])
-                    # Sadece tek, en temiz plaka görseli
-                    img = self.drive.get_best_slab_image(sf["id"], sf["name"])
-                    
-                    cards.append({
-                        "title": sf["name"].upper(),
-                        "data": info["data"],
-                        "drive_link": sf["link"],
-                        "image_bytes": img
-                    })
-
-        # 2. Spesifik Sorgular (A-371, vb.)
+                    img = self.drive.get_best_slab_image(sf["id"], sf["name"]) # Bookmatch Elendi!
+                    cards.append({"title": sf["name"].upper(), "data": info["data"], "drive_link": sf["link"], "image_bytes": img})
         else:
             for q in queries:
                 info = self.inventory.get_lot_info(q)
                 img = self.drive.get_best_slab_image(info["folder_id"], q)
-                cards.append({
-                    "title": q.upper(),
-                    "data": info["data"],
-                    "drive_link": info["drive_link"],
-                    "image_bytes": img
-                })
+                cards.append({"title": q.upper(), "data": info["data"], "drive_link": info["drive_link"], "image_bytes": img})
 
-        if not cards:
-            raise ValueError("Belirtilen klasörlerde veya lotlarda gösterilecek veri bulunamadı.")
+        if not cards: raise ValueError("Belirtilen klasörlerde veya lotlarda veri bulunamadı.")
 
         pdf_io = io.BytesIO()
-        # Sayfa marjinleri genişletildi ki taşmasın
-        doc = SimpleDocTemplate(pdf_io, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=40, bottomMargin=40)
+        doc = SimpleDocTemplate(pdf_io, pagesize=A4, rightMargin=35, leftMargin=35, topMargin=45, bottomMargin=40)
         styles = getSampleStyleSheet()
         NAVY, GOLD, SLATE, LIGHT_BG, BORD = colors.HexColor("#14213D"), colors.HexColor("#C5A059"), colors.HexColor("#2B2D42"), colors.HexColor("#F8F9FA"), colors.HexColor("#DEE2E6")
 
-        title_s = ParagraphStyle("T", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=24, textColor=NAVY, alignment=1, spaceAfter=8)
-        sub_s = ParagraphStyle("S", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10, textColor=GOLD, alignment=1, spaceAfter=20)
-        ch_s = ParagraphStyle("CH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=13, textColor=NAVY, spaceAfter=10)
-        th_s = ParagraphStyle("TH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=colors.whitesmoke)
-        tdl_s = ParagraphStyle("TDL", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=SLATE)
-        tdv_s = ParagraphStyle("TDV", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=SLATE)
+        title_s = ParagraphStyle("T", fontName="Helvetica-Bold", fontSize=26, textColor=NAVY, alignment=1, spaceAfter=10)
+        sub_s = ParagraphStyle("S", fontName="Helvetica-Bold", fontSize=12, textColor=GOLD, alignment=1, spaceAfter=30)
+        ch_s = ParagraphStyle("CH", fontName="Helvetica-Bold", fontSize=14, textColor=NAVY, spaceAfter=12)
+        th_s = ParagraphStyle("TH", fontName="Helvetica-Bold", fontSize=9, textColor=colors.whitesmoke)
+        tdl_s = ParagraphStyle("TDL", fontName="Helvetica-Bold", fontSize=9, textColor=SLATE)
+        tdv_s = ParagraphStyle("TDV", fontName="Helvetica", fontSize=9, textColor=SLATE)
 
-        # Üst Başlık (Logolu Tasarım)
         try:
-            logo_img = RLImage(io.BytesIO(self._create_luxury_logo()), width=240, height=48)
+            logo_img = RLImage(io.BytesIO(self._create_luxury_logo()), width=260, height=45)
             header_table = Table([[logo_img]], colWidths=[500])
             header_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
-            story = [header_table, Spacer(1, 10), Paragraph(pdf_title, sub_s)]
+            story = [header_table, Spacer(1, 15), Paragraph(pdf_title, sub_s)]
         except:
             story = [Paragraph("ARSLANLAR MARBLE", title_s), Paragraph(pdf_title, sub_s)]
 
-        story.append(HRFlowable(width="100%", thickness=1.5, color=GOLD, spaceAfter=30))
+        story.append(HRFlowable(width="100%", thickness=1.5, color=GOLD, spaceAfter=40))
 
         for idx, card in enumerate(cards, start=1):
             d = card["data"]
-            m2 = d.get("total_m2", 0.0)
-            slabs = d.get("total_slabs", 0)
+            m2, slabs = d.get("total_m2", 0.0), d.get("total_slabs", 0)
             
-            # Avaliable Stock karşısında metraj doluluğu KESİN OLARAK sağlandı
-            stock_str = f"{m2:,.2f} m² ({slabs} Slabs)" if m2 > 0 else "0.00 m² (Contact for Production)"
+            # Available Stock her zaman değer alır
+            stock_str = f"{m2:,.2f} m² ({slabs} Slabs)"
             surf_thick_str = f"{d.get('surface', '-')} | {d.get('thickness', '-')}"
             
-            raw_img = card["image_bytes"]
             try:
-                pil_im = Image.open(io.BytesIO(raw_img)).convert("RGB")
+                pil_im = Image.open(io.BytesIO(card["image_bytes"])).convert("RGB")
                 img_io = io.BytesIO()
                 pil_im.save(img_io, format="JPEG", quality=88)
                 img_io.seek(0)
                 rl_img = RLImage(img_io, width=190, height=130)
             except:
-                rl_img = Paragraph("No Image Available", tdv_s)
+                rl_img = Paragraph("No Image", tdv_s)
 
-            # Temiz Tablo: Total Production ve Boş Avg Slab Size YÖK!
             spec_rows = [
                 [Paragraph("Specification", th_s), Paragraph("Technical Data", th_s)],
                 [Paragraph("Available Stock", tdl_s), Paragraph(stock_str, tdv_s)],
@@ -471,43 +460,33 @@ class PDFPresentationEngine:
 
             st = Table(spec_rows, colWidths=[130, 220])
             st.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), NAVY), 
-                ("BACKGROUND", (0,1), (-1,-1), LIGHT_BG), 
-                ("GRID", (0,0), (-1,-1), 0.5, BORD), 
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("TOPPADDING", (0,0), (-1,-1), 6),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 6),
-                ("LEFTPADDING", (0,0), (-1,-1), 6),
+                ("BACKGROUND", (0,0), (-1,0), NAVY), ("BACKGROUND", (0,1), (-1,-1), LIGHT_BG), 
+                ("GRID", (0,0), (-1,-1), 0.5, BORD), ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+                ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6), ("LEFTPADDING", (0,0), (-1,-1), 6),
             ]))
             
             mr = Table([[rl_img, st]], colWidths=[200, 360])
             mr.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("ALIGN", (0,0), (0,0), "CENTER")]))
             
-            # KeepTogether ile tablo parçalanması ve taşması engellendi
-            story.append(KeepTogether([Paragraph(f"{idx}. {card['title']}", ch_s), Spacer(1, 5), mr, Spacer(1, 25)]))
+            story.append(KeepTogether([Paragraph(f"{idx}. {card['title']}", ch_s), Spacer(1, 5), mr]))
+            story.append(Spacer(1, 35)) # Öğeler arası geniş boşluk (Kayma Bitti)
 
         doc.build(story)
         pdf_io.seek(0)
         return pdf_io.read(), f"Arslanlar_Presentation_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
 
     def generate_packing_list_pdf(self, raw_df: pd.DataFrame, lot_name: str, mapped_cols: Dict[str, str]) -> bytes:
-        """Çeki listesini yatay, resmi ve şık PDF formatına döker."""
         pdf_io = io.BytesIO()
         doc = SimpleDocTemplate(pdf_io, pagesize=landscape(A4), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
         styles = getSampleStyleSheet()
         NAVY, GOLD, SLATE = colors.HexColor("#14213D"), colors.HexColor("#C5A059"), colors.HexColor("#2B2D42")
         
-        title_p = ParagraphStyle("PlT", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=18, textColor=NAVY, alignment=1)
-        sub_p = ParagraphStyle("PlS", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=10, textColor=GOLD, alignment=1, spaceAfter=15)
-        th_p = ParagraphStyle("TH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=colors.whitesmoke, alignment=1)
-        td_p = ParagraphStyle("TD", parent=styles["Normal"], fontName="Helvetica", fontSize=8.5, textColor=SLATE, alignment=1)
+        title_p = ParagraphStyle("PlT", fontName="Helvetica-Bold", fontSize=18, textColor=NAVY, alignment=1)
+        sub_p = ParagraphStyle("PlS", fontName="Helvetica-Bold", fontSize=10, textColor=GOLD, alignment=1, spaceAfter=15)
+        th_p = ParagraphStyle("TH", fontName="Helvetica-Bold", fontSize=9, textColor=colors.whitesmoke, alignment=1)
+        td_p = ParagraphStyle("TD", fontName="Helvetica", fontSize=8.5, textColor=SLATE, alignment=1)
 
-        story = [
-            Paragraph("ARSLANLAR MARBLE", title_p),
-            Paragraph(f"OFFICIAL PACKING LIST — {lot_name.upper()}", sub_p),
-            HRFlowable(width="100%", thickness=1, color=GOLD, spaceAfter=10),
-        ]
-
+        story = [Paragraph("ARSLANLAR MARBLE", title_p), Paragraph(f"OFFICIAL PACKING LIST — {lot_name.upper()}", sub_p), HRFlowable(width="100%", thickness=1, color=GOLD, spaceAfter=10)]
         table_data = [[Paragraph("Row #", th_p), Paragraph("Slab No", th_p), Paragraph("Length", th_p), Paragraph("Height", th_p), Paragraph("Thick", th_p), Paragraph("Net M2", th_p)]]
         
         total_m2, row_count = 0.0, 0
@@ -523,7 +502,7 @@ class PDFPresentationEngine:
                 Paragraph(str(row.get(c_len, "-")), td_p), Paragraph(str(row.get(c_h, "-")), td_p),
                 Paragraph(str(row.get(c_th, "-")), td_p), Paragraph(f"{m2_val:.2f}", td_p)
             ])
-            if row_count >= 150: break # Aşırı büyük tabloları sınırla
+            if row_count >= 150: break
 
         pl_table = Table(table_data, colWidths=[60, 100, 100, 100, 80, 100])
         pl_table.setStyle(TableStyle([
@@ -532,12 +511,10 @@ class PDFPresentationEngine:
         ]))
         story.append(pl_table)
         story.append(Spacer(1, 15))
-        story.append(Paragraph(f"<b>Total Evaluated Slabs:</b> {row_count} pcs | <b>Total Net Area:</b> {total_m2:,.2f} m²", ParagraphStyle("Sum", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=9, textColor=SLATE)))
-
+        story.append(Paragraph(f"<b>Total Evaluated Slabs:</b> {row_count} pcs | <b>Total Net Area:</b> {total_m2:,.2f} m²", ParagraphStyle("Sum", fontName="Helvetica-Oblique", fontSize=9, textColor=SLATE)))
         doc.build(story)
         pdf_io.seek(0)
         return pdf_io.read()
-
 
 # =====================================================================
 # 6. ARGON AI ORKESTRATÖRÜ (NLP)
@@ -550,37 +527,37 @@ class ArgonBrain:
         raw = (user_text or "").strip().upper()
         if not raw: return {"should_reply": False}
         
-        # Sadece Lot Kodlarını Çıkarır (A-371 vb.)
         lot_regex = re.compile(r"\b([A-Z]{1,4})[-\s]?(\d{1,5})\b")
-        matched = [f"{m.group(1)}-{m.group(2)}" for m in lot_regex.finditer(raw) if m.group(1) not in ["M","CM","MM","PDF"]]
+        matched = [f"{m.group(1)}-{m.group(2)}" for m in lot_regex.finditer(raw) if m.group(1) not in ["M","CM","MM","PDF","TON","KG"]]
         
-        # Koleksiyon Taraması Analizi
+        want_deep_scan = any(kw in raw for kw in ["TÜM STOĞUMU", "TUM STOGUM", "GENEL TARAMA", "DEEP SCAN", "TÜM KOLEKSIYON", "RAPORLA", "NE KADAR STOĞUM", "NE KADAR STOGUM", "TOPLAM STOK", "TOPLAM NE KADAR"])
+        
         collection_folder = None
         if "COLLECTION" in raw or "SERIES" in raw or "EXCLUSIVE" in raw:
             if "ARSLANLAR COLLECTION" in raw: collection_folder = "Arslanlar Collection"
             elif "ARSLANLAR SERIES" in raw: collection_folder = "Arslanlar Series"
             elif "EXCLUSIVE" in raw: collection_folder = "Arslanlar Exclusive Collection"
-            elif "TÜM" in raw or "TUM" in raw: collection_folder = "Arslanlar Collection" # Default
+            elif "TÜM" in raw or "TUM" in raw: collection_folder = "Arslanlar Collection"
         
         want_pdf = any(kw in raw for kw in ["PDF", "SUNUM", "KATALOG"])
         want_packing = any(kw in raw for kw in ["ÇEKİ", "CEKI", "PACKING", "SEVK"])
         want_photo = any(kw in raw for kw in ["FOTO", "RESIM", "GORSEL", "DRIVE", "LINK"])
         
-        if is_group and not bot_mentioned and not matched and not want_pdf and not want_packing and not want_photo and not collection_folder:
+        if is_group and not bot_mentioned and not matched and not want_pdf and not want_packing and not want_photo and not collection_folder and not want_deep_scan:
             return {"should_reply": False}
 
         return {
             "should_reply": True,
             "matched_queries": matched[:3],
             "collection_folder": collection_folder,
+            "want_deep_scan": want_deep_scan,
             "want_pdf": want_pdf,
             "want_packing": want_packing,
             "want_photo": want_photo or bool(matched)
         }
 
-
 # =====================================================================
-# 7. TELEGRAM SOHBET YÖNETİCİSİ (ANA ŞALTER)
+# 7. TELEGRAM SOHBET YÖNETİCİSİ (HATA GEÇİRMEZ HTML MOTORU)
 # =====================================================================
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(drive_explorer)
@@ -604,6 +581,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     intent = await argon_brain.evaluate_intent(msg.text or "", is_group, bot_mentioned)
     if not intent.get("should_reply"): return
 
+    # 1. BÜYÜK VERİ TARAMASI (DEEP SCAN)
+    if intent.get("want_deep_scan"):
+        status = await msg.reply_text("🔎 <b>Argon Deep Scan Başlatıldı.</b>\nDrive klasörlerinizdeki Excel tabloları taranıyor, lütfen bekleyin...", parse_mode=ParseMode.HTML)
+        try:
+            report = await asyncio.to_thread(inventory_engine.deep_scan_collections)
+            await status.edit_text(report, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            await status.edit_text(f"Tarama Hatası: {e}")
+        return
+
     queries = intent.get("matched_queries", [])
     collection_folder = intent.get("collection_folder")
     
@@ -614,73 +601,70 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     
-    # -------------------------------------------------------------
-    # 1. KOLEKSİYON BAZLI PDF SUNUMU (Tüm Taşları Tarar)
-    # -------------------------------------------------------------
+    # 2. KOLEKSİYON BAZLI PDF SUNUMU
     if collection_folder and intent.get("want_pdf"):
-        await msg.reply_text(f"📁 **{collection_folder}** koleksiyonu Drive'da taranıyor, bu işlem birkaç saniye sürebilir...", parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(f"📁 <b>{collection_folder}</b> koleksiyonu Drive'da taranıyor, bu işlem birkaç saniye sürebilir...", parse_mode=ParseMode.HTML)
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
         try:
-            pdf_b, pdf_n = await asyncio.to_thread(pdf_engine.generate_presentation_pdf, [], collection_folder=collection_folder)
-            await msg.reply_document(document=io.BytesIO(pdf_b), filename=pdf_n, caption=f"📄 **{collection_folder}** Premium PDF Kataloğu", parse_mode=ParseMode.MARKDOWN)
+            pdf_b, pdf_n = await asyncio.to_thread(pdf_engine.generate_presentation_pdf, [], collection_folder_name=collection_folder)
+            await msg.reply_document(document=io.BytesIO(pdf_b), filename=pdf_n, caption=f"📄 <b>{collection_folder}</b> Premium PDF Kataloğu", parse_mode=ParseMode.HTML)
         except Exception as e:
             await msg.reply_text(f"PDF oluşturulurken hata: {e}")
         return
 
-    # -------------------------------------------------------------
-    # 2. SPESİFİK LOT / TAŞ İŞLEMLERİ (Döngü)
-    # -------------------------------------------------------------
+    # 3. SPESİFİK LOT / TAŞ İŞLEMLERİ (Döngü)
     for q in queries:
-        # Excel yoksa bile klasör ve linkleri getirir!
-        info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
-        d = info["data"]
-        fid = info["folder_id"]
-        flink = info["drive_link"]
+        try:
+            # Excel yoksa bile klasör ve linkleri getirir, hata vermez!
+            info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
+            d = info["data"]
+            fid = info["folder_id"]
+            flink = info["drive_link"]
 
-        # ÇEKİ LİSTESİ İSTENDİYSE (DUAL EXPORT: Orijinal Excel + PDF)
-        if intent.get("want_packing"):
-            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
-            if info["excel_bytes"]:
-                await msg.reply_document(document=io.BytesIO(info["excel_bytes"]), filename=info["excel_name"], caption=f"📦 **{q}** Orijinal Excel Çeki Listesi", parse_mode=ParseMode.MARKDOWN)
+            # ÇEKİ LİSTESİ İSTENDİYSE (DUAL EXPORT)
+            if intent.get("want_packing"):
+                await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+                if info["excel_bytes"]:
+                    await msg.reply_document(document=io.BytesIO(info["excel_bytes"]), filename=info["excel_name"], caption=f"📦 <b>{q}</b> Orijinal Excel Çeki Listesi", parse_mode=ParseMode.HTML)
+                    if d.get("raw_df") is not None:
+                        pdf_pack_bytes = await asyncio.to_thread(pdf_engine.generate_packing_list_pdf, d["raw_df"], q, d["mapped_cols"])
+                        await msg.reply_document(document=io.BytesIO(pdf_pack_bytes), filename=f"PackingList_{q}.pdf", caption=f"📄 <b>{q}</b> Resmi PDF Çeki Listesi", parse_mode=ParseMode.HTML)
+                else:
+                    await msg.reply_text(f"⚠️ {q} klasöründe orijinal çeki listesi (Excel) bulunamadı.")
+                continue
                 
-                # İçinden PDF yarat
-                if d.get("raw_df") is not None:
-                    pdf_pack_bytes = await asyncio.to_thread(pdf_engine.generate_packing_list_pdf, d["raw_df"], q, d["mapped_cols"])
-                    await msg.reply_document(document=io.BytesIO(pdf_pack_bytes), filename=f"PackingList_{q}.pdf", caption=f"📄 **{q}** Resmi PDF Çeki Listesi", parse_mode=ParseMode.MARKDOWN)
-            else:
-                await msg.reply_text(f"⚠️ {q} klasöründe orijinal çeki listesi (Excel) bulunamadı.")
-            continue
-            
-        # PDF SUNUM İSTENDİYSE
-        if intent.get("want_pdf"):
-            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
-            try:
-                pdf_b, pdf_n = await asyncio.to_thread(pdf_engine.generate_presentation_pdf, [q])
-                await msg.reply_document(document=io.BytesIO(pdf_b), filename=pdf_n, caption=f"📄 **{q}** Premium PDF Sunumu", parse_mode=ParseMode.MARKDOWN)
-            except Exception as e:
-                await msg.reply_text(f"PDF oluşturulurken hata: {e}")
-            continue
+            # PDF SUNUM İSTENDİYSE
+            if intent.get("want_pdf"):
+                await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
+                try:
+                    pdf_b, pdf_n = await asyncio.to_thread(pdf_engine.generate_presentation_pdf, [q])
+                    await msg.reply_document(document=io.BytesIO(pdf_b), filename=pdf_n, caption=f"📄 <b>{q}</b> Premium PDF Sunumu", parse_mode=ParseMode.HTML)
+                except Exception as e:
+                    await msg.reply_text(f"PDF oluşturulurken hata: {e}")
+                continue
 
-        # STANDART SORGULAMA: TELEGRAM İKİLİ FOTO ALBÜM VE BİLGİ KARTI
-        text_response = (
-            f"💎 **{q.upper()}**\n"
-            f"• Mevcut Stok: `{d['total_m2']:,.2f} m²` (`{d['total_slabs']} Plaka`)\n"
-            f"• Ortalama Ebat: `{d['dimensions']}`\n"
-            f"• Yüzey & Kalınlık: `{d['surface']} ({d['thickness']})`\n"
-            f"• Drive Linki: {flink}"
-        )
-        
-        # 1. Foto (Plaka), 2. Foto (Bookmatch veya 2. Plaka)
-        img1, img2 = await asyncio.to_thread(drive_explorer.get_images_structured, fid, q)
-        
-        media = []
-        if img1: media.append(InputMediaPhoto(media=img1, caption=text_response, parse_mode=ParseMode.MARKDOWN))
-        if img2: media.append(InputMediaPhoto(media=img2))
-        
-        if media:
-            await msg.reply_media_group(media=media)
-        else:
-            await msg.reply_text(text_response, parse_mode=ParseMode.MARKDOWN)
+            # STANDART SORGULAMA: TELEGRAM İKİLİ FOTO ALBÜM VE BİLGİ KARTI (HTML ParseMode)
+            text_response = (
+                f"💎 <b>{q.upper()}</b>\n"
+                f"• Mevcut Stok: <code>{d['total_m2']:,.2f} m²</code> (<code>{d['total_slabs']} Plaka</code>)\n"
+                f"• Ortalama Ebat: <code>{d['dimensions']}</code>\n"
+                f"• Yüzey & Kalınlık: <code>{d['surface']} ({d['thickness']})</code>\n"
+                f"• Drive Linki: <a href='{flink}'>Klasöre Git</a>"
+            )
+            
+            img1, img2 = await asyncio.to_thread(drive_explorer.get_images_structured, fid, q)
+            
+            media = []
+            if img1: media.append(InputMediaPhoto(media=img1, caption=text_response, parse_mode=ParseMode.HTML))
+            if img2: media.append(InputMediaPhoto(media=img2))
+            
+            if media:
+                await msg.reply_media_group(media=media)
+            else:
+                await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
+        except Exception as ex:
+            logger.error(f"İşlem Hatası ({q}): {ex}")
+            await msg.reply_text(f"⚠️ {q} işlenirken beklenmeyen bir hata oluştu.")
 
 
 # =====================================================================
@@ -702,10 +686,10 @@ def main():
     threading.Thread(target=run_flask, daemon=True).start()
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    # Sadece metin ve fotoğraf alıyor, Excel yüklemeye kapalı.
+    # Sadece metin ve fotoğraf alıyor, Excel yüklemeye tamamen kapalı.
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
     
-    logger.info("🚀 Argon Master Pure Drive Final (Sıfır Hata, %100 Otonom) başlatılıyor...")
+    logger.info("🚀 Argon Master Perfect Final (Pure HTML & Deep Scan) başlatılıyor...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
