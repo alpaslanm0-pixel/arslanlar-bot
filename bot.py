@@ -3,6 +3,7 @@ import io
 import re
 import json
 import time
+import base64
 import logging
 import asyncio
 import threading
@@ -10,6 +11,7 @@ from datetime import datetime
 from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
+import requests
 import pandas as pd
 from flask import Flask
 from PIL import Image, ImageDraw
@@ -42,15 +44,16 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
 # =====================================================================
-# 1. LOGLAMA VE SİSTEM AYARLARI
+# 1. LOGLAMA VE SİSTEM YAPILANDIRMASI
 # =====================================================================
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V5")
+logger = logging.getLogger("ArgonMaster_UltimateFinal")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()  # HATA BURADAYDI, EKLENDİ!
 GOOGLE_SA_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
 DEFAULT_DRIVE_LINK = (os.getenv("GOOGLE_DRIVE_LINK") or "https://drive.google.com").strip()
 
@@ -90,10 +93,10 @@ def safe_float(val: Any) -> float:
         s = s.replace(".", "").replace(",", ".") if s.rfind(",") > s.rfind(".") else s.replace(",", "")
     elif "," in s: s = s.replace(",", ".")
     try: return float(s)
-    except: return 0.0
+    except ValueError: return 0.0
 
 # =====================================================================
-# 3. GOOGLE DRIVE MOTORU (Klasör, Görsel, Excel)
+# 3. GOOGLE DRIVE MOTORU (Otonom Klasör & Dosya Tarayıcı)
 # =====================================================================
 class DriveExplorer:
     def __init__(self, sa_json_str: str):
@@ -110,7 +113,7 @@ class DriveExplorer:
             self.service = build("drive", "v3", credentials=creds, cache_discovery=False)
             logger.info("Drive API Bağlantısı Aktif.")
         except Exception as e:
-            logger.error(f"Drive Hatası: {e}")
+            logger.error(f"Drive API Hatası: {e}")
 
     def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
         norm_key = normalize_lot_code(query_term)
@@ -174,7 +177,7 @@ class DriveExplorer:
         except: return None, None
 
     def get_images_structured(self, folder_id: str, query_term: str) -> Tuple[Optional[bytes], Optional[bytes]]:
-        """Telegram Albümü İçin: 1. Foto (Plaka), 2. Foto (Bookmatch veya 2. Plaka)"""
+        """Telegram İçin: 1. Foto (Plaka), 2. Foto (Bookmatch veya 2. Plaka)"""
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs: return None, None
 
@@ -249,7 +252,7 @@ class DriveExplorer:
 
 
 # =====================================================================
-# 4. ENVANTER MOTORU (Master Excel Fallback Sistemiyle)
+# 4. HİBRİT ENVANTER MOTORU (Master Excel Fallback Sistemi)
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
@@ -259,7 +262,7 @@ class InventoryEngine:
         self._load_master_excel()
 
     def _load_master_excel(self) -> None:
-        """Eğer klasörde Excel yoksa sıfır yazmasın diye ana stok listesini hafızaya alır."""
+        """Klasörde Excel yoksa sıfır yazmasın diye ana stok listesini hafızaya alır."""
         target = None
         for fname in os.listdir("."):
             if fname.lower().endswith((".xlsx", ".xls")) and not fname.startswith("~$"):
@@ -275,10 +278,9 @@ class InventoryEngine:
                 if not temp_df.empty and len(temp_df.columns) > 3:
                     df = temp_df
                     break
-
             if df.empty: return
+
             col_map = {c: normalize_turkish_key(c) for c in df.columns}
-            
             m2_col = next((c for c, n in col_map.items() if any(k in n for k in ["M2", "ALAN", "NET", "METRAJ"])), None)
             slab_col = next((c for c, n in col_map.items() if any(k in n for k in ["ADET", "PLAKA", "PCS"])), None)
             thick_col = next((c for c, n in col_map.items() if any(k in n for k in ["KALIN", "THICK", "CM"])), None)
@@ -329,7 +331,7 @@ class InventoryEngine:
 
             self.master_lots_index = lots_agg
             self.master_raw_rows = raw_rows
-            logger.info(f"Master Excel Aktif. Toplam Lot: {len(self.master_lots_index)}")
+            logger.info(f"Master Excel Yedeği Aktif. Toplam Lot: {len(self.master_lots_index)}")
         except Exception as e:
             logger.error(f"Master Excel okuma hatası: {e}")
 
@@ -439,7 +441,7 @@ class InventoryEngine:
                         coll_m2 += data["total_m2"]
                         total_factory_m2 += data["total_m2"]
                         total_factory_slabs += data["total_slabs"]
-                await asyncio.sleep(0.05) # Rate limit koruması
+                await asyncio.sleep(0.05)
             
             report_lines.append(f"  └ <i>Koleksiyon Toplamı: {coll_m2:,.2f} m²</i>\n")
             
@@ -455,11 +457,20 @@ class PDFPresentationEngine:
         self.inventory = inventory
         self.drive = drive
 
+    @staticmethod
+    def _create_luxury_logo() -> bytes:
+        img = Image.new("RGB", (600, 100), color=(255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        draw.text((20, 20), "ARSLANLAR MARBLE", fill=(20, 33, 61))
+        draw.text((20, 60), "P R E M I U M   C O L L E C T I O N", fill=(197, 160, 89))
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
     def generate_presentation_pdf(self, queries: List[str], collection_folder_name: str = None) -> Tuple[bytes, str]:
         """
         Sen A-96, A-383 yazdığında hepsini TEK BİR PDF İÇİNDE alt alta birleştirir.
         Koleksiyon yazarsan klasördeki tüm taşları tek bir PDF yapar.
-        Tablo boyutları şıklaştırıldı, başlık kaymaları Spacer'lar ile engellendi.
         """
         cards = []
         pdf_title = "EXECUTIVE STOCK & SLAB PRESENTATION"
@@ -486,27 +497,30 @@ class PDFPresentationEngine:
         styles = getSampleStyleSheet()
         NAVY, GOLD, SLATE, LIGHT_BG, BORD = colors.HexColor("#14213D"), colors.HexColor("#C5A059"), colors.HexColor("#2B2D42"), colors.HexColor("#F8F9FA"), colors.HexColor("#DEE2E6")
 
-        # Özel Font ve Stiller
         title_s = ParagraphStyle("T", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=26, textColor=NAVY, alignment=1, spaceAfter=8)
         sub_s = ParagraphStyle("S", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11, textColor=GOLD, alignment=1, spaceAfter=20)
-        ch_s = ParagraphStyle("CH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=14, textColor=NAVY, spaceAfter=12) # Lot başlıkları için büyük boşluk
+        ch_s = ParagraphStyle("CH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=14, textColor=NAVY, spaceAfter=12)
         th_s = ParagraphStyle("TH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=colors.whitesmoke)
         tdl_s = ParagraphStyle("TDL", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9, textColor=SLATE)
         tdv_s = ParagraphStyle("TDV", parent=styles["Normal"], fontName="Helvetica", fontSize=9, textColor=SLATE)
 
-        # PDF Üst Kısım (Header)
-        story = [
-            Paragraph("ARSLANLAR MARBLE", title_s), 
-            Paragraph(pdf_title, sub_s),
-            HRFlowable(width="100%", thickness=1.5, color=GOLD, spaceAfter=35) # Çizgiden sonra büyük boşluk
-        ]
+        story = []
+        try:
+            logo_img = RLImage(io.BytesIO(self._create_luxury_logo()), width=240, height=48)
+            header_table = Table([[logo_img]], colWidths=[500])
+            header_table.setStyle(TableStyle([('ALIGN', (0,0), (-1,-1), 'CENTER')]))
+            story = [header_table, Spacer(1, 10), Paragraph(pdf_title, sub_s)]
+        except:
+            story = [Paragraph("ARSLANLAR MARBLE", title_s), Paragraph(pdf_title, sub_s)]
+
+        story.append(HRFlowable(width="100%", thickness=1.5, color=GOLD, spaceAfter=35))
 
         for idx, card in enumerate(cards, start=1):
             d = card["data"]
             m2 = d.get("total_m2", 0.0)
             slabs = d.get("total_slabs", 0)
             
-            stock_str = f"{m2:,.2f} m² ({slabs} Slabs)" if m2 > 0 else "Contact for Availability"
+            stock_str = f"{m2:,.2f} m² ({slabs} Slabs)" if m2 > 0 else "0.00 m² (Check Production)"
             surf_thick_str = f"{d.get('surface', '-')} | {d.get('thickness', '-')}"
             
             try:
@@ -540,7 +554,6 @@ class PDFPresentationEngine:
             mr = Table([[rl_img, st]], colWidths=[230, 300])
             mr.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("ALIGN", (0,0), (0,0), "CENTER")]))
             
-            # Kartları birbirinden kesin çizgilerle ayır (KeepTogether ile parça kopmaz)
             story.append(KeepTogether([Paragraph(f"{idx}. {card['title']}", ch_s), Spacer(1, 5), mr]))
             story.append(Spacer(1, 35))
 
@@ -591,13 +604,14 @@ class PDFPresentationEngine:
         return pdf_io.read()
 
 # =====================================================================
-# 6. ARGON NLP (Niyet Çözümleyici)
+# 6. ARGON AI NLP MOTORU (İnsan Gibi Akıllı Konuşma + Komut Yönlendirme)
 # =====================================================================
 class ArgonBrain:
     def __init__(self, api_key: str):
         self.api_key = api_key
+        self.endpoint = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
-    def evaluate_intent(self, user_text: str, is_group: bool, bot_mentioned: bool) -> Dict[str, Any]:
+    async def evaluate_intent(self, user_text: str, is_group: bool, bot_mentioned: bool) -> Dict[str, Any]:
         raw = (user_text or "").strip().upper()
         if not raw: return {"should_reply": False}
         
@@ -616,13 +630,32 @@ class ArgonBrain:
         want_pdf = any(kw in raw for kw in ["PDF", "SUNUM", "KATALOG"])
         want_packing = any(kw in raw for kw in ["ÇEKİ", "CEKI", "PACKING", "SEVK"])
         want_photo = any(kw in raw for kw in ["FOTO", "RESIM", "GORSEL", "DRIVE", "LINK"])
+        is_greeting = any(kw in raw for kw in ["MERHABA", "SELAM", "ORDA MISIN", "HELLO", "NASILSIN"])
+
+        # Akıllı AI Yanıtı (Operasyon Dışı Sorular İçin İnsan Gibi Cevap)
+        reply_text = ""
+        has_command = matched or want_deep_scan or want_pdf or want_packing or want_photo or collection_folder
         
-        if is_group and not bot_mentioned and not matched and not want_pdf and not want_packing and not want_photo and not collection_folder and not want_deep_scan:
+        if self.api_key and not has_command and (not is_group or bot_mentioned or is_greeting):
+            try:
+                payload = {
+                    "contents": [{"parts": [{"text": f"Sen Arslanlar Marble dijital asistanı Argonsun. Kullanıcı sana şunu yazdı: '{user_text}'. Çok kısa, profesyonel, akıllı ve yardımsever bir cevap ver. Konu dışına çıkma."}]}],
+                    "generationConfig": {"temperature": 0.3}
+                }
+                headers = {"Content-Type": "application/json", "X-goog-api-key": self.api_key}
+                resp = requests.post(self.endpoint, json=payload, headers=headers, timeout=5)
+                if resp.status_code == 200:
+                    reply_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except Exception as e:
+                logger.error(f"Gemini AI Hatası: {e}")
+        
+        if is_group and not bot_mentioned and not has_command and not is_greeting:
             return {"should_reply": False}
 
         return {
             "should_reply": True,
-            "matched_queries": matched[:5], # Tek PDF'e en fazla 5 lot birleştirir
+            "reply_text": reply_text,
+            "matched_queries": matched[:5],
             "collection_folder": collection_folder,
             "want_deep_scan": want_deep_scan,
             "want_pdf": want_pdf,
@@ -652,7 +685,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_group = update.effective_chat.type in ["group", "supergroup"]
     bot_mentioned = bool(context.bot.username and f"@{context.bot.username.lower()}" in (msg.text or "").lower())
     
-    intent = argon_brain.evaluate_intent(msg.text or "", is_group, bot_mentioned)
+    intent = await argon_brain.evaluate_intent(msg.text or "", is_group, bot_mentioned)
     if not intent.get("should_reply"): return
 
     # 1. DEEP SCAN (TOPLAM STOK)
@@ -668,8 +701,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     queries = intent.get("matched_queries", [])
     collection_folder = intent.get("collection_folder")
     
-    if not queries and not collection_folder:
-        if not is_group or bot_mentioned:
+    # EĞER KOMUT YOKSA SADECE AI MESAJINI GÖNDER (İnsan Gibi Yanıt)
+    if not queries and not collection_folder and not intent.get("want_packing") and not intent.get("want_pdf"):
+        ai_reply = intent.get("reply_text")
+        if ai_reply:
+            await msg.reply_text(ai_reply, parse_mode=ParseMode.MARKDOWN)
+        elif not is_group or bot_mentioned:
             await msg.reply_text("👋 Argon Master Final Pure Drive System Aktif.\nLot kodu (A-371, A-96), Koleksiyon Sunumu veya çeki listesi isteyebilirsiniz.")
         return
 
@@ -690,7 +727,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.reply_document(document=io.BytesIO(pdf_b), filename=pdf_n, caption="📄 Lüks İngilizce Sunum (Bookmatch'siz)", parse_mode=ParseMode.HTML)
         except Exception as e:
             await msg.reply_text(f"PDF oluşturulurken hata: {e}")
-        return # PDF atınca başka mesaj atma
+        return
 
     # =========================================================
     # NORMAL SORGULAMA VE ÇEKİ LİSTESİ DÖNGÜSÜ
@@ -702,7 +739,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fid = info["folder_id"]
             flink = info["drive_link"]
 
-            # ÇEKİ LİSTESİ İSTENDİYSE (DUAL EXPORT)
             if intent.get("want_packing"):
                 await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT)
                 if info["excel_bytes"]:
@@ -750,7 +786,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
-def health_check(): return "Argon Master V5 Perfect is Live!", 200
+def health_check(): return "Argon Master Ultimate Final is Live!", 200
 
 def run_flask():
     flask_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), use_reloader=False)
@@ -765,7 +801,7 @@ def main():
     
     application.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & (~filters.COMMAND), handle_message))
     
-    logger.info("🚀 Argon Master V5 Perfect (HTML, Single PDF, Hybrid Fallback) başlatılıyor...")
+    logger.info("🚀 Argon Master Ultimate Final başlatılıyor...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
