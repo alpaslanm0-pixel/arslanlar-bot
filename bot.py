@@ -10,10 +10,32 @@ from datetime import datetime
 from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
-import requests
-import pandas as pd
-import openpyxl
+# =====================================================================
+# 0. RENDER PORTUNU 0. SANİYEDE AÇ (DEPLOY TAKILMASINI %100 ÖNLER)
+# =====================================================================
 from flask import Flask
+
+flask_app = Flask(__name__)
+
+@flask_app.route("/")
+def health_check():
+    return "Argon Master V6.1 Instant-Boot is Live!", 200
+
+@flask_app.route("/healthz")
+def healthz():
+    return "OK", 200
+
+def _start_flask_immediately():
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
+
+# Daha diğer kütüphaneler yüklenirken portu arka planda anında açıyoruz!
+threading.Thread(target=_start_flask_immediately, daemon=True).start()
+
+# =====================================================================
+# 1. DİĞER KÜTÜPHANELER VE SİSTEM AYARLARI
+# =====================================================================
+import pandas as pd
 from PIL import Image
 
 from reportlab.lib.pagesizes import A4, landscape
@@ -43,14 +65,11 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
-# =====================================================================
-# 1. LOGLAMA VE SİSTEM AYARLARI
-# =====================================================================
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V6_Complete")
+logger = logging.getLogger("ArgonMaster_V6_1")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -122,10 +141,6 @@ def safe_float(val: Any) -> float:
 
 
 def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
-    """
-    Telegram'ın yüksek boyutlu veya CMYK formatlı görsellerde çökmesini
-    önlemek için görseli standart RGB JPEG formatına optimize eder.
-    """
     if not raw_bytes:
         return None
     try:
@@ -140,34 +155,43 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
 
 
 # =====================================================================
-# 3. DERİN REKÜRSİF GOOGLE DRIVE MOTORU (supportsAllDrives + Sheets)
+# 3. LAZY-LOADED (TEMBEL YÜKLEMELİ) GOOGLE DRIVE MOTORU
 # =====================================================================
 class DriveExplorer:
+    """
+    Deploy sırasında Google API'ye bağlanıp Render'ı kilitlemez!
+    Sadece ilk sorgu geldiğinde (_ensure_service ile) bağlantıyı açar.
+    """
     def __init__(self, sa_json_str: str):
         self.service = None
         self.sa_json_str = sa_json_str
         self.hyperlinks_db = load_json_file(HYPERLINKS_DB_FILE, {})
-        self._init_service()
+        self._lock = threading.Lock()
 
-    def _init_service(self) -> None:
+    def _ensure_service(self) -> bool:
+        if self.service is not None:
+            return True
         if not self.sa_json_str:
             logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON eksik!")
-            return
-        try:
-            info = json.loads(self.sa_json_str)
-            creds = service_account.Credentials.from_service_account_info(
-                info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
-            )
-            self.service = build("drive", "v3", credentials=creds, cache_discovery=False)
-            logger.info("Drive API Bağlantısı Başarıyla Kuruldu.")
-        except Exception as e:
-            logger.error(f"Drive API Başlatma Hatası: {e}")
+            return False
+        with self._lock:
+            if self.service is not None:
+                return True
+            try:
+                info = json.loads(self.sa_json_str)
+                creds = service_account.Credentials.from_service_account_info(
+                    info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+                )
+                self.service = build(
+                    "drive", "v3", credentials=creds, cache_discovery=False
+                )
+                logger.info("Drive API Bağlantısı (Lazy Load) Başarıyla Kuruldu.")
+                return True
+            except Exception as e:
+                logger.error(f"Drive API Başlatma Hatası: {e}")
+                return False
 
     def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Lot kodunu ('A-371'), taş adını veya koleksiyon adını ('Arslanlar Collection')
-        tüm Drive'da (Paylaşılan Sürücüler dahil) esnek adaylarla arar.
-        """
         norm_key = normalize_lot_code(query_term)
         if norm_key in self.hyperlinks_db:
             url = self.hyperlinks_db[norm_key]
@@ -175,7 +199,7 @@ class DriveExplorer:
             if fid:
                 return fid, url
 
-        if not self.service:
+        if not self._ensure_service():
             return None, None
 
         raw_clean = query_term.strip().replace("'", "")
@@ -208,7 +232,6 @@ class DriveExplorer:
                 )
                 files = res.get("files", [])
                 if files:
-                    # Önce tam eşleşme veya kelime sınırı eşleşmesi ara
                     best = files[0]
                     for f in files:
                         fname_norm = normalize_lot_code(f["name"])
@@ -228,7 +251,7 @@ class DriveExplorer:
         return None, None
 
     def list_child_folders(self, parent_folder_id: str) -> List[Dict[str, str]]:
-        if not self.service or not parent_folder_id:
+        if not parent_folder_id or not self._ensure_service():
             return []
         try:
             q = (
@@ -264,11 +287,7 @@ class DriveExplorer:
     def get_excel_from_folder(
         self, folder_id: str, max_depth: int = 2
     ) -> Tuple[Optional[bytes], Optional[str]]:
-        """
-        Klasörün ve alt klasörlerinin içindeki Excel (.xlsx / .xls) VEYA
-        Google Sheets (E-Tablo) dosyasını bulur ve indirir.
-        """
-        if not self.service or not folder_id:
+        if not folder_id or not self._ensure_service():
             return None, None
 
         try:
@@ -309,7 +328,6 @@ class DriveExplorer:
                 if b_data:
                     return b_data, fname
 
-            # Bulunamadıysa alt klasörlere rekürsif olarak in
             if max_depth > 0:
                 for sf in self.list_child_folders(folder_id)[:12]:
                     b_data, fname = self.get_excel_from_folder(
@@ -325,6 +343,8 @@ class DriveExplorer:
     def _download_excel_or_sheet(
         self, file_id: str, mime_type: str
     ) -> Optional[bytes]:
+        if not self._ensure_service():
+            return None
         try:
             if mime_type == "application/vnd.google-apps.spreadsheet":
                 req = self.service.files().export_media(
@@ -349,11 +369,6 @@ class DriveExplorer:
     def get_images_structured(
         self, folder_id: Optional[str], query_term: str
     ) -> Tuple[Optional[bytes], Optional[bytes]]:
-        """
-        Telegram Sohbeti İçin:
-        1. Görsel: Standart Düz Plaka
-        2. Görsel: Bookmatch (Varsa) veya 2. Düz Plaka
-        """
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs:
             return None, None
@@ -387,9 +402,6 @@ class DriveExplorer:
     def get_best_slab_image(
         self, folder_id: Optional[str], query_term: str
     ) -> Optional[bytes]:
-        """
-        PDF Sunumu İçin: Bookmatch Görüntülerini ASLA Almaz, En İyi Düz Plakayı Seçer.
-        """
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs:
             return None
@@ -406,7 +418,7 @@ class DriveExplorer:
     def _scan_images(
         self, folder_id: Optional[str], query_term: str
     ) -> List[Dict[str, str]]:
-        if not self.service:
+        if not self._ensure_service():
             return []
         all_imgs: List[Dict[str, str]] = []
         try:
@@ -478,6 +490,8 @@ class DriveExplorer:
             return []
 
     def _download_file(self, file_id: str) -> Optional[bytes]:
+        if not self._ensure_service():
+            return None
         try:
             req = self.service.files().get_media(
                 fileId=file_id, supportsAllDrives=True
@@ -511,11 +525,6 @@ class InventoryEngine:
         self.drive = drive
 
     def parse_packing_list_bytes(self, excel_bytes: bytes) -> Optional[Dict[str, Any]]:
-        """
-        Çeki listesi Excel'lerinde tablo 1. satırdan başlamasa bile (Örn: 6. satırda
-        EN, BOY, M2 başlıkları varsa) başlık satırını otomatik tespit eder,
-        TOPLAM satırlarını filtreler ve gerçek M2 / Plaka / Ebatları çıkarır.
-        """
         try:
             xls = pd.ExcelFile(io.BytesIO(excel_bytes))
             for sheet in xls.sheet_names:
@@ -523,7 +532,6 @@ class InventoryEngine:
                 if raw_df.empty or len(raw_df) < 2:
                     continue
 
-                # İlk 25 satır içinde gerçek tablo başlığını (Header Row) bul
                 header_idx = 0
                 best_score = 0
                 header_keywords = [
@@ -568,9 +576,7 @@ class InventoryEngine:
                 if df.empty:
                     continue
 
-                col_map = {
-                    c: normalize_turkish_key(c) for c in df.columns
-                }
+                col_map = {c: normalize_turkish_key(c) for c in df.columns}
 
                 m2_col = next(
                     (
@@ -632,7 +638,6 @@ class InventoryEngine:
                     None,
                 )
 
-                # Geçerli plaka satırlarını süz ("TOPLAM / TOTAL" satırlarını iki kez sayma)
                 valid_rows = []
                 total_m2 = 0.0
                 total_slabs = 0
@@ -653,11 +658,9 @@ class InventoryEngine:
                     h_val = safe_float(row.get(height_col)) if height_col else 0.0
                     m2_val = safe_float(row.get(m2_col)) if m2_col else 0.0
 
-                    # Eğer M2 hücresi formül hatası veya boşsa En x Boy'dan hesapla
                     if m2_val <= 0 and l_val > 20 and h_val > 20:
                         m2_val = (l_val * h_val) / 10000.0
 
-                    # Gerçek bir plaka satırı değilse veya m2 > 50 (toplam satırıysa) atla
                     if m2_val <= 0 or m2_val > 50:
                         continue
 
@@ -724,9 +727,6 @@ class InventoryEngine:
         pre_folder_id: Optional[str] = None,
         pre_folder_link: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        SADECE ilgili taşın/lotun Drive klasörüne girer ve oradaki Excel'i okur.
-        """
         norm_key = normalize_lot_code(query)
         folder_id = pre_folder_id
         folder_link = pre_folder_link
@@ -767,20 +767,13 @@ class InventoryEngine:
     def scan_folder_recursively_for_lots(
         self, parent_id: str, depth: int = 0, max_depth: int = 3
     ) -> List[Dict[str, Any]]:
-        """
-        Ana koleksiyon klasörünün içindeki tüm taş ve lot alt klasörlerini
-        3 katman derinliğe kadar tarayarak Excel bulunan tüm lotları toplar.
-        """
         results = []
         if depth > max_depth or not parent_id:
             return results
 
         sub_folders = self.drive.list_child_folders(parent_id)
         for sf in sub_folders:
-            # Doğrudan bu klasörde (1 seviye) Excel var mı kontrol et
-            ex_bytes, ex_name = self.drive.get_excel_from_folder(
-                sf["id"], max_depth=0
-            )
+            ex_bytes, _ = self.drive.get_excel_from_folder(sf["id"], max_depth=0)
             if ex_bytes:
                 parsed = self.parse_packing_list_bytes(ex_bytes)
                 if parsed and parsed["total_m2"] > 0:
@@ -794,14 +787,12 @@ class InventoryEngine:
                     )
                     continue
 
-            # Bu klasör bir Taş Grubu klasörüyse (içinde A-371 gibi alt lot klasörleri varsa) derine in
             deeper = self.scan_folder_recursively_for_lots(
                 sf["id"], depth=depth + 1, max_depth=max_depth
             )
             if deeper:
                 results.extend(deeper)
             else:
-                # Excel yoksa ama görsel varsa yine de listeye ekle (Koleksiyon PDF'i için)
                 results.append(
                     {
                         "name": sf["name"],
@@ -819,10 +810,6 @@ class InventoryEngine:
         return results
 
     def deep_scan_collections(self) -> str:
-        """
-        Arslanlar Collection, Arslanlar Series ve Arslanlar Exclusive Collection
-        klasörlerinin tüm alt dallarını kazıyarak gerçek toplam stok raporunu üretir.
-        """
         collections = [
             "Arslanlar Collection",
             "Arslanlar Series",
@@ -926,7 +913,6 @@ class PDFPresentationEngine:
         LIGHT_BG = colors.HexColor("#F8F9FA")
         BORD = colors.HexColor("#DEE2E6")
 
-        # Vektörel Kurumsal Antet Stilleri (Bulanık resim logo yerine cam gibi vektörel başlık)
         brand_title = ParagraphStyle(
             "BrandT",
             parent=styles["Normal"],
@@ -1279,7 +1265,7 @@ class ArgonBrain:
 
 
 # =====================================================================
-# 7. TELEGRAM SOHBET YÖNETİCİSİ (SIFIR ÇÖKME GARANTİLİ)
+# 7. TELEGRAM SOHBET YÖNETİCİSİ
 # =====================================================================
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(drive_explorer)
@@ -1334,7 +1320,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not queries and not collection_folder:
         if not is_group or bot_mentioned:
             await msg.reply_text(
-                "👋 <b>Argon Master V6 Aktif.</b>\n"
+                "👋 <b>Argon Master V6.1 Aktif.</b>\n"
                 "• Lot sorgusu: <code>A-371</code>\n"
                 "• Çoklu Tek PDF Sunum: <code>A-96 ve A-383 sunum hazırla</code>\n"
                 "• Koleksiyon PDF: <code>Arslanlar Collection sunum hazırla</code>\n"
@@ -1372,7 +1358,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"⚠️ Koleksiyon PDF uyarısı: {e}")
         return
 
-    # 3. ÇOKLU LOT TEK PDF SUNUMU (Örn: A-96 ve A-383 sunum hazırla)
+    # 3. ÇOKLU LOT TEK PDF SUNUMU
     if queries and intent.get("want_pdf"):
         status_msg = await msg.reply_text(
             f"📄 Seçilen Lotlar (<b>{', '.join(queries)}</b>) tek bir Premium PDF'te birleştiriliyor...",
@@ -1403,7 +1389,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fid = info["folder_id"]
         flink = info["drive_link"]
 
-        # Çeki Listesi İsteği
         if intent.get("want_packing"):
             if info["excel_bytes"]:
                 await context.bot.send_chat_action(
@@ -1439,7 +1424,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             continue
 
-        # Standart Flash-Kart + 2'li Fotoğraf Albümü (1 Plaka + 1 Bookmatch)
         m2_val = d.get("total_m2", 0.0)
         slabs_val = d.get("total_slabs", 0)
         stock_str = (
@@ -1486,28 +1470,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =====================================================================
-# 8. RENDER WEB SUNUCUSU VE BAŞLATICI
+# 8. ANA BAŞLATICI (PORT ZATEN 0. SANİYEDE AÇILDI)
 # =====================================================================
-flask_app = Flask(__name__)
-
-
-@flask_app.route("/")
-def health_check():
-    return "Argon Master V6 Complete is Live!", 200
-
-
-def run_flask():
-    flask_app.run(
-        host="0.0.0.0", port=int(os.environ.get("PORT", 10000)), use_reloader=False
-    )
-
-
 def main():
     if not TELEGRAM_TOKEN:
         logger.error("CRITICAL: TELEGRAM_TOKEN eksik!")
         return
 
-    threading.Thread(target=run_flask, daemon=True).start()
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     application.add_handler(
@@ -1516,7 +1485,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V6 Complete başlatılıyor...")
+    logger.info("🚀 Argon Master V6.1 Instant-Boot başlatılıyor...")
     application.run_polling(drop_pending_updates=True)
 
 
