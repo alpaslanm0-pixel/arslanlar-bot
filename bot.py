@@ -23,7 +23,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V13 Zero-Lock Engine is Live!", 200
+    return "Argon Master V14 Corporate AI & Full Catalog is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -38,11 +38,12 @@ threading.Thread(target=_start_flask_immediately, daemon=True).start()
 # =====================================================================
 # 1. KÜTÜPHANELER VE GÖMÜLÜ ORİJİNAL ARSLANLAR MARBLE LOGOSU
 # =====================================================================
+import numpy as np
 import pandas as pd
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.drawing.image import Image as XLImage
-from PIL import Image, ImageStat
+from PIL import Image
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
@@ -60,7 +61,7 @@ from reportlab.platypus import (
 
 from telegram import Update, InputMediaPhoto
 from telegram.error import Conflict, NetworkError, TimedOut
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, ChatAction
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -75,7 +76,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V13")
+logger = logging.getLogger("ArgonMaster_V14")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -216,6 +217,19 @@ SUBFOLDER_BLACKLIST = {
     "LOW RES",
 }
 
+# Ham blok / ocak klasörü kara listesi (Plaka yerine ham blok gelmesini %100 önler!)
+RAW_BLOCK_FOLDER_BLACKLIST = {
+    "STOCK",
+    "BLOK",
+    "BLOCK",
+    "BLOCKS",
+    "BLOKLAR",
+    "QUARRY",
+    "OCAK",
+    "HAM BLOK",
+    "RAW BLOCK",
+}
+
 DEFAULT_STONE_DNA = {
     "A-283": {
         "stone_name": "VIOLET BRECCIA",
@@ -249,20 +263,63 @@ DEFAULT_STONE_DNA = {
 
 
 # =====================================================================
-# 2. YARDIMCI FONKSİYONLAR, İSİM TEMİZLEME VE GÖRSEL ORAN KORUMA
+# 2. YARDIMCI FONKSİYONLAR, PDF KARAKTER TEMİZLEME VE DİKDÖRTGENLİK TESTİ
 # =====================================================================
 def normalize_turkish_key(text: Any) -> str:
     if text is None or pd.isna(text):
         return ""
     tr_map = str.maketrans("İıiŞşĞğÜüÖöÇç", "IIISSGGUUOOCC")
     s = str(text).strip().translate(tr_map).upper()
+    s = re.sub(r"[\u0300-\u036f]", "", s)
     return re.sub(r"\s+", " ", s).strip()
+
+
+def sanitize_pdf_text(text: Any) -> str:
+    """
+    ReportLab standart Helvetica fontunda 'Pol■shed' gibi siyah kutu (■)
+    çıkmasını %100 önleyen ASCII/Latin karakter temizleyici!
+    """
+    if text is None:
+        return ""
+    s = str(text)
+    tr_pdf_map = str.maketrans(
+        "İıŞşĞğÜüÖöÇç",
+        "IiSsGgUuOoCc",
+    )
+    s = s.translate(tr_pdf_map)
+    s = re.sub(r"[\u0300-\u036f]", "", s)
+    return s.strip()
 
 
 def normalize_lot_code(code: Any) -> str:
     raw = normalize_turkish_key(code)
     match = re.match(r"^([A-Z]{1,4})[-\s_.]*0*(\d{1,5})$", raw)
     return f"{match.group(1)}-{match.group(2)}" if match else raw
+
+
+def extract_slab_seq_number(filename: str, lot_code: str = "") -> int:
+    """
+    Dosya adından plaka sıra numarasını çıkarır (Örn: 'A 223- 1.jpg' -> 1,
+    'Block No A468 - Slab No 52' -> 52).
+    Böylece 1 numaralı bozuk kenar plakası yerine ortadaki en düzgün plakaları seçeriz!
+    """
+    fn = normalize_turkish_key(os.path.splitext(filename)[0])
+    # 1. 'SLAB NO: 52' veya 'PLAKA NO: 15' kalıbı varsa
+    m_slab = re.search(r"(?:SLAB|PLAKA)\s*(?:NO|NUMBER|#)?\s*[:=-]?\s*(\d{1,3})\b", fn)
+    if m_slab:
+        return int(m_slab.group(1))
+
+    # 2. Lot kodunu (Örn: A-223 veya A 223) silip kalan sayıya bak
+    if lot_code and lot_code != "-":
+        lot_m = re.match(r"^([A-Z]+)-(\d+)$", normalize_lot_code(lot_code))
+        if lot_m:
+            prefix, l_num = lot_m.group(1), lot_m.group(2)
+            fn = re.sub(rf"\b{prefix}[-\s_.]*0*{l_num}\b", " ", fn)
+
+    # Ebat ifadelerini (290x180 vb.) sil
+    fn = re.sub(r"\d{2,4}\s*[XX*]\s*\d{2,4}", " ", fn)
+    nums = [int(n) for n in re.findall(r"\b(\d{1,3})\b", fn) if 1 <= int(n) <= 150]
+    return nums[-1] if nums else 999
 
 
 def is_utility_subfolder(folder_name: str) -> bool:
@@ -280,10 +337,6 @@ def is_utility_subfolder(folder_name: str) -> bool:
 def clean_stone_and_lot_title(
     raw_title: str, parent_stone: str = ""
 ) -> Tuple[str, str, str]:
-    """
-    Kirli klasör adlarını ('[FULL LOT]', '- CUSTOM', '- WEB', '- LARGE') temizler.
-    Dönüş: (clean_display_title, clean_stone_name, clean_lot_code)
-    """
     s = normalize_turkish_key(raw_title)
     s = re.sub(r"\[.*?\]|\(.*?\)", " ", s)
 
@@ -300,7 +353,11 @@ def clean_stone_and_lot_title(
     if lot_m:
         stone_part = s[: lot_m.start()] + " " + s[lot_m.end() :]
 
-    noise_words = list(SUBFOLDER_BLACKLIST) + ["FULL", "LOT", "BLOCK", "BLOK"]
+    noise_words = (
+        list(SUBFOLDER_BLACKLIST)
+        + list(RAW_BLOCK_FOLDER_BLACKLIST)
+        + ["FULL", "LOT"]
+    )
     for nw in noise_words:
         stone_part = re.sub(
             rf"(?<![A-Z0-9]){re.escape(nw)}(?![A-Z0-9])", " ", stone_part
@@ -353,9 +410,9 @@ def clean_stone_and_lot_title(
         display_title = stone_part or "ARSLANLAR MARBLE SELECTION"
 
     return (
-        display_title,
-        (stone_part or "ARSLANLAR MARBLE"),
-        (lot_code or "-"),
+        sanitize_pdf_text(display_title),
+        sanitize_pdf_text(stone_part or "ARSLANLAR MARBLE"),
+        sanitize_pdf_text(lot_code or "-"),
     )
 
 
@@ -371,7 +428,7 @@ def exact_lot_match_in_text(folder_or_file_name: str, target_lot: str) -> int:
         prefix, num = lot_m.group(1), lot_m.group(2)
         pattern = rf"(?<![A-Z0-9]){prefix}[-\s_.]*0*{num}(?![0-9])"
         if re.search(pattern, fn_norm):
-            return 90
+            return 95
         return 0
 
     if target_norm == fn_norm:
@@ -455,10 +512,13 @@ def analyze_and_prepare_pdf_slab_image(
     raw_bytes: Optional[bytes], max_w_pt: float = 185.0, max_h_pt: float = 122.0
 ) -> Optional[Tuple[bytes, float, float, int]]:
     """
-    1. Görselin çerçeve kalitesini analiz eder (Arka planı bembeyaz kırpılmış/yamuk
-       dekupe fotoğraflardan puan kırar, tam çerçeveli stüdyo çekimi plakaya yüksek puan verir).
-    2. Görselin orijinal En-Boy Oranını (Aspect Ratio) %100 KORUR! Asla sündürmez!
-    Dönüş: (jpeg_bytes, render_width_pt, render_height_pt, visual_quality_score)
+    1. Görselin dikdörtgenliğini (Rectangularity), kenar bütünlüğünü ve çerçeve
+       kalitesini piksel bazında ölçer.
+       - ROSSO VIOLA A-339 gibi kenarı kırık/eksik beyaz dekupe plakaları tespit edip
+         puanını düşürür; en tam dikdörtgen plakayı seçer!
+       - Altında siyah bilgi bandı ('Block No - Slab No - Area') olan gerçek stüdyo
+         çekimlerine +65 puan verir.
+    2. Görselin orijinal En-Boy Oranını (Aspect Ratio) %100 KORUR (Asla sündürmez).
     """
     if not raw_bytes:
         return None
@@ -466,48 +526,68 @@ def analyze_and_prepare_pdf_slab_image(
         with Image.open(io.BytesIO(raw_bytes)) as im:
             img = im.convert("RGB")
             w, h = img.size
-            if w < 100 or h < 100:
+            if w < 120 or h < 100:
                 return None
 
             aspect = w / float(h)
             visual_score = 50
 
-            # Düzgün yatay plaka oranı (1.25 - 1.95 arası)
             if 1.25 <= aspect <= 1.95:
-                visual_score += 30
-            elif aspect < 1.0:
-                visual_score -= 40
+                visual_score += 25
+            elif aspect < 1.05:
+                # Dikey veya kare fotoğraflar genelde blok/saha fotoğrafıdır
+                visual_score -= 60
 
-            # Kenar piksellerini kontrol et: Eğer 4 köşe bembeyaz (>248) ise bu arka planı
-            # silinmiş/kırpılmış (DENVER'deki gibi) bir dekupe görseldir; gerçek çerçeveli
-            # stüdyo çekimini tercih etmek için puanını düşür!
-            small = img.resize((60, 40), Image.Resampling.BILINEAR)
-            corners = [
-                small.getpixel((2, 2)),
-                small.getpixel((57, 2)),
-                small.getpixel((2, 37)),
-                small.getpixel((57, 37)),
-            ]
-            white_corners = sum(
-                1 for (r, g, b) in corners if r > 246 and g > 246 and b > 246
+            small = img.resize((120, 80), Image.Resampling.BILINEAR)
+            arr = np.array(small, dtype=np.float32)
+
+            # Beyaz arka plan (dekupe) analizi ve dikdörtgen doluluk oranı
+            white_mask = (
+                (arr[:, :, 0] > 242)
+                & (arr[:, :, 1] > 242)
+                & (arr[:, :, 2] > 242)
             )
-            if white_corners >= 3:
-                visual_score -= 35
-            else:
-                # Gerçek arka planlı ve alt siyah bilgi barlı stüdyo çekimi!
-                bottom_strip = [small.getpixel((x, 38)) for x in range(10, 50)]
-                dark_bottom = sum(
-                    1 for (r, g, b) in bottom_strip if r < 45 and g < 45 and b < 45
-                )
-                if dark_bottom >= 20:
-                    visual_score += 45
+            white_ratio = float(white_mask.mean())
 
-            # Oranı bozmadan (Zero-Stretch) PDF kutusuna sığacak tam pt ölçülerini hesapla
+            if white_ratio > 0.06:
+                # Dekupe (beyaz arka planlı) görsel: Plakanın ne kadar düzgün dikdörtgen olduğunu ölç!
+                non_white = ~white_mask
+                if non_white.any():
+                    ys, xs = np.where(non_white)
+                    bbox = non_white[
+                        ys.min() : ys.max() + 1, xs.min() : xs.max() + 1
+                    ]
+                    rect_fill = float(bbox.mean())
+                    row_widths = bbox.mean(axis=1)
+                    col_heights = bbox.mean(axis=0)
+                    edge_std = float(np.std(row_widths) + np.std(col_heights))
+
+                    # Eğer plakanın kenarı kırıksa (rect_fill < 0.94 veya edge_std yüksekse) ağır ceza ver
+                    if rect_fill >= 0.95 and edge_std < 0.08:
+                        visual_score += 25
+                    elif rect_fill < 0.88 or edge_std > 0.14:
+                        visual_score -= 45
+                    else:
+                        visual_score -= 10
+            else:
+                # Tam çerçeveli fotoğraf: Alt siyah bilgi şeridi ("Block No - Slab No - Area") var mı?
+                bottom_strip = arr[74:79, 10:110, :]
+                dark_ratio = float((bottom_strip.mean(axis=2) < 48).mean())
+                if dark_ratio > 0.45:
+                    # Arslanlar Marble logolu ve siyah alt bantlı stüdyo plaka çekimi!
+                    visual_score += 65
+                else:
+                    # Merkezdeki plaka dokusu homojen mi yoksa vinç/tavan/saha karmaşası mı?
+                    top_strip = arr[2:14, 15:105, :]
+                    top_std = float(np.std(top_strip))
+                    if top_std > 58.0:
+                        # Tavan pencereleri / vinç kıskacı olan saha çekimi
+                        visual_score -= 25
+
             scale = min(max_w_pt / float(w), max_h_pt / float(h))
             render_w = round(w * scale, 1)
             render_h = round(h * scale, 1)
 
-            # Yüksek çözünürlükte (300 DPI karşılığı) kaydet
             img.thumbnail((950, 650), Image.Resampling.LANCZOS)
             out = io.BytesIO()
             img.save(out, format="JPEG", quality=92)
@@ -517,7 +597,7 @@ def analyze_and_prepare_pdf_slab_image(
 
 
 # =====================================================================
-# 3. SAF REST API TABANLI GOOGLE DRIVE MOTORU (NO-CUSTOM & EXACT EXCEL)
+# 3. SAF REST API GOOGLE DRIVE MOTORU (KOLEKSİYON ÖNCELİKLİ & BLOK KORUMALI)
 # =====================================================================
 class DriveExplorer:
     DRIVE_API_URL = "https://www.googleapis.com/drive/v3/files"
@@ -529,6 +609,7 @@ class DriveExplorer:
         self._logo_jpeg_bytes: Optional[bytes] = None
         self._logo_png_bytes: Optional[bytes] = None
         self._lot_result_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._folder_meta_cache: Dict[str, Dict[str, Any]] = {}
 
         if self.sa_json_str:
             try:
@@ -553,7 +634,7 @@ class DriveExplorer:
         self,
         q: str,
         fields: str = "files(id,name,mimeType,parents,webViewLink,thumbnailLink,shortcutDetails,size)",
-        page_size: int = 150,
+        page_size: int = 200,
     ) -> List[Dict[str, Any]]:
         headers = self._get_headers()
         if not headers:
@@ -577,8 +658,12 @@ class DriveExplorer:
         return []
 
     def get_folder_metadata(self, folder_id: str) -> Optional[Dict[str, Any]]:
+        if not folder_id:
+            return None
+        if folder_id in self._folder_meta_cache:
+            return self._folder_meta_cache[folder_id]
         headers = self._get_headers()
-        if not headers or not folder_id:
+        if not headers:
             return None
         try:
             url = f"{self.DRIVE_API_URL}/{folder_id}"
@@ -588,7 +673,9 @@ class DriveExplorer:
             }
             resp = requests.get(url, headers=headers, params=params, timeout=8)
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                self._folder_meta_cache[folder_id] = data
+                return data
         except Exception:
             pass
         return None
@@ -636,6 +723,11 @@ class DriveExplorer:
     def find_folder_exact(
         self, query_term: str
     ) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
+        """
+        A-467 veya A-468 sorulduğunda kişisel Drive'daki ham blok klasörünü ('STOCK / A-467')
+        SEÇMEZ! Plaka koleksiyonundaki gerçek plaka klasörünü ('CEPPO BRECCIA A-468[FULL LOT]')
+        seçer!
+        """
         norm_key = normalize_lot_code(query_term)
         if not norm_key:
             return None, None, None, query_term
@@ -650,14 +742,13 @@ class DriveExplorer:
                 f"{prefix}-{num}",
                 f"{prefix} {num}",
                 f"{prefix}{num}",
-                num,
             ]
         else:
             tr_var = norm_key.replace("SILVER", "SİLVER").replace("RIVER", "RİVER")
             if tr_var != norm_key:
                 search_terms.append(tr_var)
 
-        search_terms = list(dict.fromkeys([t for t in search_terms if len(t) >= 1]))
+        search_terms = list(dict.fromkeys([t for t in search_terms if len(t) >= 2]))
 
         matched_folders = []
         seen_ids = set()
@@ -667,7 +758,7 @@ class DriveExplorer:
                 f"mimeType = 'application/vnd.google-apps.folder' "
                 f"and trashed = false and name contains '{term}'"
             )
-            files = self.api_list_files(q, page_size=50)
+            files = self.api_list_files(q, page_size=60)
             for f in files:
                 fid = f["id"]
                 if fid in seen_ids:
@@ -676,6 +767,12 @@ class DriveExplorer:
                 score = exact_lot_match_in_text(fname, norm_key)
                 if score > 0:
                     fn_up = normalize_turkish_key(fname)
+
+                    # 1. Klasör adında taş ismi veya [FULL LOT] geçiyorsa bu gerçek bir PLAKA klasörüdür (+45 puan!)
+                    if "FULL LOT" in fn_up or len(fn_up) > len(norm_key) + 3:
+                        score += 45
+
+                    # 2. Alt medya klasörü ise (- CUSTOM, - WEB, - LARGE) puan kır
                     if any(
                         re.search(rf"(?<![A-Z0-9]){bw}(?![A-Z0-9])", fn_up)
                         for bw in [
@@ -687,26 +784,54 @@ class DriveExplorer:
                             "BOOKMATCH",
                         ]
                     ):
-                        score -= 40
+                        score -= 55
+
                     seen_ids.add(fid)
-                    matched_folders.append((score, f))
-            if any(s >= 90 for s, _ in matched_folders):
-                break
+                    matched_folders.append([score, f])
 
         if not matched_folders:
             return None, None, None, norm_key
 
+        # Aday klasörlerin üst klasörünü (Parent) kontrol et:
+        # Eğer üst klasör 'STOCK', 'BLOK', 'OCAK' ise (Ham blok klasörüyse) -120 puan ceza ver!
+        # Eğer üst klasör 'COLLECTION', 'SERIES', 'EXCLUSIVE' veya bir taş adıysa +50 puan ver!
+        for item_pair in matched_folders:
+            sc, f_obj = item_pair[0], item_pair[1]
+            parents = f_obj.get("parents", [])
+            if parents:
+                p_meta = self.get_folder_metadata(parents[0])
+                if p_meta:
+                    p_name = normalize_turkish_key(p_meta.get("name", ""))
+                    if p_name in RAW_BLOCK_FOLDER_BLACKLIST or any(
+                        bw in p_name for bw in ["BLOK", "BLOCK", "OCAK", "QUARRY"]
+                    ):
+                        item_pair[0] -= 120
+                    elif any(
+                        cw in p_name
+                        for cw in ["COLLECTION", "SERIES", "EXCLUSIVE", "PLAKA", "SLAB"]
+                    ):
+                        item_pair[0] += 55
+                    elif p_name == "STOCK":
+                        item_pair[0] -= 120
+
         matched_folders.sort(key=lambda x: x[0], reverse=True)
-        best = matched_folders[0][1]
+        best_score, best = matched_folders[0]
 
         parents = best.get("parents", [])
         parent_id = parents[0] if parents else None
-        if parent_id and matched_folders[0][0] < 80:
-            p_meta = self.get_folder_metadata(parent_id)
-            if p_meta and exact_lot_match_in_text(p_meta.get("name", ""), norm_key) > 0:
-                best = p_meta
-                p_parents = best.get("parents", [])
-                parent_id = p_parents[0] if p_parents else None
+
+        # Eğer en iyi eşleşen klasör yine de bir alt klasörse (örn: "CEPPO BRECCIA A-468 - LARGE") ve üst klasörü ana klasörse üst klasöre çık
+        if parent_id:
+            fn_up = normalize_turkish_key(best.get("name", ""))
+            if any(
+                re.search(rf"(?<![A-Z0-9]){bw}(?![A-Z0-9])", fn_up)
+                for bw in ["CUSTOM", "WEB", "LARGE", "EMAIL", "PHOTOS", "BOOKMATCH"]
+            ):
+                p_meta = self.get_folder_metadata(parent_id)
+                if p_meta and exact_lot_match_in_text(p_meta.get("name", ""), norm_key) > 0:
+                    best = p_meta
+                    p_parents = best.get("parents", [])
+                    parent_id = p_parents[0] if p_parents else None
 
         fid = best["id"]
         link = best.get(
@@ -744,7 +869,12 @@ class DriveExplorer:
         if name.startswith("~$"):
             return None
         mime = item.get("mimeType", "")
-        if mime == "application/vnd.google-apps.folder" or mime.startswith("image/") or mime.startswith("video/"):
+        if (
+            mime == "application/vnd.google-apps.folder"
+            or mime.startswith("image/")
+            or mime.startswith("video/")
+            or mime == "application/pdf"
+        ):
             return None
 
         target_id = item["id"]
@@ -843,15 +973,6 @@ class DriveExplorer:
                             ):
                                 fname += ".xlsx"
                             return b_data, fname
-            for item in p_items:
-                cand = self._extract_excel_candidate(item)
-                if cand:
-                    b_data = self.download_file_bytes(cand["id"], cand["mimeType"])
-                    if b_data:
-                        fname = cand["name"]
-                        if not fname.lower().endswith((".xlsx", ".xls", ".csv")):
-                            fname += ".xlsx"
-                        return b_data, fname
 
         if norm_q and norm_q != "-":
             lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_q)
@@ -860,7 +981,6 @@ class DriveExplorer:
                     f"{lot_m.group(1)}-{lot_m.group(2)}",
                     f"{lot_m.group(1)} {lot_m.group(2)}",
                     f"{lot_m.group(1)}{lot_m.group(2)}",
-                    lot_m.group(2),
                 ]
                 if lot_m
                 else [norm_q]
@@ -892,10 +1012,6 @@ class DriveExplorer:
     def scan_images_deep(
         self, folder_id: Optional[str], query_term: str
     ) -> List[Dict[str, Any]]:
-        """
-        CUSTOM klasöründeki fotoğrafları kesin olarak dışarıda bırakarak
-        LARGE / PHOTOS / ana klasördeki plaka fotoğraflarını 3 katman derinlikte tarar.
-        """
         all_imgs: List[Dict[str, Any]] = []
         if folder_id:
             lvl1 = self.batch_list_children([folder_id]).get(folder_id, [])
@@ -903,7 +1019,6 @@ class DriveExplorer:
             for it in lvl1:
                 mime = it.get("mimeType", "")
                 if mime == "application/vnd.google-apps.folder":
-                    # CUSTOM klasörüne ASLA girme!
                     if "CUSTOM" in normalize_turkish_key(it.get("name", "")):
                         continue
                     sub_1.append(it)
@@ -946,36 +1061,58 @@ class DriveExplorer:
         return all_imgs
 
     @staticmethod
-    def _score_slab_image_metadata(img_meta: Dict[str, Any]) -> int:
+    def _rank_candidates_preferring_middle_slabs(
+        imgs: List[Dict[str, Any]], lot_code: str = ""
+    ) -> List[Dict[str, Any]]:
         """
-        CUSTOM klasörünü kesin olarak eler (-1000 puan).
-        LARGE / ORJINAL / PHOTOS klasöründeki çerçevesi düzgün gerçek plaka fotoğraflarına
-        en yüksek önceliği verir.
+        Bloğun ilk kesilen 1, 2, 3 numaralı kapak plakaları ('A 223- 1' gibi)
+        her zaman kenarı kırık veya küçük olduğu için, bloğun ORTASINDAKİ plakaları
+        (Örn: 54 plaka varsa 20-35 arası plakaları) en öne alır!
         """
-        fname = normalize_turkish_key(img_meta.get("name", ""))
-        pname = normalize_turkish_key(img_meta.get("parent_name", ""))
-        score = 50
+        if not imgs:
+            return []
 
-        if "CUSTOM" in pname or "CUSTOM" in fname:
-            return -1000
+        # Önce klasör kalitesine (LARGE / PHOTOS > WEB / EMAIL) göre grupla
+        scored_list = []
+        seq_nums = [
+            extract_slab_seq_number(f.get("name", ""), lot_code) for f in imgs
+        ]
+        valid_seqs = [s for s in seq_nums if 1 <= s <= 150]
+        median_seq = (
+            sorted(valid_seqs)[len(valid_seqs) // 2] if valid_seqs else 15
+        )
 
-        if "LARGE" in pname or "LARGE" in fname or "ORJ" in pname:
-            score += 45
-        elif "PHOTOS" in pname or "FOTO" in pname:
-            score += 35
+        for f, seq in zip(imgs, seq_nums):
+            fname = normalize_turkish_key(f.get("name", ""))
+            pname = normalize_turkish_key(f.get("parent_name", ""))
+            if "CUSTOM" in pname or "CUSTOM" in fname:
+                continue
 
-        # Altında siyah bilgi bandı ("Block No - Slab No - Area") olan çerçeveli plaka fotoğrafları
-        if any(k in fname for k in ["AREA", "BLOCK", "SLAB", "CM"]):
-            score += 40
+            meta_score = 50
+            if "LARGE" in pname or "LARGE" in fname or "ORJ" in pname:
+                meta_score += 45
+            elif "PHOTOS" in pname or "FOTO" in pname:
+                meta_score += 35
 
-        if "WEB" in pname or "EMAIL" in pname or "SMALL" in pname:
-            score -= 20
+            if any(k in fname for k in ["AREA", "BLOCK", "SLAB", "CM"]):
+                meta_score += 45
 
-        size_bytes = int(img_meta.get("size", 0) or 0)
-        if size_bytes > 400_000:
-            score += 15
+            if "WEB" in pname or "EMAIL" in pname or "SMALL" in pname:
+                meta_score -= 15
 
-        return score
+            # Plaka sıra numarası değerlendirmesi:
+            # 1 veya 2 numaralı ilk kapak plakalarından -35 puan kır!
+            # Ortadaki plakalara (median_seq civarına) +30 puan ver!
+            if seq in (1, 2):
+                meta_score -= 35
+            elif 1 <= seq <= 150:
+                dist = abs(seq - median_seq)
+                meta_score += max(0, 30 - dist)
+
+            scored_list.append((meta_score, f))
+
+        scored_list.sort(key=lambda x: x[0], reverse=True)
+        return [item[1] for item in scored_list]
 
     def get_images_for_telegram(
         self, folder_id: Optional[str], query_term: str
@@ -987,8 +1124,6 @@ class DriveExplorer:
         bm_files = []
         std_files = []
         for f in all_imgs:
-            if self._score_slab_image_metadata(f) < 0:
-                continue
             fn = f.get("name", "").lower()
             pn = f.get("parent_name", "").lower()
             if "bookmatch" in fn or "bm" in fn or "bookmatch" in pn:
@@ -996,14 +1131,18 @@ class DriveExplorer:
             else:
                 std_files.append(f)
 
-        std_files.sort(key=self._score_slab_image_metadata, reverse=True)
-        bm_files.sort(key=self._score_slab_image_metadata, reverse=True)
+        ranked_std = self._rank_candidates_preferring_middle_slabs(
+            std_files, query_term
+        )
+        ranked_bm = self._rank_candidates_preferring_middle_slabs(
+            bm_files, query_term
+        )
 
-        f1 = std_files[0] if std_files else (bm_files[0] if bm_files else None)
+        f1 = ranked_std[0] if ranked_std else (ranked_bm[0] if ranked_bm else None)
         f2 = (
-            bm_files[0]
-            if (bm_files and bm_files[0] != f1)
-            else (std_files[1] if len(std_files) > 1 else f1)
+            ranked_bm[0]
+            if (ranked_bm and ranked_bm[0] != f1)
+            else (ranked_std[1] if len(ranked_std) > 1 else f1)
         )
 
         img1 = (
@@ -1030,9 +1169,9 @@ class DriveExplorer:
         """
         PDF Sunumu İçin:
         1. CUSTOM ve BOOKMATCH klasörlerini kesin olarak eler.
-        2. En yüksek puanlı 2 adayı indirip çerçeve düzgünlüğünü (beyaz kırpık köşeli mi
-           yoksa tam dikdörtgen çerçeveli plaka mı) kontrol eder.
-        3. En düzgün çerçeveli plakayı en-boy oranını (aspect ratio) HİÇ BOZMADAN döner!
+        2. Bloğun ortasındaki (Slab #1 olmayan!) en yüksek puanlı 3 adayı indirir.
+        3. Piksel bazında dikdörtgenlik (Rectangularity) ve çerçeve düzgünlüğü testi
+           yaparak kenarı kırık olmayan, en düzgün şekilli plakayı seçer!
         """
         all_imgs = (
             pre_imgs
@@ -1045,19 +1184,18 @@ class DriveExplorer:
         clean_slabs = [
             f
             for f in all_imgs
-            if self._score_slab_image_metadata(f) > 0
-            and "bookmatch" not in f.get("name", "").lower()
+            if "bookmatch" not in f.get("name", "").lower()
             and "bm" not in f.get("name", "").lower()
             and "bookmatch" not in f.get("parent_name", "").lower()
         ]
-        candidates = clean_slabs if clean_slabs else all_imgs
-        candidates.sort(key=self._score_slab_image_metadata, reverse=True)
+        ranked_candidates = self._rank_candidates_preferring_middle_slabs(
+            clean_slabs if clean_slabs else all_imgs, query_term
+        )
 
         best_result = None
-        best_total_score = -9999
+        best_vis_score = -9999
 
-        # İlk 2 adayı kontrol edip çerçevesi en düzgün olanı seç
-        for cand in candidates[:2]:
+        for cand in ranked_candidates[:3]:
             raw = self.download_raw_image_fast(
                 cand["id"], cand.get("thumbnailLink")
             )
@@ -1067,11 +1205,11 @@ class DriveExplorer:
             if not analyzed:
                 continue
             jpg_b, rw, rh, vis_score = analyzed
-            total_sc = self._score_slab_image_metadata(cand) + vis_score
-            if total_sc > best_total_score:
-                best_total_score = total_sc
+            if vis_score > best_vis_score:
+                best_vis_score = vis_score
                 best_result = (jpg_b, rw, rh)
-            if vis_score >= 90:
+            # Tam çerçeveli ve dikdörtgen stüdyo çekimi bulunduysa hemen kabul et
+            if vis_score >= 95:
                 break
 
         return best_result
@@ -1093,7 +1231,7 @@ class DriveExplorer:
 
 
 # =====================================================================
-# 4. %100 GERÇEK EXCEL OKUYAN ENVANTER MOTORU (SAHTE TAHMİN YOK!)
+# 4. %100 GERÇEK EXCEL OKUYAN ENVANTER MOTORU (TÜM TAŞLARI TARAR!)
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
@@ -1281,8 +1419,8 @@ class InventoryEngine:
         self, excel_bytes: bytes
     ) -> List[Tuple[str, pd.DataFrame]]:
         """
-        Hem modern .xlsx (openpyxl birleştirilmiş hücre çözücülü) hem de eski .xls / .csv
-        (pandas tabanlı) dosyalarını hatasız okur!
+        Pandas4Warning (inplace=True) ve python-calamine uyarılarını %100 önleyerek
+        Excel sayfalarını okur.
         """
         sheets_list: List[Tuple[str, pd.DataFrame]] = []
         try:
@@ -1290,7 +1428,6 @@ class InventoryEngine:
             for s_name in wb.sheetnames:
                 ws = wb[s_name]
                 for m_range in list(ws.merged_cells.ranges):
-                    # Sadece dikey birleştirmeleri (Blok No, Ürün Adı) veya 2-3 sütunluk Ebat başlığını kopyala
                     col_span = m_range.max_col - m_range.min_col + 1
                     row_span = m_range.max_row - m_range.min_row + 1
                     top_val = ws.cell(m_range.min_row, m_range.min_col).value
@@ -1307,8 +1444,7 @@ class InventoryEngine:
                 rows_matrix = list(ws.iter_rows(values_only=True))
                 if rows_matrix:
                     df = pd.DataFrame(rows_matrix)
-                    df.dropna(how="all", inplace=True)
-                    df.reset_index(drop=True, inplace=True)
+                    df = df.dropna(how="all").reset_index(drop=True)
                     if not df.empty:
                         sheets_list.append((s_name, df))
             if sheets_list:
@@ -1316,17 +1452,15 @@ class InventoryEngine:
         except Exception:
             pass
 
-        # Yedek: Pandas ExcelFile (.xls veya farklı formatlar için)
         try:
-            xls = pd.ExcelFile(io.BytesIO(excel_bytes))
+            xls = pd.ExcelFile(io.BytesIO(excel_bytes), engine="openpyxl")
             for s_name in xls.sheet_names:
                 df = pd.read_excel(xls, sheet_name=s_name, header=None)
-                df.dropna(how="all", inplace=True)
-                df.reset_index(drop=True, inplace=True)
+                df = df.dropna(how="all").reset_index(drop=True)
                 if not df.empty:
                     sheets_list.append((s_name, df))
-        except Exception as e:
-            logger.warning(f"Tablo okuma uyarısı: {e}")
+        except Exception:
+            pass
 
         return sheets_list
 
@@ -1349,11 +1483,14 @@ class InventoryEngine:
             if len(raw_df) < 2:
                 continue
 
-            # Üst bilgi satırlarında BLOK NO / LOT NO yazıyor mu kontrol et (Örn: DENVER için gerçek lot kodunu bulur)
             sheet_detected_lot = ""
             for idx in range(min(15, len(raw_df))):
                 row_text = " ".join(
-                    [normalize_turkish_key(v) for v in raw_df.iloc[idx].values if pd.notna(v)]
+                    [
+                        normalize_turkish_key(v)
+                        for v in raw_df.iloc[idx].values
+                        if pd.notna(v)
+                    ]
                 )
                 lm = re.search(
                     r"(?:BLOK|BLOCK|LOT|PARTI)\s*(?:NO|NUMBER|#|:)?\s*[:=-]?\s*\b([A-Z]{1,4}[-\s_.]*\d{1,5})\b",
@@ -1401,12 +1538,10 @@ class InventoryEngine:
                     if any(kw == v or kw in v for kw in header_keywords)
                     or bool(re.search(r"\bEN\b", v))
                 )
-                # Alt başlık satırı ("EN | BOY") üst satırla eşit puan alırsa alt satırı seçmek için >= kullan!
                 if score >= best_score and score > 0:
                     best_score = score
                     header_idx = idx
 
-            # Üst satır (header_idx - 1) ve mevcut başlık satırını (header_idx) birleştir
             composite_headers = {}
             start_h = max(0, header_idx - 1) if best_score >= 1 else 0
             for col_i in range(raw_df.shape[1]):
@@ -1638,7 +1773,7 @@ class InventoryEngine:
 
                 valid_rows.append(
                     {
-                        "slab_no": slab_no_str,
+                        "slab_no": sanitize_pdf_text(slab_no_str),
                         "length_cm": int(round(l_cm)) if l_cm > 0 else 0,
                         "height_cm": int(round(h_cm)) if h_cm > 0 else 0,
                         "thickness": "2 cm",
@@ -1668,11 +1803,20 @@ class InventoryEngine:
             elif "3CM" in detected_stone_desc or "3 CM" in detected_stone_desc:
                 thick_val = "3 cm"
 
+            # Türkçe 'Pol■shed' siyah kutu hatasını %100 önlemek için önce ASCII'ye çevir!
             surf_val = "Polished"
             if surf_col is not None and not rows_to_iter[surf_col].dropna().empty:
-                surf_val = (
-                    str(rows_to_iter[surf_col].dropna().iloc[0]).strip().title()
+                raw_surf = normalize_turkish_key(
+                    rows_to_iter[surf_col].dropna().iloc[0]
                 )
+                if "HONED" in raw_surf or "HONLU" in raw_surf or "MAT" in raw_surf:
+                    surf_val = "Honed"
+                elif "BRUSH" in raw_surf or "FIRCA" in raw_surf or "LEATHER" in raw_surf:
+                    surf_val = "Brushed / Leather"
+                elif "POLISH" in raw_surf or "CILALI" in raw_surf or "PARLAK" in raw_surf:
+                    surf_val = "Polished"
+                else:
+                    surf_val = sanitize_pdf_text(raw_surf.title())
             elif "HONED" in detected_stone_desc:
                 surf_val = "Honed"
 
@@ -1689,11 +1833,11 @@ class InventoryEngine:
             return {
                 "total_m2": round(final_m2, 2),
                 "total_slabs": sum_slabs if sum_slabs > 0 else len(valid_rows),
-                "thickness": thick_val,
-                "surface": surf_val,
-                "dimensions": dims_str,
-                "stone_desc": detected_stone_desc,
-                "detected_lot": sheet_detected_lot,
+                "thickness": sanitize_pdf_text(thick_val),
+                "surface": sanitize_pdf_text(surf_val),
+                "dimensions": sanitize_pdf_text(dims_str),
+                "stone_desc": sanitize_pdf_text(detected_stone_desc),
+                "detected_lot": sanitize_pdf_text(sheet_detected_lot),
                 "clean_rows": valid_rows,
             }
         return None
@@ -1742,12 +1886,11 @@ class InventoryEngine:
                 "clean_rows": [],
             }
 
-        # Eğer klasör adında lot kodu yoksa ama Excel içinden BLOK NO okunduysa onu kullan!
         if lot_code == "-" and data.get("detected_lot"):
             lot_code = data["detected_lot"]
             clean_disp = f"{stone_name} — {lot_code}"
 
-        if data.get("stone_desc") and stone_name == "ARSLANLAR MARBLE":
+        if data.get("stone_desc") and stone_name in ("ARSLANLAR MARBLE", "STOCK"):
             _, parsed_st, _ = clean_stone_and_lot_title(data["stone_desc"])
             if parsed_st:
                 stone_name = parsed_st
@@ -1760,9 +1903,11 @@ class InventoryEngine:
         res = {
             "status": "success",
             "query": norm_key,
-            "title": clean_disp,
-            "stone_name": stone_name,
-            "lot_code": lot_code if lot_code != "-" else norm_key,
+            "title": sanitize_pdf_text(clean_disp),
+            "stone_name": sanitize_pdf_text(stone_name),
+            "lot_code": sanitize_pdf_text(
+                lot_code if lot_code != "-" else norm_key
+            ),
             "drive_link": folder_link,
             "folder_id": folder_id,
             "excel_name": excel_name or f"{norm_key}_Original_PackingList.xlsx",
@@ -1774,12 +1919,14 @@ class InventoryEngine:
         return res
 
     def scan_collection_lots(
-        self, collection_name: str, max_lots: int = 22
+        self,
+        collection_name: str,
+        max_lots: int = 100,
+        progress_cb: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Koleksiyon klasörünü 3 katman derinliğe kadar tarar; 'DENVER' gibi taş
-        klasörlerinin içindeki alt lot klasörlerine iner, 'CUSTOM/WEB/LARGE/PHOTOS'
-        klasörlerini eler ve sadece gerçek Excel verisini okur!
+        Koleksiyon klasöründeki 47+ taşın TAMAMINI (24 sınırına takılmadan!)
+        tarar, tekilleştirir ve Excel verilerini okur.
         """
         fid, _, _, _ = self.drive.find_folder_exact(collection_name)
         if not fid:
@@ -1832,7 +1979,6 @@ class InventoryEngine:
                     }
                 )
 
-        # Eğer 2. katmanın altında da gerçek lot klasörleri varsa (3. katman) onları da al
         if lvl2_to_check_deeper:
             lvl3_batch = self.drive.batch_list_children(
                 list(lvl2_to_check_deeper.keys())
@@ -1889,8 +2035,17 @@ class InventoryEngine:
                 cf["lot_code"] = l_code
                 unique_lots[dedup_key] = cf
 
+        all_unique_items = list(unique_lots.values())[:max_lots]
+        total_items = len(all_unique_items)
         results = []
-        for _, lf in list(unique_lots.items())[:max_lots]:
+
+        for idx, lf in enumerate(all_unique_items, start=1):
+            if progress_cb and (idx == 1 or idx % 10 == 0 or idx == total_items):
+                try:
+                    progress_cb(idx, total_items, lf["clean_title"])
+                except Exception:
+                    pass
+
             q_hint = (
                 lf["lot_code"]
                 if lf["lot_code"] != "-"
@@ -1931,9 +2086,9 @@ class InventoryEngine:
 
             results.append(
                 {
-                    "title": final_title,
-                    "stone_name": final_stone,
-                    "lot_code": final_lot_code,
+                    "title": sanitize_pdf_text(final_title),
+                    "stone_name": sanitize_pdf_text(final_stone),
+                    "lot_code": sanitize_pdf_text(final_lot_code),
                     "id": lf["id"],
                     "link": lf["link"],
                     "data": parsed_data,
@@ -1953,11 +2108,11 @@ class InventoryEngine:
         total_factory_slabs = 0
 
         for coll in collections:
-            items = self.scan_collection_lots(coll, max_lots=35)
+            items = self.scan_collection_lots(coll, max_lots=100)
             if not items:
                 continue
 
-            report_lines.append(f"📁 <b>{coll.upper()}</b>")
+            report_lines.append(f"📁 <b>{coll.upper()} ({len(items)} Lot)</b>")
             coll_m2 = 0.0
             coll_slabs = 0
 
@@ -1983,7 +2138,7 @@ class InventoryEngine:
 
 
 # =====================================================================
-# 5. KURUMSAL SUNUM PDF (ZERO-STRETCH) & BUNDLE PACKING LIST MOTORU
+# 5. KURUMSAL SUNUM PDF (47+ TAŞ DESTEKLİ) & BUNDLE PACKING LIST MOTORU
 # =====================================================================
 class CorporateDocumentEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -2011,7 +2166,7 @@ class CorporateDocumentEngine:
         )
         return [
             rl_logo,
-            Paragraph(pdf_title, sub_s),
+            Paragraph(sanitize_pdf_text(pdf_title), sub_s),
             HRFlowable(width="100%", thickness=1.5, color=BRONZE, spaceAfter=14),
         ]
 
@@ -2019,6 +2174,7 @@ class CorporateDocumentEngine:
         self,
         queries: List[str],
         collection_folder_names: Optional[List[str]] = None,
+        progress_cb: Optional[Any] = None,
     ) -> Tuple[bytes, str]:
         cards: List[Dict[str, Any]] = []
         seen_keys = set()
@@ -2028,10 +2184,9 @@ class CorporateDocumentEngine:
                 normalize_turkish_key(c) for c in collection_folder_names
             ]
             pdf_title = f"{' & '.join(titles_norm)} — EXECUTIVE CATALOG PRESENTATION"
-            per_coll = max(8, int(24 / len(collection_folder_names)))
             for coll_name in collection_folder_names:
                 scanned = self.inventory.scan_collection_lots(
-                    coll_name, max_lots=per_coll
+                    coll_name, max_lots=100, progress_cb=progress_cb
                 )
                 for item in scanned:
                     dedup_k = (
@@ -2162,20 +2317,20 @@ class CorporateDocumentEngine:
                 stock_str = "<b>Available in Factory Stock</b>"
                 heading_badge = ""
 
-            surf_str = d.get("surface", "Polished") or "Polished"
-            thick_str = d.get("thickness", "2 cm") or "2 cm"
+            surf_str = sanitize_pdf_text(d.get("surface", "Polished") or "Polished")
+            thick_str = sanitize_pdf_text(d.get("thickness", "2 cm") or "2 cm")
             surf_thick_str = f"{surf_str} | {thick_str}"
-            dims_str = d.get("dimensions", "-")
+            dims_str = sanitize_pdf_text(d.get("dimensions", "-"))
             if not dims_str or dims_str == "-":
                 dims_str = "Standard Export Slab Sizes"
 
-            lot_c = card["lot_code"]
-            if lot_c and lot_c != "-" and lot_c != card["stone_name"]:
-                stone_block_str = f"<b>{card['stone_name']}</b> (Block / Lot: <b>{lot_c}</b>)"
+            st_clean = sanitize_pdf_text(card["stone_name"])
+            lot_c = sanitize_pdf_text(card["lot_code"])
+            if lot_c and lot_c != "-" and lot_c != st_clean:
+                stone_block_str = f"<b>{st_clean}</b> (Block / Lot: <b>{lot_c}</b>)"
             else:
-                stone_block_str = f"<b>{card['stone_name']}</b>"
+                stone_block_str = f"<b>{st_clean}</b>"
 
-            # En-Boy Oranı Korunmuş (Sündürülmemiş!) Yüksek Kaliteli Plaka Görseli
             rl_img = Paragraph(
                 "<b>ARSLANLAR MARBLE</b><br/>High-Res Slab Selection", tdv_s
             )
@@ -2244,10 +2399,11 @@ class CorporateDocumentEngine:
                 )
             )
 
+            clean_card_title = sanitize_pdf_text(card["title"])
             story.append(
                 KeepTogether(
                     [
-                        Paragraph(f"{idx}. {card['title']}{heading_badge}", ch_s),
+                        Paragraph(f"{idx}. {clean_card_title}{heading_badge}", ch_s),
                         mr,
                         Spacer(1, 14),
                     ]
@@ -2268,7 +2424,7 @@ class CorporateDocumentEngine:
         gc.collect()
 
         if collection_folder_names:
-            fname = f"Arslanlar_Collections_{datetime.now().strftime('%H%M')}.pdf"
+            fname = f"Arslanlar_Catalog_{len(cards)}_Stones_{datetime.now().strftime('%H%M')}.pdf"
         else:
             fname = f"Arslanlar_Presentation_{'_'.join(queries[:3])}.pdf"
         return pdf_bytes, fname
@@ -2512,10 +2668,10 @@ class CorporateDocumentEngine:
     def generate_packing_list_pdf(self, info: Dict[str, Any]) -> bytes:
         d = info["data"]
         clean_rows = d.get("clean_rows", [])
-        stone_name = info.get("stone_name", "ARSLANLAR MARBLE")
-        lot_code = info.get("lot_code", info.get("query", "A-100"))
-        thick_str = d.get("thickness", "2 cm")
-        surf_str = d.get("surface", "Polished")
+        stone_name = sanitize_pdf_text(info.get("stone_name", "ARSLANLAR MARBLE"))
+        lot_code = sanitize_pdf_text(info.get("lot_code", info.get("query", "A-100")))
+        thick_str = sanitize_pdf_text(d.get("thickness", "2 cm"))
+        surf_str = sanitize_pdf_text(d.get("surface", "Polished"))
         prod_desc = f"{stone_name} ({thick_str} {surf_str})"
         kg_per_m2 = 85.5 if "3" in thick_str else 57.0
 
@@ -2546,8 +2702,8 @@ class CorporateDocumentEngine:
             alignment=2,
         )
         comp_html = (
-            "<b>ARSLANLAR TAAHHUT INS. HAFR.MAD.SAN.TİC.LTD.ŞTİ</b><br/>"
-            "KasımPasa Mah. Ataturk Cad. No:99/11 Menderes / Izmir / Turkey<br/>"
+            "<b>ARSLANLAR TAAHHUT INS. HAFR.MAD.SAN.TIC.LTD.STI</b><br/>"
+            "KasimPasa Mah. Ataturk Cad. No:99/11 Menderes / Izmir / Turkey<br/>"
             "Tax Office: MENDERES VD. 0840060648<br/>"
             f"<b>DATE:</b> {datetime.now().strftime('%d.%m.%Y')} | <b>BLOCK / LOT:</b> {lot_code}"
         )
@@ -2721,11 +2877,61 @@ class CorporateDocumentEngine:
 
 
 # =====================================================================
-# 6. ARGON AI & GÖRSEL TAŞ EŞLEŞTİRME MOTORU
+# 6. ARGON KURUMSAL KİMLİK (AI ASİSTAN) & GÖRSEL EŞLEŞTİRME MOTORU
 # =====================================================================
 class ArgonBrain:
     def __init__(self, api_key: str):
         self.api_key = api_key
+
+    def generate_corporate_assistant_reply(
+        self, user_text: str, cached_lots_summary: str = ""
+    ) -> str:
+        """
+        Grup veya özel sohbetlerde soru soran kişilere Arslanlar Marble'ın
+        Kurumsal Dijital Operasyon & Satış Uzmanı 'Argon' kimliğiyle profesyonel,
+        bilgili ve çözüm odaklı yanıt üretir.
+        """
+        if self.api_key:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.api_key}"
+                system_prompt = (
+                    "Sen Arslanlar Marble (Menderes / İzmir) firmasının Kurumsal Dijital Operasyon ve "
+                    "Satış Asistanı 'Argon'sun. Ekip arkadaşlarımızın ve yöneticilerimizin (Mehmet Bey vb.) "
+                    "sorularına her zaman kurumsal, saygılı, net, pratik ve çözüm odaklı cevap verirsin.\n"
+                    "Yetkinliklerin:\n"
+                    "- Her türlü Lot/Blok kodunun (Örn: A-371, A-468, D-3) güncel plaka stoğunu (m², plaka ve bundle adedi), "
+                    "plaka fotoğraflarını ve Google Drive klasör linkini anında paylaşmak.\n"
+                    "- Tekli veya çoklu lotlar için ya da Arslanlar Collection, Arslanlar Series ve Arslanlar Exclusive Collection "
+                    "için Bronz Aslan logolu İngilizce Executive PDF Katalog hazırlamak.\n"
+                    "- Minimum 12'şerli ahşap bundle (wooden bundle) standardında resmi Excel ve PDF Çeki Listesi (Packing List) üretmek.\n"
+                    "- Gönderilen mermer fotoğraflarını analiz edip stoklarımızdaki en yakın seleksiyonları eşleştirmek.\n"
+                    f"{cached_lots_summary}\n"
+                    f"Kullanıcının mesajı: '{user_text}'\n"
+                    "Lütfen Türkçe, doğal, kurumsal ve doğrudan yardımcı olan kısa bir yanıt ver."
+                )
+                payload = {
+                    "contents": [{"parts": [{"text": system_prompt}]}],
+                    "generationConfig": {"temperature": 0.35, "maxOutputTokens": 350},
+                }
+                resp = requests.post(url, json=payload, timeout=10)
+                if resp.status_code == 200:
+                    ans = (
+                        resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                        .strip()
+                    )
+                    if ans:
+                        return ans
+            except Exception as e:
+                logger.warning(f"Gemini kurumsal yanıt uyarısı: {e}")
+
+        return (
+            "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan</b>\n\n"
+            "Memnuniyetle yardımcı olabilirim. Sistem üzerinden şu işlemleri anında gerçekleştirebilirsiniz:\n"
+            "• <b>Plaka Görselleri & Stok:</b> Lot kodunu yazmanız yeterli (Örn: <code>A-371</code>, <code>A-468 fotoğraf</code>).\n"
+            "• <b>Kurumsal PDF Sunum:</b> Tekli/çoklu lotlar veya tüm koleksiyon için (Örn: <code>A-96 ve A-383 sunum</code> veya <code>Arslanlar Series sunum lütfen</code>).\n"
+            "• <b>Resmi Çeki Listesi (12'li Bundle):</b> <code>A-371 çeki listesi</code> yazarak hem orijinal hem de kurumsal bundle Excel/PDF çeki listesini alabilirsiniz.\n"
+            "• <b>Genel Fabrika Stoğu:</b> <code>Toplam stoğum ne kadar</code> yazarak tüm koleksiyonların özetini alabilirsiniz."
+        )
 
     def match_visual_stone(self, image_bytes: bytes) -> List[str]:
         if self.api_key:
@@ -2771,6 +2977,7 @@ class ArgonBrain:
         user_text: str,
         is_group: bool,
         bot_mentioned: bool,
+        is_reply_to_bot: bool = False,
         has_photo: bool = False,
     ) -> Dict[str, Any]:
         raw = normalize_turkish_key(user_text)
@@ -2784,7 +2991,8 @@ class ArgonBrain:
         matched = [
             f"{m.group(1)}-{int(m.group(2))}"
             for m in lot_regex.finditer(raw)
-            if m.group(1) not in ["M", "CM", "MM", "PDF", "TON", "KG"]
+            if m.group(1)
+            not in ["M", "CM", "MM", "PDF", "TON", "KG", "NO", "VE", "BU", "SU", "O"]
         ]
 
         for st_key in DEFAULT_STONE_DNA.keys():
@@ -2814,7 +3022,7 @@ class ArgonBrain:
         if "EXCLUSIVE" in raw:
             collection_folders.append("Arslanlar Exclusive Collection")
 
-        want_pdf = any(kw in raw for kw in ["PDF", "SUNUM", "KATALOG"])
+        want_pdf = any(kw in raw for kw in ["PDF", "SUNUM", "KATALOG", "PRESENTATION"])
         want_packing = any(kw in raw for kw in ["CEKI", "PACKING", "SEVK"])
         want_only_link = any(kw in raw for kw in ["LINK", "DRIVE"]) and not any(
             kw in raw for kw in ["FOTO", "RESIM", "GORSEL", "PDF", "SUNUM", "CEKI"]
@@ -2829,23 +3037,60 @@ class ArgonBrain:
             )
         )
 
-        if (
-            is_group
-            and not bot_mentioned
-            and not matched
-            and not want_pdf
-            and not want_packing
-            and not want_photo
-            and not want_only_link
-            and not collection_folders
-            and not want_deep_scan
-        ):
+        # Grupta veya özelde soru/sohbet tespiti (Kurumsal Kimlik Yanıtı için)
+        conversational_triggers = [
+            "ARGON",
+            "MERHABA",
+            "SELAM",
+            "GUNAYDIN",
+            "IYI GUNLER",
+            "IYI AKSAMLAR",
+            "NASILSIN",
+            "KIMIN",
+            "KIMDIR",
+            "YARDIM",
+            "BILGI",
+            "VAR MI",
+            "VARMI",
+            "KAC",
+            "NEDIR",
+            "NASIL",
+            "NE ZAMAN",
+            "HANGI",
+            "STOK",
+            "MERMER",
+            "PLAKA",
+            "BUNDLE",
+            "FIYAT",
+            "LIMAN",
+            "SEVK",
+            "?",
+        ]
+        is_question_or_chat = (
+            bot_mentioned
+            or is_reply_to_bot
+            or ("?" in user_text)
+            or any(t in raw for t in conversational_triggers)
+        )
+
+        has_operational_cmd = bool(
+            matched
+            or want_pdf
+            or want_packing
+            or want_photo
+            or want_only_link
+            or collection_folders
+            or want_deep_scan
+        )
+
+        if is_group and not has_operational_cmd and not is_question_or_chat:
             return {"should_reply": False}
 
         return {
             "should_reply": True,
             "is_visual_search": False,
-            "matched_queries": list(dict.fromkeys(matched))[:10],
+            "is_corporate_chat": (not has_operational_cmd),
+            "matched_queries": list(dict.fromkeys(matched))[:12],
             "collection_folders": collection_folders,
             "want_deep_scan": want_deep_scan,
             "want_pdf": want_pdf,
@@ -2856,7 +3101,7 @@ class ArgonBrain:
 
 
 # =====================================================================
-# 7. SIRALI KUYRUK ZIRHLI (SEMAPHORE) TELEGRAM SOHBET YÖNETİCİSİ
+# 7. SIRALI KUYRUK ZIRHLI TELEGRAM SOHBET YÖNETİCİSİ
 # =====================================================================
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(drive_explorer)
@@ -2864,7 +3109,6 @@ doc_engine = CorporateDocumentEngine(inventory_engine, drive_explorer)
 argon_brain = ArgonBrain(GEMINI_API_KEY)
 
 PROCESSED_MESSAGES = deque(maxlen=500)
-# Arka arkaya 5-10 mesaj atıldığında Render CPU/RAM'inin kilitlenmesini %100 önleyen kuyruk kilidi!
 TASK_QUEUE_SEMAPHORE = asyncio.Semaphore(1)
 
 
@@ -2893,10 +3137,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.bot.username
         and f"@{context.bot.username.lower()}" in user_text.lower()
     )
+    is_reply_to_bot = bool(
+        msg.reply_to_message
+        and msg.reply_to_message.from_user
+        and context.bot.id == msg.reply_to_message.from_user.id
+    )
 
     has_photo = bool(msg.photo)
     intent = argon_brain.evaluate_intent(
-        user_text, is_group, bot_mentioned, has_photo=has_photo
+        user_text,
+        is_group,
+        bot_mentioned,
+        is_reply_to_bot=is_reply_to_bot,
+        has_photo=has_photo,
     )
     if not intent.get("should_reply"):
         return
@@ -2917,6 +3170,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status.delete()
                 intent["matched_queries"] = matched_stones
                 intent["want_photo"] = True
+                intent["is_corporate_chat"] = False
             except Exception as e:
                 await status.edit_text(f"⚠️ Görsel analiz edilemedi: {e}")
                 return
@@ -2927,7 +3181,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 1. DEEP SCAN (TOPLAM STOK RAPORU)
         if intent.get("want_deep_scan") and not queries and not collection_folders:
             status = await msg.reply_text(
-                "🔎 <b>Argon Deep Scan Raporu Hazırlanıyor...</b>",
+                "🔎 <b>Argon Deep Scan Raporu Hazırlanıyor...</b>\n"
+                "Tüm koleksiyonlardaki taş ve lot klasörleri taranıyor...",
                 parse_mode=ParseMode.HTML,
             )
             try:
@@ -2939,37 +3194,71 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status.edit_text(f"⚠️ Rapor uyarısı: {e}")
             return
 
+        # 2. KURUMSAL KİMLİK SOHBET & SORU YANITLAMA (GRUP VEYA ÖZEL)
         if not queries and not collection_folders:
-            if not is_group or bot_mentioned:
-                await msg.reply_text(
-                    "👋 <b>Argon Master V13 Aktif.</b>\n"
-                    "• Lot & Fotoğraf: <code>A-371</code> veya <code>A-258</code>\n"
-                    "• Drive Linki: <code>A-371 drive linki lütfen</code>\n"
-                    "• Çoklu Tek PDF Sunum: <code>A-96 ve A-383 sunum hazırla</code>\n"
-                    "• Koleksiyon PDF: <code>Arslanlar Collection sunum lütfen</code>\n"
-                    "• 3'lü Çeki Listesi: <code>A-371 çeki listesi</code>\n"
-                    "• Genel Stok: <code>Toplam stoğum ne kadar</code>",
-                    parse_mode=ParseMode.HTML,
-                )
+            cached_summary = ""
+            if drive_explorer._lot_result_cache:
+                summary_parts = []
+                for k, (_, v) in list(drive_explorer._lot_result_cache.items())[:15]:
+                    d_v = v.get("data", {})
+                    if d_v.get("total_m2", 0) > 0:
+                        summary_parts.append(
+                            f"{v['title']}: {d_v['total_m2']} m2 ({d_v['total_slabs']} Plaka)"
+                        )
+                if summary_parts:
+                    cached_summary = "Hafızadaki güncel bazı lotlar: " + ", ".join(
+                        summary_parts
+                    )
+
+            reply_msg = await asyncio.to_thread(
+                argon_brain.generate_corporate_assistant_reply,
+                user_text,
+                cached_summary,
+            )
+            try:
+                await msg.reply_text(reply_msg, parse_mode=ParseMode.HTML)
+            except Exception:
+                await msg.reply_text(reply_msg)
             return
 
-        # 2. KOLEKSİYON PDF SUNUMU
-        if collection_folders and intent.get("want_pdf") and not intent.get("want_packing"):
+        # 3. KOLEKSİYON PDF SUNUMU (47+ TAŞIN TAMAMINI TARAR VE CANLI İLERLEME GÖSTERİR)
+        if (
+            collection_folders
+            and intent.get("want_pdf")
+            and not intent.get("want_packing")
+        ):
             coll_label = ", ".join(collection_folders)
             status_msg = await msg.reply_text(
-                f"📁 <b>{coll_label}</b> için CUSTOM Filtreli, Oran Korumalı ve Gerçek Excel Metrajlı PDF Kataloğu hazırlanıyor...",
+                f"📁 <b>{coll_label}</b> altındaki tüm taşlar taranıyor (Lütfen bekleyin, ilerleme durumu güncellenecektir)...",
                 parse_mode=ParseMode.HTML,
             )
+            main_loop = asyncio.get_running_loop()
+
+            def _progress_callback(curr_idx: int, total_cnt: int, st_title: str):
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        status_msg.edit_text(
+                            f"📁 <b>{coll_label}</b> Kataloğu Hazırlanıyor...\n"
+                            f"⏳ İlerleme: <b>{curr_idx} / {total_cnt}</b> Taş İşlendi\n"
+                            f"💎 Son İşlenen: <code>{st_title}</code>",
+                            parse_mode=ParseMode.HTML,
+                        ),
+                        main_loop,
+                    )
+                except Exception:
+                    pass
+
             try:
                 pdf_b, pdf_n = await asyncio.to_thread(
                     doc_engine.generate_presentation_pdf,
                     [],
                     collection_folder_names=collection_folders,
+                    progress_cb=_progress_callback,
                 )
                 await msg.reply_document(
                     document=io.BytesIO(pdf_b),
                     filename=pdf_n,
-                    caption=f"📄 <b>{coll_label}</b> — Executive Stock & Slab Presentation",
+                    caption=f"📄 <b>{coll_label}</b> — Tam Kapsamlı Executive PDF Kataloğu",
                     parse_mode=ParseMode.HTML,
                 )
                 await status_msg.delete()
@@ -2977,10 +3266,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status_msg.edit_text(f"⚠️ Koleksiyon PDF uyarısı: {e}")
             return
 
-        # 3. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU
+        # 4. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU
         if queries and intent.get("want_pdf") and not intent.get("want_packing"):
             status_msg = await msg.reply_text(
-                f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Gerçek Excel Metrajlı PDF Sunumu hazırlanıyor...",
+                f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Dikdörtgen Plaka Seçimli PDF Sunumu hazırlanıyor...",
                 parse_mode=ParseMode.HTML,
             )
             try:
@@ -2998,7 +3287,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await status_msg.edit_text(f"⚠️ PDF oluşturulamadı: {e}")
             return
 
-        # 4. ÇEKİ LİSTESİ (1. DRIVE ORİJİNAL EXCEL + 2. BUNDLE DRAFT EXCEL + 3. KURUMSAL PDF)
+        # 5. ÇEKİ LİSTESİ (1. DRIVE ORİJİNAL EXCEL + 2. BUNDLE DRAFT EXCEL + 3. KURUMSAL PDF)
         if queries and intent.get("want_packing"):
             status_msg = await msg.reply_text(
                 f"📦 <b>{', '.join(queries)}</b> için 12'şerli Bundle Formatında Kurumsal Çeki Listeleri hazırlanıyor...",
@@ -3026,7 +3315,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     customer_code="-".join(queries[:3]),
                 )
                 date_str = datetime.now().strftime("%d.%m.%Y")
-                draft_fname = f"PACKING LIST DRAFT {date_str} {'-'.join(queries[:3])}.xlsx"
+                draft_fname = (
+                    f"PACKING LIST DRAFT {date_str} {'-'.join(queries[:3])}.xlsx"
+                )
                 await msg.reply_document(
                     document=io.BytesIO(draft_excel_bytes),
                     filename=draft_fname,
@@ -3056,15 +3347,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.delete()
             return
 
-        # 5. STANDART LOT SORGUSU (HIZLI LİNK VEYA FLASH-KART + 2 FOTOĞRAF)
+        # 6. STANDART LOT SORGUSU (HIZLI LİNK VEYA FLASH-KART + 2 FOTOĞRAF)
         for q in queries:
             try:
-                # Eğer kullanıcı sadece "drive linki lütfen" dediyse Excel ve fotoğraf indirmeden 0.5 saniyede linki ver!
                 if intent.get("want_only_link"):
                     fid, flink, p_id, act_name = await asyncio.to_thread(
                         drive_explorer.find_folder_exact, q
                     )
-                    disp_t, _, l_code = clean_stone_and_lot_title(act_name or q)
+                    p_name = ""
+                    if p_id:
+                        pm = await asyncio.to_thread(
+                            drive_explorer.get_folder_metadata, p_id
+                        )
+                        if pm:
+                            p_name = pm.get("name", "")
+                    disp_t, _, l_code = clean_stone_and_lot_title(
+                        act_name or q, p_name
+                    )
                     link_html = (
                         f"<a href='{flink}'>Klasöre Git ({l_code})</a>"
                         if flink
@@ -3165,7 +3464,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V13 Zero-Lock Engine başlatılıyor...")
+    logger.info("🚀 Argon Master V14 Corporate AI & Full Catalog başlatılıyor...")
     application.run_polling(
         drop_pending_updates=True, poll_interval=1.0, timeout=15
     )
