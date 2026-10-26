@@ -2,7 +2,6 @@ import os
 import io
 import re
 import gc
-import sys
 import json
 import time
 import base64
@@ -14,7 +13,7 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
 # =====================================================================
-# 0. RENDER PORTUNU ANINDA AÇ (DEPLOY TAKILMASINI %100 ÖNLER)
+# 0. RENDER PORTUNU 0. SANİYEDE AÇ (DEPLOY HATASINI %100 ÖNLER)
 # =====================================================================
 from flask import Flask
 import requests
@@ -23,7 +22,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V10 Pre-Indexed Zero-Wait is Live!", 200
+    return "Argon Master V11 Rock-Solid is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -66,17 +65,14 @@ from telegram.ext import (
     filters,
 )
 
-import httplib2
 from google.oauth2 import service_account
-from google_auth_httplib2 import AuthorizedHttp
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+import google.auth.transport.requests
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V10")
+logger = logging.getLogger("ArgonMaster_V11")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -86,8 +82,6 @@ DEFAULT_DRIVE_LINK = (
     or os.getenv("DEFAULT_DRIVE_LINK")
     or "https://drive.google.com"
 ).strip()
-
-MASTER_INDEX_FILE = "drive_master_index_v10.json"
 
 # GÖMÜLÜ ORİJİNAL ARSLANLAR MARBLE BRONZ ASLAN LOGOSU (logo_bronz)
 EMBEDDED_LOGO_B64 = (
@@ -215,26 +209,8 @@ DEFAULT_STONE_DNA = {
 
 
 # =====================================================================
-# 2. YARDIMCI FONKSİYONLAR VE NORMALİZASYON
+# 2. YARDIMCI FONKSİYONLAR VE KESİN SAYISAL ÇÖZÜMLEME
 # =====================================================================
-def load_json_file(filepath: str, default_data: Any) -> Any:
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return default_data
-
-
-def save_json_file(filepath: str, data: Any) -> None:
-    try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-
 def normalize_turkish_key(text: Any) -> str:
     if text is None or pd.isna(text):
         return ""
@@ -245,8 +221,36 @@ def normalize_turkish_key(text: Any) -> str:
 
 def normalize_lot_code(code: Any) -> str:
     raw = normalize_turkish_key(code)
-    match = re.match(r"^([A-Z]+)[-\s_.]*(\d+)$", raw)
+    match = re.match(r"^([A-Z]+)[-\s_.]*0*(\d+)$", raw)
     return f"{match.group(1)}-{match.group(2)}" if match else raw
+
+
+def exact_lot_match_in_text(folder_or_file_name: str, target_lot: str) -> int:
+    """
+    A-1009 arandığında A-100 veya A-10 ile eşleşmesini %100 ENGELLEYEN
+    tam kelime ve rakam sınırı (Word-Boundary) eşleştiricisi!
+    Dönüş: 100 (Tam Eşleşme), 90 (İçinde Tam Lot Kodu Var), 0 (Eşleşmiyor).
+    """
+    fn_norm = normalize_turkish_key(folder_or_file_name)
+    target_norm = normalize_lot_code(target_lot)
+
+    if normalize_lot_code(fn_norm) == target_norm:
+        return 100
+
+    lot_m = re.match(r"^([A-Z]+)-(\d+)$", target_norm)
+    if lot_m:
+        prefix, num = lot_m.group(1), lot_m.group(2)
+        # Rakamdan sonra başka bir rakam gelmemeli ((?![0-9])) -> A-100 asla A-1009 ile eşleşmez!
+        pattern = rf"(?<![A-Z0-9]){prefix}[-\s_.]*0*{num}(?![0-9])"
+        if re.search(pattern, fn_norm):
+            return 90
+        return 0
+
+    if target_norm == fn_norm:
+        return 100
+    if re.search(rf"(?<![A-Z0-9]){re.escape(target_norm)}(?![A-Z0-9])", fn_norm):
+        return 85
+    return 0
 
 
 def safe_float(val: Any) -> float:
@@ -257,50 +261,38 @@ def safe_float(val: Any) -> float:
     s = str(val).strip()
     if not s:
         return 0.0
-    s_clean = re.sub(r"[^\d,.-]", "", s)
-    if not s_clean:
+    # Birim ifadelerini ("m2", "m²", "cm") sil ki "6,09 m2" -> "6,092" olmasın!
+    s = re.sub(r"(?i)\b(m2|m²|sqm|cm|mm|pcs|adet)\b", "", s)
+    m = re.search(r"[-+]?\d+(?:[.,]\d+)*", s)
+    if not m:
         return 0.0
-    if "," in s_clean and "." in s_clean:
-        if s_clean.rfind(",") > s_clean.rfind("."):
-            s_clean = s_clean.replace(".", "").replace(",", ".")
+    num_str = m.group(0)
+    if "," in num_str and "." in num_str:
+        if num_str.rfind(",") > num_str.rfind("."):
+            num_str = num_str.replace(".", "").replace(",", ".")
         else:
-            s_clean = s_clean.replace(",", "")
-    elif "," in s_clean:
-        s_clean = s_clean.replace(",", ".")
+            num_str = num_str.replace(",", "")
+    elif "," in num_str:
+        parts = num_str.split(",")
+        if len(parts) == 2 and len(parts[1]) == 3 and len(parts[0]) >= 1:
+            # Örn: "1,250" -> İngilizce binlik mi yoksa 1.25 m2 mi? Mermerde 1,250 m2 = 1.25 m2'dir
+            num_str = num_str.replace(",", ".")
+        else:
+            num_str = num_str.replace(",", ".")
     try:
-        return float(s_clean)
+        return float(num_str)
     except Exception:
-        m = re.search(r"[-+]?\d+(?:\.\d+)?", s_clean)
-        return float(m.group(0)) if m else 0.0
+        return 0.0
 
 
-def compute_slab_m2(
-    l_val: float, h_val: float, raw_m2: float
-) -> Tuple[float, float, float]:
-    if l_val > 600:
-        l_cm = l_val / 10.0
-    elif 0 < l_val < 10:
-        l_cm = l_val * 100.0
-    else:
-        l_cm = l_val
-
-    if h_val > 600:
-        h_cm = h_val / 10.0
-    elif 0 < h_val < 10:
-        h_cm = h_val * 100.0
-    else:
-        h_cm = h_val
-
-    calc_m2 = (l_cm * h_cm) / 10000.0 if (l_cm > 20 and h_cm > 20) else 0.0
-
-    if raw_m2 > 1000:
-        raw_m2 = raw_m2 / 10000.0
-
-    if 0.2 <= raw_m2 <= 25.0:
-        return raw_m2, l_cm, h_cm
-    if 0.2 <= calc_m2 <= 25.0:
-        return calc_m2, l_cm, h_cm
-    return 0.0, l_cm, h_cm
+def normalize_cm(val: float) -> float:
+    if val <= 0:
+        return 0.0
+    if val > 600:  # mm yazılmış (örn: 3150 mm -> 315 cm)
+        return val / 10.0
+    if 0 < val < 10:  # metre yazılmış (örn: 3.15 m -> 315 cm)
+        return val * 100.0
+    return val
 
 
 def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
@@ -323,45 +315,100 @@ def prepare_pdf_card_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
     try:
         with Image.open(io.BytesIO(raw_bytes)) as im:
             img = im.convert("RGB")
-            img.thumbnail((540, 360), Image.Resampling.LANCZOS)
+            img.thumbnail((560, 380), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            img.save(out, format="JPEG", quality=85)
+            img.save(out, format="JPEG", quality=86)
             return out.getvalue()
     except Exception:
         return None
 
 
 # =====================================================================
-# 3. HIZLI THUMBNAIL & BATCH DESTEKLİ DRIVE MOTORU
+# 3. SAF REST API TABANLI GOOGLE DRIVE MOTORU (ASLA KİLİTLENMEZ!)
 # =====================================================================
 class DriveExplorer:
+    """
+    httplib2 kütüphanesinin SSL/Socket kilitlenmelerini %100 ortadan kaldırmak için
+    doğrudan Google Drive v3 REST API'sini 'requests' (kesin timeout korumalı) ile çağırır.
+    """
+    DRIVE_API_URL = "https://www.googleapis.com/drive/v3/files"
+
     def __init__(self, sa_json_str: str):
         self.sa_json_str = sa_json_str
-        self._sa_info = None
-        self._local = threading.local()
+        self._creds = None
+        self._token_lock = threading.Lock()
         self._logo_jpeg_bytes: Optional[bytes] = None
+        self._lot_Result_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 
         if self.sa_json_str:
             try:
-                self._sa_info = json.loads(self.sa_json_str)
-                logger.info("Google Drive Kimlik Bilgileri Hazır.")
+                info = json.loads(self.sa_json_str)
+                self._creds = service_account.Credentials.from_service_account_info(
+                    info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
+                )
+                logger.info("Google Drive REST Kimlik Bilgileri Hazır.")
             except Exception as e:
                 logger.error(f"Google Service Account JSON Hatası: {e}")
 
-    def _get_service(self):
-        if not self._sa_info:
+    def _get_headers(self) -> Optional[Dict[str, str]]:
+        if not self._creds:
             return None
-        if getattr(self._local, "service", None) is None:
-            creds = service_account.Credentials.from_service_account_info(
-                self._sa_info,
-                scopes=["https://www.googleapis.com/auth/drive.readonly"],
+        with self._token_lock:
+            if not self._creds.valid or self._creds.expired or not self._creds.token:
+                req = google.auth.transport.requests.Request()
+                self._creds.refresh(req)
+            return {"Authorization": f"Bearer {self._creds.token}"}
+
+    def api_list_files(
+        self,
+        q: str,
+        fields: str = "files(id,name,mimeType,parents,webViewLink,thumbnailLink,shortcutDetails)",
+        page_size: int = 100,
+    ) -> List[Dict[str, Any]]:
+        headers = self._get_headers()
+        if not headers:
+            return []
+        params = {
+            "q": q,
+            "spaces": "drive",
+            "fields": fields,
+            "includeItemsFromAllDrives": "true",
+            "supportsAllDrives": "true",
+            "pageSize": page_size,
+        }
+        try:
+            resp = requests.get(
+                self.DRIVE_API_URL, headers=headers, params=params, timeout=12
             )
-            http = httplib2.Http(timeout=12)
-            authed_http = AuthorizedHttp(creds, http=http)
-            self._local.service = build(
-                "drive", "v3", http=authed_http, cache_discovery=False
-            )
-        return self._local.service
+            if resp.status_code == 200:
+                return resp.json().get("files", [])
+            logger.warning(f"Drive API List HTTP {resp.status_code}: {resp.text[:120]}")
+        except Exception as e:
+            logger.warning(f"Drive REST List uyarısı: {e}")
+        return []
+
+    def download_file_bytes(
+        self, file_id: str, mime_type: str = ""
+    ) -> Optional[bytes]:
+        headers = self._get_headers()
+        if not headers or not file_id:
+            return None
+        try:
+            if mime_type == "application/vnd.google-apps.spreadsheet":
+                url = f"{self.DRIVE_API_URL}/{file_id}/export"
+                params = {
+                    "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                }
+            else:
+                url = f"{self.DRIVE_API_URL}/{file_id}"
+                params = {"alt": "media", "supportsAllDrives": "true"}
+
+            resp = requests.get(url, headers=headers, params=params, timeout=18)
+            if resp.status_code == 200 and len(resp.content) > 50:
+                return resp.content
+        except Exception as e:
+            logger.warning(f"Dosya indirme uyarısı ({file_id}): {e}")
+        return None
 
     def get_official_logo_jpeg(self) -> bytes:
         if self._logo_jpeg_bytes:
@@ -374,32 +421,17 @@ class DriveExplorer:
             self._logo_jpeg_bytes = out.getvalue()
         return self._logo_jpeg_bytes
 
-    @staticmethod
-    def _matches_target(folder_name: str, norm_target: str) -> int:
-        fn_norm = normalize_turkish_key(folder_name)
-        fn_lot = normalize_lot_code(folder_name)
-        if fn_lot == norm_target or fn_norm == norm_target:
-            return 100
-
-        lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_target)
-        if lot_m:
-            prefix, num = lot_m.group(1), lot_m.group(2)
-            pat = rf"(?<![A-Z0-9]){prefix}[-\s_.]*0*{num}(?![0-9])"
-            if re.search(pat, fn_norm):
-                return 85
-            return 0
-
-        if norm_target in fn_norm:
-            return 75
-        return 0
-
-    def find_folder_live(
+    def find_folder_exact(
         self, query_term: str
-    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    ) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
+        """
+        Aranan lot veya koleksiyon klasörünü TAM EŞLEŞME ile bulur.
+        A-1009 arandığında ASLA A-100 döndürmez!
+        Dönüş: (folder_id, webViewLink, parent_id, actual_folder_name)
+        """
         norm_key = normalize_lot_code(query_term)
-        svc = self._get_service()
-        if not svc or not norm_key:
-            return None, None, None
+        if not norm_key:
+            return None, None, None, query_term
 
         raw_clean = query_term.strip().replace("'", "")
         search_terms = [norm_key, raw_clean]
@@ -407,7 +439,8 @@ class DriveExplorer:
         lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_key)
         if lot_m:
             prefix, num = lot_m.group(1), lot_m.group(2)
-            search_terms.extend([f"{prefix} {num}", f"{prefix}{num}", num])
+            # Sadece tam numarayı ("1009") ve boşluklu/tireli tam halini ara
+            search_terms = [f"{prefix}-{num}", f"{prefix} {num}", f"{prefix}{num}", num]
         else:
             tr_var = norm_key.replace("SILVER", "SİLVER").replace("RIVER", "RİVER")
             if tr_var != norm_key:
@@ -419,46 +452,42 @@ class DriveExplorer:
         seen_ids = set()
 
         for term in search_terms:
-            try:
-                q = (
-                    f"mimeType = 'application/vnd.google-apps.folder' "
-                    f"and trashed = false and name contains '{term}'"
-                )
-                res = (
-                    svc.files()
-                    .list(
-                        q=q,
-                        spaces="drive",
-                        fields="files(id, name, webViewLink, parents)",
-                        includeItemsFromAllDrives=True,
-                        supportsAllDrives=True,
-                        pageSize=25,
-                    )
-                    .execute()
-                )
-                for f in res.get("files", []):
-                    if f["id"] in seen_ids:
-                        continue
-                    score = self._matches_target(f.get("name", ""), norm_key)
-                    if score > 0:
-                        seen_ids.add(f["id"])
-                        matched_folders.append((score, f))
-                if any(s >= 90 for s, _ in matched_folders):
-                    break
-            except Exception:
-                continue
+            q = (
+                f"mimeType = 'application/vnd.google-apps.folder' "
+                f"and trashed = false and name contains '{term}'"
+            )
+            files = self.api_list_files(q, page_size=40)
+            for f in files:
+                fid = f["id"]
+                if fid in seen_ids:
+                    continue
+                score = exact_lot_match_in_text(f.get("name", ""), norm_key)
+                if score > 0:
+                    seen_ids.add(fid)
+                    matched_folders.append((score, f))
+            if any(s == 100 for s, _ in matched_folders):
+                break
 
         if not matched_folders:
-            return None, None, None
+            return None, None, None, norm_key
 
         matched_folders.sort(key=lambda x: x[0], reverse=True)
         best = matched_folders[0][1]
+
+        # Eğer aynı lot adıyla birden fazla klasör varsa içinde Excel olanı seç
+        if len(matched_folders) > 1:
+            for _, cand_f in matched_folders[:3]:
+                ex_b, _ = self.get_excel_from_folder(cand_f["id"], max_depth=1)
+                if ex_b:
+                    best = cand_f
+                    break
+
         fid = best["id"]
         link = best.get(
             "webViewLink", f"https://drive.google.com/drive/folders/{fid}"
         )
         parents = best.get("parents", [])
-        return fid, link, (parents[0] if parents else None)
+        return fid, link, (parents[0] if parents else None), best.get("name", norm_key)
 
     def batch_list_children(
         self, parent_ids: List[str]
@@ -466,8 +495,7 @@ class DriveExplorer:
         result_map: Dict[str, List[Dict[str, Any]]] = {
             pid: [] for pid in parent_ids if pid
         }
-        svc = self._get_service()
-        if not svc or not result_map:
+        if not result_map:
             return result_map
 
         valid_pids = list(result_map.keys())
@@ -477,25 +505,11 @@ class DriveExplorer:
             chunk = valid_pids[i : i + chunk_size]
             or_clause = " or ".join([f"'{pid}' in parents" for pid in chunk])
             q = f"({or_clause}) and trashed = false"
-            try:
-                res = (
-                    svc.files()
-                    .list(
-                        q=q,
-                        spaces="drive",
-                        fields="files(id, name, mimeType, parents, webViewLink, thumbnailLink, shortcutDetails)",
-                        includeItemsFromAllDrives=True,
-                        supportsAllDrives=True,
-                        pageSize=800,
-                    )
-                    .execute()
-                )
-                for f in res.get("files", []):
-                    for p in f.get("parents", []):
-                        if p in result_map:
-                            result_map[p].append(f)
-            except Exception as e:
-                logger.warning(f"Batch listeleme uyarısı: {e}")
+            files = self.api_list_files(q, page_size=500)
+            for f in files:
+                for p in f.get("parents", []):
+                    if p in result_map:
+                        result_map[p].append(f)
 
         return result_map
 
@@ -526,32 +540,172 @@ class DriveExplorer:
             return {"id": target_id, "name": name, "mimeType": target_mime}
         return None
 
-    def download_excel_or_sheet(
-        self, file_id: str, mime_type: str
-    ) -> Optional[bytes]:
-        svc = self._get_service()
-        if not svc or not file_id:
-            return None
-        try:
-            if mime_type == "application/vnd.google-apps.spreadsheet":
-                req = svc.files().export_media(
-                    fileId=file_id,
-                    mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    def get_excel_from_folder(
+        self,
+        folder_id: Optional[str],
+        query_hint: str = "",
+        parent_folder_id: Optional[str] = None,
+        max_depth: int = 2,
+    ) -> Tuple[Optional[bytes], Optional[str]]:
+        if folder_id:
+            items = self.batch_list_children([folder_id]).get(folder_id, [])
+            sub_ids = []
+            for item in items:
+                cand = self._extract_excel_candidate(item)
+                if cand:
+                    b_data = self.download_file_bytes(cand["id"], cand["mimeType"])
+                    if b_data:
+                        fname = cand["name"]
+                        if not fname.lower().endswith((".xlsx", ".xls", ".csv")):
+                            fname += ".xlsx"
+                        return b_data, fname
+                if item.get("mimeType") == "application/vnd.google-apps.folder":
+                    sub_ids.append(item["id"])
+
+            if max_depth > 0 and sub_ids:
+                sub_batch = self.batch_list_children(sub_ids[:12])
+                for _, s_items in sub_batch.items():
+                    for item in s_items:
+                        cand = self._extract_excel_candidate(item)
+                        if cand:
+                            b_data = self.download_file_bytes(
+                                cand["id"], cand["mimeType"]
+                            )
+                            if b_data:
+                                fname = cand["name"]
+                                if not fname.lower().endswith(
+                                    (".xlsx", ".xls", ".csv")
+                                ):
+                                    fname += ".xlsx"
+                                return b_data, fname
+
+        # Klasörde yoksa doğrudan Drive genelinde tam lot adıyla Excel ara
+        if query_hint:
+            norm_q = normalize_lot_code(query_hint)
+            lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_q)
+            terms = (
+                [f"{lot_m.group(1)}-{lot_m.group(2)}", f"{lot_m.group(1)} {lot_m.group(2)}", lot_m.group(2)]
+                if lot_m
+                else [norm_q]
+            )
+            for term in terms:
+                gq = (
+                    f"trashed = false and name contains '{term}' and "
+                    f"mimeType != 'application/vnd.google-apps.folder' and "
+                    f"not mimeType contains 'image/'"
                 )
+                gfiles = self.api_list_files(gq, page_size=15)
+                for gf in gfiles:
+                    if exact_lot_match_in_text(gf.get("name", ""), norm_q) >= 90:
+                        cand = self._extract_excel_candidate(gf)
+                        if cand:
+                            b_data = self.download_file_bytes(
+                                cand["id"], cand["mimeType"]
+                            )
+                            if b_data:
+                                fname = cand["name"]
+                                if not fname.lower().endswith(
+                                    (".xlsx", ".xls", ".csv")
+                                ):
+                                    fname += ".xlsx"
+                                return b_data, fname
+
+        return None, None
+
+    def scan_images_in_folder(
+        self, folder_id: Optional[str], query_term: str
+    ) -> List[Dict[str, Any]]:
+        all_imgs: List[Dict[str, Any]] = []
+        if folder_id:
+            items = self.batch_list_children([folder_id]).get(folder_id, [])
+            sub_folders = []
+            for it in items:
+                mime = it.get("mimeType", "")
+                if mime == "application/vnd.google-apps.folder":
+                    sub_folders.append(it)
+                elif mime.startswith("image/"):
+                    all_imgs.append(it)
+
+            if sub_folders:
+                sf_map = {sf["id"]: sf["name"] for sf in sub_folders[:8]}
+                sub_batch = self.batch_list_children(list(sf_map.keys()))
+                for sf_id, sf_items in sub_batch.items():
+                    for img in sf_items:
+                        if img.get("mimeType", "").startswith("image/"):
+                            img_copy = dict(img)
+                            img_copy["parent_name"] = sf_map.get(sf_id, "")
+                            all_imgs.append(img_copy)
+
+        return all_imgs
+
+    def get_images_for_telegram(
+        self, folder_id: Optional[str], query_term: str
+    ) -> Tuple[Optional[bytes], Optional[bytes]]:
+        all_imgs = self.scan_images_in_folder(folder_id, query_term)
+        if not all_imgs:
+            return None, None
+
+        bm_file = None
+        std_files = []
+        for f in all_imgs:
+            fn = f.get("name", "").lower()
+            pn = f.get("parent_name", "").lower()
+            if "bookmatch" in fn or "bm" in fn or "bookmatch" in pn:
+                if not bm_file:
+                    bm_file = f
             else:
-                req = svc.files().get_media(
-                    fileId=file_id, supportsAllDrives=True
-                )
-            fh = io.BytesIO()
-            dl = MediaIoBaseDownload(fh, req)
-            done = False
-            while not done:
-                _, done = dl.next_chunk()
-            fh.seek(0)
-            return fh.read()
-        except Exception as e:
-            logger.warning(f"Tablo indirme uyarısı ({file_id}): {e}")
+                std_files.append(f)
+
+        f1 = std_imgs_first = std_files[0] if std_files else bm_file
+        f2 = (
+            bm_file
+            if (bm_file and bm_file != f1)
+            else (std_files[1] if len(std_files) > 1 else f1)
+        )
+
+        img1 = (
+            self.download_fast_image(
+                f1["id"], f1.get("thumbnailLink"), for_pdf=False
+            )
+            if f1
+            else None
+        )
+        img2 = (
+            self.download_fast_image(
+                f2["id"], f2.get("thumbnailLink"), for_pdf=False
+            )
+            if f2
+            else None
+        )
+        return img1, img2
+
+    def get_best_slab_image_for_pdf(
+        self,
+        folder_id: Optional[str],
+        query_term: str,
+        pre_imgs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[bytes]:
+        """
+        PDF Sunumu İçin: Bookmatch Görüntülerini ASLA Almaz, En İyi Düz Plakayı Seçer.
+        """
+        all_imgs = (
+            pre_imgs
+            if pre_imgs is not None
+            else self.scan_images_in_folder(folder_id, query_term)
+        )
+        if not all_imgs:
             return None
+        clean_slabs = [
+            f
+            for f in all_imgs
+            if "bookmatch" not in f.get("name", "").lower()
+            and "bm" not in f.get("name", "").lower()
+            and "bookmatch" not in f.get("parent_name", "").lower()
+        ]
+        target = clean_slabs[0] if clean_slabs else all_imgs[0]
+        return self.download_fast_image(
+            target["id"], target.get("thumbnailLink"), for_pdf=True
+        )
 
     def download_fast_image(
         self,
@@ -559,37 +713,18 @@ class DriveExplorer:
         thumb_url: Optional[str] = None,
         for_pdf: bool = False,
     ) -> Optional[bytes]:
-        """
-        Önce Google Drive'ın hızlı yüksek çözünürlüklü önizleme sunucusunu (=s1000)
-        dener (15 MB yerine 80 KB indirir, 10 kat hızlıdır ve CPU'yu hiç yormaz!).
-        Eğer önizleme yoksa doğrudan dosyayı indirir.
-        """
         raw = None
         if thumb_url:
             try:
                 hi_res_url = re.sub(r"=s\d+", "=s1200", thumb_url)
-                resp = requests.get(hi_res_url, timeout=6)
+                resp = requests.get(hi_res_url, timeout=8)
                 if resp.status_code == 200 and len(resp.content) > 1500:
                     raw = resp.content
             except Exception:
                 pass
 
         if not raw and file_id:
-            svc = self._get_service()
-            if svc:
-                try:
-                    req = svc.files().get_media(
-                        fileId=file_id, supportsAllDrives=True
-                    )
-                    fh = io.BytesIO()
-                    dl = MediaIoBaseDownload(fh, req)
-                    done = False
-                    while not done:
-                        _, done = dl.next_chunk()
-                    fh.seek(0)
-                    raw = fh.read()
-                except Exception:
-                    pass
+            raw = self.download_file_bytes(file_id)
 
         if not raw:
             return None
@@ -601,36 +736,29 @@ class DriveExplorer:
 
 
 # =====================================================================
-# 4. ARKA PLAN ÖNBELLEKLEYİCİ (PRE-INDEXED) ENVANTER MOTORU
+# 4. BİREBİR EXCEL M2 VE PLAKA ADEDİ OKUYAN ENVANTER MOTORU
 # =====================================================================
 class InventoryEngine:
-    """
-    Bot başlarken arka planda (CPU'yu hiç yormadan) tüm koleksiyonları ve lotları
-    indeksler. Kullanıcı soru sorduğunda veya PDF istediğinde Drive'da arama yapmak
-    yerine 0.1 saniyede hazır veriyi kullanır!
-    """
     def __init__(self, drive: DriveExplorer):
         self.drive = drive
-        self.index_db: Dict[str, Any] = load_json_file(
-            MASTER_INDEX_FILE,
-            {"lots": {}, "collections": {}, "last_updated": None},
-        )
-        self._lock = threading.Lock()
-        self.is_indexing = False
 
     @staticmethod
     def _detect_columns(col_map: Dict[Any, str]) -> Dict[str, Any]:
+        # Önce NET M2 / ALAN / M2 sütununu bul (BRÜT olmayanı tercih et)
         m2_col = next(
             (
                 c
                 for c, n in col_map.items()
-                if any(
+                if "BRUT" not in n
+                and "GROSS" not in n
+                and any(
                     k in n
                     for k in [
+                        "NET M2",
+                        "NET ALAN",
                         "M2",
                         "M²",
                         "ALAN",
-                        "NET",
                         "METRAJ",
                         "METREKARE",
                         "AREA",
@@ -640,6 +768,18 @@ class InventoryEngine:
             ),
             None,
         )
+        if m2_col is None:
+            m2_col = next(
+                (
+                    c
+                    for c, n in col_map.items()
+                    if any(
+                        k in n
+                        for k in ["M2", "M²", "ALAN", "METRAJ", "AREA", "SQM"]
+                    )
+                ),
+                None,
+            )
 
         len_col = next(
             (
@@ -682,7 +822,10 @@ class InventoryEngine:
                 c
                 for c, n in col_map.items()
                 if c not in (m2_col, len_col, height_col)
-                and any(k in n for k in ["PLAKA", "SLAB", "SIRA", "NO"])
+                and any(
+                    k in n
+                    for k in ["PLAKA NO", "SLAB NO", "PLAKA", "SLAB", "SIRA", "NO"]
+                )
             ),
             None,
         )
@@ -716,17 +859,6 @@ class InventoryEngine:
             None,
         )
 
-        lot_col = next(
-            (
-                c
-                for c, n in col_map.items()
-                if any(
-                    k in n for k in ["LOT", "BLOK", "BLOCK", "BUNDLE", "PARTI", "KOD"]
-                )
-            ),
-            None,
-        )
-
         return {
             "m2": m2_col,
             "len": len_col,
@@ -736,27 +868,41 @@ class InventoryEngine:
             "adet": adet_col,
             "thick": thick_col,
             "surf": surf_col,
-            "lot": lot_col,
         }
 
     def parse_packing_list_bytes(
         self, excel_bytes: bytes, target_lot: str = ""
     ) -> Optional[Dict[str, Any]]:
+        """
+        Excel tablosundaki gerçek M2 sütununu ve en alttaki TOPLAM (Total) satırını
+        birebir okur. Formüllü hücreleri data_only=True ile çözer.
+        """
         norm_target_lot = normalize_lot_code(target_lot) if target_lot else ""
         try:
-            xls = pd.ExcelFile(io.BytesIO(excel_bytes))
-            ordered_sheets = list(xls.sheet_names)
+            wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=True)
+            sheet_names = list(wb.sheetnames)
             if norm_target_lot:
-                ordered_sheets.sort(
+                sheet_names.sort(
                     key=lambda s: 0
-                    if DriveExplorer._matches_target(s, norm_target_lot) > 0
+                    if exact_lot_match_in_text(s, norm_target_lot) >= 85
                     else 1
                 )
 
-            for sheet in ordered_sheets:
-                raw_df = pd.read_excel(xls, sheet_name=sheet, header=None)
+            for s_name in sheet_names:
+                ws = wb[s_name]
+                rows_matrix = list(ws.iter_rows(values_only=True))
+                if not rows_matrix or len(rows_matrix) < 2:
+                    continue
+
+                raw_df = pd.DataFrame(rows_matrix)
+                raw_df.dropna(how="all", inplace=True)
+                raw_df.reset_index(drop=True, inplace=True)
                 if raw_df.empty or len(raw_df) < 2:
                     continue
+
+                # 1. Üst bilgi satırlarında açıkça "TOPLAM M2: XXX" veya "TOTAL AREA: XXX" yazıyor mu kontrol et
+                explicit_summary_m2 = 0.0
+                explicit_summary_slabs = 0
 
                 header_idx = 0
                 best_score = 0
@@ -783,7 +929,8 @@ class InventoryEngine:
                     "EBAT",
                     "OLCU",
                 ]
-                for idx in range(min(35, len(raw_df))):
+
+                for idx in range(min(30, len(raw_df))):
                     row_vals = [
                         normalize_turkish_key(v)
                         for v in raw_df.iloc[idx].values
@@ -799,62 +946,67 @@ class InventoryEngine:
                         best_score = score
                         header_idx = idx
 
-                start_h = max(0, header_idx - 1) if best_score >= 1 else 0
-                end_h = min(len(raw_df) - 1, header_idx + 1) if best_score >= 1 else 0
-
+                # Sadece başlık satırını (ve eğer birleştirilmişse hemen alt satırını) al
                 composite_headers = {}
                 for col_i in range(raw_df.shape[1]):
-                    parts = []
-                    for r_i in range(start_h, end_h + 1):
-                        val = normalize_turkish_key(raw_df.iloc[r_i, col_i])
-                        if val and not re.match(r"^\d+([.,]\d+)?$", val):
-                            if val not in parts:
-                                parts.append(val)
-                    composite_headers[col_i] = (
-                        " ".join(parts) if parts else f"COL_{col_i}"
-                    )
-
-                data_start_row = header_idx + 1 if best_score >= 1 else 0
-                df = raw_df.iloc[data_start_row:].copy()
-                df.columns = list(range(raw_df.shape[1]))
+                    h_val = normalize_turkish_key(raw_df.iloc[header_idx, col_i])
+                    if (
+                        header_idx + 1 < len(raw_df)
+                        and any(
+                            k in h_val for k in ["EBAT", "OLCU", "DIMENSION", "SIZE"]
+                        )
+                    ):
+                        sub_h = normalize_turkish_key(
+                            raw_df.iloc[header_idx + 1, col_i]
+                        )
+                        if sub_h and not re.match(r"^\d+([.,]\d+)?$", sub_h):
+                            h_val = f"{h_val} {sub_h}"
+                    composite_headers[col_i] = h_val if h_val else f"COL_{col_i}"
 
                 mapped = self._detect_columns(composite_headers)
 
+                data_start = header_idx + 1
+                df = raw_df.iloc[data_start:].copy()
+                df.columns = list(range(raw_df.shape[1]))
+
+                # Sayısal profilleme (Eğer M2, Boy veya En başlığı boş/farklı yazılmışsa)
                 if (
-                    mapped["len"] is None
+                    mapped["m2"] is None
+                    or mapped["len"] is None
                     or mapped["height"] is None
-                    or mapped["m2"] is None
                 ):
-                    dim_candidates = []
-                    m2_candidates = []
+                    dim_cands = []
+                    m2_cands = []
                     for col_i in df.columns:
                         nums = [
                             safe_float(v)
                             for v in df[col_i].dropna().values
-                            if 0 < safe_float(v) < 5000
+                            if 0 < safe_float(v) < 4500
                         ]
                         if len(nums) >= 2:
-                            avg_n = sum(nums) / len(nums)
-                            if (70 <= avg_n <= 380) or (700 <= avg_n <= 3800):
-                                dim_candidates.append((avg_n, col_i))
-                            elif 1.2 <= avg_n <= 12.0 and any(
-                                (n % 1) != 0 for n in nums
+                            # Sondaki toplam satırını hariç tutarak ortalamaya bak
+                            sample_nums = nums[:-1] if len(nums) > 3 else nums
+                            avg_n = sum(sample_nums) / len(sample_nums)
+                            if (80 <= avg_n <= 380) or (800 <= avg_n <= 3800):
+                                dim_cands.append((avg_n, col_i))
+                            elif 1.0 <= avg_n <= 12.0 and any(
+                                (n % 1) != 0 for n in sample_nums
                             ):
-                                m2_candidates.append(col_i)
+                                m2_cands.append(col_i)
 
-                    if len(dim_candidates) >= 2 and (
+                    if len(dim_cands) >= 2 and (
                         mapped["len"] is None or mapped["height"] is None
                     ):
-                        dim_candidates.sort(key=lambda x: x[0], reverse=True)
+                        dim_cands.sort(key=lambda x: x[0], reverse=True)
                         if mapped["len"] is None:
-                            mapped["len"] = dim_candidates[0][1]
+                            mapped["len"] = dim_cands[0][1]
                         if mapped["height"] is None:
-                            for _, c_idx in dim_candidates[1:]:
-                                if c_idx != mapped["len"]:
-                                    mapped["height"] = c_idx
+                            for _, c_i in dim_cands[1:]:
+                                if c_i != mapped["len"]:
+                                    mapped["height"] = c_i
                                     break
-                    if mapped["m2"] is None and m2_candidates:
-                        mapped["m2"] = m2_candidates[-1]
+                    if mapped["m2"] is None and m2_cands:
+                        mapped["m2"] = m2_cands[-1]
 
                 m2_col = mapped["m2"]
                 len_col = mapped["len"]
@@ -864,35 +1016,31 @@ class InventoryEngine:
                 adet_col = mapped["adet"]
                 thick_col = mapped["thick"]
                 surf_col = mapped["surf"]
-                lot_col = mapped["lot"]
-
-                rows_to_iter = df
-                if norm_target_lot and lot_col is not None:
-                    lot_filtered = df[
-                        df[lot_col].apply(
-                            lambda v: DriveExplorer._matches_target(
-                                str(v), norm_target_lot
-                            )
-                            > 0
-                        )
-                    ]
-                    if not lot_filtered.empty:
-                        rows_to_iter = lot_filtered
 
                 valid_rows = []
-                total_m2 = 0.0
-                total_slabs = 0
+                sum_slab_m2 = 0.0
+                sum_slabs = 0
+                explicit_total_row_m2 = 0.0
                 lengths = []
                 heights = []
 
-                for _, row in rows_to_iter.iterrows():
-                    row_str = " ".join(
-                        [normalize_turkish_key(v) for v in row.values if pd.notna(v)]
-                    )
+                for _, row in df.iterrows():
+                    row_cells_norm = [
+                        normalize_turkish_key(v) for v in row.values if pd.notna(v)
+                    ]
+                    row_str = " ".join(row_cells_norm)
+
+                    # Eğer satırda "TOPLAM / TOTAL" yazıyorsa, o satırdaki M2 değerini kaydet ama plaka olarak ekleme!
                     if any(
                         tot_w in row_str
                         for tot_w in ["TOPLAM", "TOTAL", "GENEL TOPLAM", "SUBTOTAL"]
                     ):
+                        if m2_col is not None:
+                            t_val = safe_float(row.get(m2_col))
+                            if t_val > 1000:
+                                t_val = t_val / 10000.0
+                            if t_val > explicit_total_row_m2:
+                                explicit_total_row_m2 = t_val
                         continue
 
                     raw_l = (
@@ -917,22 +1065,46 @@ class InventoryEngine:
                             raw_l = safe_float(dm.group(1))
                             raw_h = safe_float(dm.group(2))
 
-                    raw_m2 = (
+                    l_cm = normalize_cm(raw_l)
+                    h_cm = normalize_cm(raw_h)
+
+                    cell_m2 = (
                         safe_float(row.get(m2_col)) if m2_col is not None else 0.0
                     )
+                    if cell_m2 > 1000:
+                        cell_m2 = cell_m2 / 10000.0
 
-                    m2_val, l_cm, h_cm = compute_slab_m2(raw_l, raw_h, raw_m2)
-                    if m2_val <= 0:
+                    calc_m2 = (
+                        (l_cm * h_cm) / 10000.0 if (l_cm > 20 and h_cm > 20) else 0.0
+                    )
+
+                    # EĞER bu satırda Boy/En yok ama M2 hücresinde tüm plakaların toplamına eşit dev bir sayı varsa
+                    # bu satır etiketsiz bir TOPLAM (Total) satırıdır!
+                    if (
+                        l_cm == 0
+                        and h_cm == 0
+                        and len(valid_rows) >= 2
+                        and cell_m2 > sum_slab_m2 * 0.75
+                    ):
+                        explicit_total_row_m2 = cell_m2
+                        continue
+
+                    # Öncelik: Excel'in kendi M2 hücresi! (Boş veya formül hatasıysa Boy x En'den hesaplanan)
+                    if 0.15 <= cell_m2 <= 25.0:
+                        m2_val = cell_m2
+                    elif 0.15 <= calc_m2 <= 25.0:
+                        m2_val = calc_m2
+                    else:
                         continue
 
                     adet_val = 1
                     if adet_col is not None:
                         cand_adet = int(safe_float(row.get(adet_col)))
-                        if 1 <= cand_adet <= 5:
+                        if 1 <= cand_adet <= 10:
                             adet_val = cand_adet
 
-                    total_m2 += m2_val
-                    total_slabs += adet_val
+                    sum_slab_m2 += m2_val
+                    sum_slabs += adet_val
                     if l_cm > 20:
                         lengths.append(l_cm)
                     if h_cm > 20:
@@ -943,36 +1115,30 @@ class InventoryEngine:
                             "slab_no": str(
                                 row.get(slab_col, len(valid_rows) + 1)
                                 if slab_col is not None
+                                and pd.notna(row.get(slab_col))
                                 else len(valid_rows) + 1
                             ),
-                            "length_cm": l_cm,
-                            "height_cm": h_cm,
+                            "length_cm": round(l_cm, 1),
+                            "height_cm": round(h_cm, 1),
                             "thickness": "2 cm",
-                            "m2": m2_val,
+                            "m2": round(m2_val, 2),
                         }
                     )
 
-                if total_m2 <= 0 and m2_col is not None:
-                    col_vals = [
-                        safe_float(v)
-                        for v in rows_to_iter[m2_col].dropna().values
-                        if 0.3 <= safe_float(v) <= 500.0
-                    ]
-                    if col_vals:
-                        slab_like = [v for v in col_vals if 0.4 <= v <= 15.0]
-                        if len(slab_like) >= 2:
-                            total_m2 = sum(slab_like)
-                            total_slabs = len(slab_like)
-                        elif max(col_vals) > 2.0:
-                            total_m2 = max(col_vals)
-                            total_slabs = max(1, len(col_vals) - 1)
+                # Excel'in kendi TOPLAM satırı varsa ve plaka toplamıyla uyumluysa onu baz al
+                final_m2 = sum_slab_m2
+                if explicit_total_row_m2 > 0:
+                    if sum_slab_m2 == 0 or (
+                        0.85 <= (explicit_total_row_m2 / sum_slab_m2) <= 1.15
+                    ):
+                        final_m2 = explicit_total_row_m2
 
-                if total_m2 <= 0:
+                if final_m2 <= 0:
                     continue
 
                 thick_val = "2 cm"
-                if thick_col is not None and not rows_to_iter[thick_col].dropna().empty:
-                    raw_th = safe_float(rows_to_iter[thick_col].dropna().iloc[0])
+                if thick_col is not None and not df[thick_col].dropna().empty:
+                    raw_th = safe_float(df[thick_col].dropna().iloc[0])
                     if 17 <= raw_th <= 24 or raw_th == 2:
                         thick_val = "2 cm"
                     elif 27 <= raw_th <= 34 or raw_th == 3:
@@ -981,10 +1147,8 @@ class InventoryEngine:
                         thick_val = f"{raw_th:g} cm"
 
                 surf_val = "Polished"
-                if surf_col is not None and not rows_to_iter[surf_col].dropna().empty:
-                    surf_val = (
-                        str(rows_to_iter[surf_col].dropna().iloc[0]).strip().title()
-                    )
+                if surf_col is not None and not df[surf_col].dropna().empty:
+                    surf_val = str(df[surf_col].dropna().iloc[0]).strip().title()
 
                 if lengths and heights:
                     avg_l = int(round(sum(lengths) / len(lengths)))
@@ -992,423 +1156,190 @@ class InventoryEngine:
                     dims_str = f"{avg_l} x {avg_h} cm"
                 elif lengths:
                     avg_l = int(round(sum(lengths) / len(lengths)))
-                    dims_str = f"{avg_l} cm (Avg. Length)"
+                    dims_str = f"{avg_l} cm"
                 else:
                     dims_str = "Standard Slab Sizes"
 
                 return {
-                    "total_m2": round(total_m2, 2),
-                    "total_slabs": total_slabs,
+                    "total_m2": round(final_m2, 2),
+                    "total_slabs": sum_slabs if sum_slabs > 0 else len(valid_rows),
                     "thickness": thick_val,
                     "surface": surf_val,
                     "dimensions": dims_str,
                     "clean_rows": valid_rows,
                 }
         except Exception as e:
-            logger.warning(f"Excel parse uyarısı: {e}")
+            logger.warning(f"Excel okuma uyarısı: {e}")
         return None
 
-    def _estimate_stock_from_images_list(
-        self, all_imgs: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        if not all_imgs:
-            return None
+    def get_lot_info(self, query: str) -> Dict[str, Any]:
+        """
+        Tam lot eşleşmesiyle klasörü bulur, içindeki gerçek Excel'i okur ve
+        sonucu 10 dakikalığına RAM önbelleğine alır.
+        """
+        norm_key = normalize_lot_code(query)
+        now = time.time()
 
-        clean_slabs = [
-            f
-            for f in all_imgs
-            if "bookmatch" not in f.get("name", "").lower()
-            and "bm" not in f.get("name", "").lower()
-            and "bookmatch" not in f.get("parent_name", "").lower()
-        ]
-        target_imgs = clean_slabs if clean_slabs else all_imgs
-        slab_count = len(target_imgs)
-        if slab_count <= 0:
-            return None
+        if norm_key in self.drive._lot_Result_cache:
+            ts, cached_res = self.drive._lot_Result_cache[norm_key]
+            if now - ts < 600:
+                return cached_res
 
-        parsed_m2_list = []
-        parsed_l_list = []
-        parsed_h_list = []
-        clean_rows = []
+        folder_id, folder_link, parent_id, actual_name = (
+            self.drive.find_folder_exact(norm_key)
+        )
 
-        for idx, f in enumerate(target_imgs, start=1):
-            fname = f.get("name", "")
-            dim_m = re.search(r"(\d{2,4})\s*[xX*]\s*(\d{2,4})", fname)
-            area_m = re.search(
-                r"(\d+[.,]\d+)\s*(?:m2|m²|sqm)", fname, re.IGNORECASE
-            )
-            l_v = safe_float(dim_m.group(1)) if dim_m else 0.0
-            h_v = safe_float(dim_m.group(2)) if dim_m else 0.0
-            a_v = safe_float(area_m.group(1)) if area_m else 0.0
-            m2_v, l_cm, h_cm = compute_slab_m2(l_v, h_v, a_v)
-            if m2_v <= 0:
-                m2_v = 5.40
-                l_cm = 290.0
-                h_cm = 186.0
-            parsed_m2_list.append(m2_v)
-            if l_cm > 20 and h_cm > 20:
-                parsed_l_list.append(l_cm)
-                parsed_h_list.append(h_cm)
-            clean_rows.append(
-                {
-                    "slab_no": str(idx),
-                    "length_cm": l_cm,
-                    "height_cm": h_cm,
-                    "thickness": "2 cm",
-                    "m2": m2_v,
-                }
-            )
+        excel_bytes, excel_name, data = None, None, None
+        excel_bytes, excel_name = self.drive.get_excel_from_folder(
+            folder_id,
+            query_hint=norm_key,
+            parent_folder_id=parent_id,
+            max_depth=2,
+        )
+        if excel_bytes:
+            data = self.parse_packing_list_bytes(excel_bytes, target_lot=norm_key)
 
-        total_m2 = round(sum(parsed_m2_list), 2)
-        if parsed_l_list and parsed_h_list:
-            avg_l = int(round(sum(parsed_l_list) / len(parsed_l_list)))
-            avg_h = int(round(sum(parsed_h_list) / len(parsed_h_list)))
-            dims_str = f"{avg_l} x {avg_h} cm"
-        else:
-            dims_str = "290 x 186 cm"
-
-        return {
-            "total_m2": total_m2,
-            "total_slabs": slab_count,
-            "thickness": "2 cm",
-            "surface": "Polished",
-            "dimensions": dims_str,
-            "clean_rows": clean_rows,
-        }
-
-    def _build_entry_from_folder_items(
-        self,
-        folder_id: str,
-        display_name: str,
-        raw_name: str,
-        folder_link: str,
-        items: List[Dict[str, Any]],
-        sub_batch_map: Dict[str, List[Dict[str, Any]]],
-    ) -> Dict[str, Any]:
-        excel_cand = None
-        imgs = []
-
-        for it in items:
-            mime = it.get("mimeType", "")
-            if not excel_cand:
-                excel_cand = DriveExplorer._extract_excel_candidate(it)
-            if mime.startswith("image/"):
-                imgs.append(it)
-            elif mime == "application/vnd.google-apps.folder":
-                sf_items = sub_batch_map.get(it["id"], [])
-                for s_it in sf_items:
-                    if not excel_cand:
-                        excel_cand = DriveExplorer._extract_excel_candidate(s_it)
-                    if s_it.get("mimeType", "").startswith("image/"):
-                        s_copy = dict(s_it)
-                        s_copy["parent_name"] = it.get("name", "")
-                        imgs.append(s_copy)
-
-        parsed_data = None
-        if excel_cand:
-            ex_bytes = self.drive.download_excel_or_sheet(
-                excel_cand["id"], excel_cand["mimeType"]
-            )
-            if ex_bytes:
-                parsed_data = self.parse_packing_list_bytes(
-                    ex_bytes, target_lot=raw_name
-                )
-            time.sleep(0.08)  # CPU ve GIL nefes alma payı
-
-        if not parsed_data or parsed_data.get("total_m2", 0.0) <= 0:
-            parsed_data = self._estimate_stock_from_images_list(imgs)
-
-        if not parsed_data:
-            parsed_data = {
+        if not data:
+            data = {
                 "total_m2": 0.0,
                 "total_slabs": 0,
                 "thickness": "2 cm",
                 "surface": "Polished",
-                "dimensions": "Standard Slab Sizes",
+                "dimensions": "-",
                 "clean_rows": [],
             }
 
-        # Standart plaka ve Bookmatch görsel ID'lerini ayır
-        bm_img = None
-        std_imgs = []
-        for f in imgs:
-            fn = f.get("name", "").lower()
-            pn = f.get("parent_name", "").lower()
-            if "bookmatch" in fn or "bm" in fn or "bookmatch" in pn:
-                if not bm_img:
-                    bm_img = f
-            else:
-                std_imgs.append(f)
-
-        slab_1 = std_imgs[0] if std_imgs else bm_img
-        slab_2 = (
-            bm_img
-            if (bm_img and bm_img != slab_1)
-            else (std_imgs[1] if len(std_imgs) > 1 else slab_1)
-        )
-
-        return {
-            "title": display_name.upper(),
-            "raw_name": raw_name,
-            "folder_id": folder_id,
+        res = {
+            "status": "success",
+            "query": norm_key,
+            "title": actual_name.upper() if actual_name else norm_key,
             "drive_link": folder_link,
-            "excel_meta": excel_cand,
-            "slab_img": {
-                "id": slab_1["id"],
-                "thumb": slab_1.get("thumbnailLink"),
-            }
-            if slab_1
-            else None,
-            "second_img": {
-                "id": slab_2["id"],
-                "thumb": slab_2.get("thumbnailLink"),
-            }
-            if slab_2
-            else None,
-            "data": parsed_data,
+            "folder_id": folder_id,
+            "excel_name": excel_name or f"{norm_key}_PackingList.xlsx",
+            "excel_bytes": excel_bytes,
+            "data": data,
         }
+        self.drive._lot_Result_cache[norm_key] = (now, res)
+        return res
 
-    def sync_all_collections_background(self) -> None:
-        """
-        Arka planda sessizce çalışır; 3 ana koleksiyonun tüm taş ve lotlarını
-        indeksleyip RAM'e ve JSON'a kaydeder.
-        """
-        if self.is_indexing:
-            return
-        self.is_indexing = True
-        logger.info("🔄 Arka plan Google Drive İndeksleme (Pre-Index) başladı...")
-
-        collections = [
-            "Arslanlar Collection",
-            "Arslanlar Series",
-            "Arslanlar Exclusive Collection",
-        ]
-        new_lots: Dict[str, Any] = dict(self.index_db.get("lots", {}))
-        new_colls: Dict[str, List[str]] = dict(
-            self.index_db.get("collections", {})
-        )
-
-        try:
-            for coll_name in collections:
-                fid, _, _ = self.drive.find_folder_live(coll_name)
-                if not fid:
-                    continue
-
-                lvl1_items = self.drive.batch_list_children([fid]).get(fid, [])
-                lvl1_folders = [
-                    f
-                    for f in lvl1_items
-                    if f.get("mimeType") == "application/vnd.google-apps.folder"
-                ]
-                if not lvl1_folders:
-                    continue
-
-                lvl1_map = {f["id"]: f for f in lvl1_folders}
-                lvl2_batch = self.drive.batch_list_children(list(lvl1_map.keys()))
-
-                leaf_list = []
-                lvl2_subfolders = {}
-
-                for f1_id, children in lvl2_batch.items():
-                    f1_meta = lvl1_map[f1_id]
-                    sub_f = [
-                        c
-                        for c in children
-                        if c.get("mimeType") == "application/vnd.google-apps.folder"
-                        and "bookmatch" not in c.get("name", "").lower()
-                        and "bm" not in c.get("name", "").lower()
-                    ]
-                    if sub_f:
-                        for sf in sub_f:
-                            sf["stone_parent_name"] = f1_meta.get("name", "")
-                            lvl2_subfolders[sf["id"]] = sf
-                    else:
-                        leaf_list.append(
-                            {
-                                "id": f1_id,
-                                "display_name": f1_meta.get("name", ""),
-                                "raw_name": f1_meta.get("name", ""),
-                                "link": f1_meta.get(
-                                    "webViewLink",
-                                    f"https://drive.google.com/drive/folders/{f1_id}",
-                                ),
-                                "items": children,
-                            }
-                        )
-
-                if lvl2_subfolders:
-                    lvl3_batch = self.drive.batch_list_children(
-                        list(lvl2_subfolders.keys())
-                    )
-                    for f2_id, children in lvl3_batch.items():
-                        f2_meta = lvl2_subfolders[f2_id]
-                        p_stone = f2_meta.get("stone_parent_name", "")
-                        f2_name = f2_meta.get("name", "")
-                        disp = (
-                            f"{p_stone} - {f2_name}"
-                            if p_stone
-                            and normalize_turkish_key(p_stone)
-                            not in normalize_turkish_key(f2_name)
-                            else f2_name
-                        )
-                        leaf_list.append(
-                            {
-                                "id": f2_id,
-                                "display_name": disp,
-                                "raw_name": f2_name,
-                                "link": f2_meta.get(
-                                    "webViewLink",
-                                    f"https://drive.google.com/drive/folders/{f2_id}",
-                                ),
-                                "items": children,
-                            }
-                        )
-
-                # Alt klasörlerin içindeki Bookmatch klasörlerini de tek seferde çek
-                bookmatch_sub_ids = []
-                for lf in leaf_list:
-                    for it in lf["items"]:
-                        if it.get("mimeType") == "application/vnd.google-apps.folder":
-                            bookmatch_sub_ids.append(it["id"])
-                bm_batch = (
-                    self.drive.batch_list_children(bookmatch_sub_ids)
-                    if bookmatch_sub_ids
-                    else {}
-                )
-
-                coll_keys = []
-                for lf in leaf_list:
-                    entry = self._build_entry_from_folder_items(
-                        folder_id=lf["id"],
-                        display_name=lf["display_name"],
-                        raw_name=lf["raw_name"],
-                        folder_link=lf["link"],
-                        items=lf["items"],
-                        sub_batch_map=bm_batch,
-                    )
-                    norm_k = normalize_lot_code(lf["raw_name"])
-                    # Lot kodunu da anahtar olarak kaydet (Örn: "A-383 SILVER ROOTS" -> "A-383")
-                    lot_m = re.search(r"\b([A-Z]{1,4})[-\s]?(\d{1,5})\b", norm_k)
-                    primary_key = (
-                        f"{lot_m.group(1)}-{lot_m.group(2)}" if lot_m else norm_k
-                    )
-                    new_lots[primary_key] = entry
-                    new_lots[norm_k] = entry
-                    if primary_key not in coll_keys:
-                        coll_keys.append(primary_key)
-                    time.sleep(0.05)
-
-                new_colls[coll_name] = coll_keys
-                with self._lock:
-                    self.index_db["lots"] = new_lots
-                    self.index_db["collections"] = new_colls
-                    self.index_db["last_updated"] = datetime.now().strftime(
-                        "%d.%m.%Y %H:%M"
-                    )
-                    save_json_file(MASTER_INDEX_FILE, self.index_db)
-
-            logger.info(
-                f"✅ Drive İndeksleme Tamamlandı! Toplam İndekslenen Kayıt: {len(new_lots)}"
-            )
-        except Exception as e:
-            logger.error(f"Arka plan indeksleme uyarısı: {e}")
-        finally:
-            self.is_indexing = False
-            gc.collect()
-
-    def get_lot_entry(self, query: str) -> Dict[str, Any]:
-        """
-        Önce RAM indeksine bakar (0.01 sn!). İndekste yoksa canlı olarak Drive'dan
-        çekip indekse ekler.
-        """
-        norm_q = normalize_lot_code(query)
-        lots_map = self.index_db.get("lots", {})
-
-        if norm_q in lots_map:
-            return lots_map[norm_q]
-
-        for k, v in lots_map.items():
-            if norm_q in k or k in norm_q:
-                return v
-
-        # İndekste henüz yoksa canlı bul ve kaydet
-        fid, flink, _ = self.drive.find_folder_live(norm_q)
-        if fid:
-            items = self.drive.batch_list_children([fid]).get(fid, [])
-            sub_ids = [
-                it["id"]
-                for it in items
-                if it.get("mimeType") == "application/vnd.google-apps.folder"
-            ]
-            sub_batch = (
-                self.drive.batch_list_children(sub_ids) if sub_ids else {}
-            )
-            entry = self._build_entry_from_folder_items(
-                folder_id=fid,
-                display_name=norm_q,
-                raw_name=norm_q,
-                folder_link=flink or DEFAULT_DRIVE_LINK,
-                items=items,
-                sub_batch_map=sub_batch,
-            )
-            with self._lock:
-                self.index_db.setdefault("lots", {})[norm_q] = entry
-                save_json_file(MASTER_INDEX_FILE, self.index_db)
-            return entry
-
-        return {
-            "title": norm_q,
-            "raw_name": norm_q,
-            "folder_id": None,
-            "drive_link": None,
-            "excel_meta": None,
-            "slab_img": None,
-            "second_img": None,
-            "data": {
-                "total_m2": 0.0,
-                "total_slabs": 0,
-                "thickness": "2 cm",
-                "surface": "Polished",
-                "dimensions": "Standard Slab Sizes",
-                "clean_rows": [],
-            },
-        }
-
-    def get_collection_entries(self, coll_name: str) -> List[Dict[str, Any]]:
-        colls_map = self.index_db.get("collections", {})
-        lots_map = self.index_db.get("lots", {})
-        keys = colls_map.get(coll_name, [])
-        if keys:
-            return [lots_map[k] for k in keys if k in lots_map]
-
-        # Henüz indekslenmemişse hızlıca sadece 1. katmanı çek
-        fid, _, _ = self.drive.find_folder_live(coll_name)
+    def scan_collection_lots(
+        self, collection_name: str, max_lots: int = 18
+    ) -> List[Dict[str, Any]]:
+        fid, _, _, _ = self.drive.find_folder_exact(collection_name)
         if not fid:
             return []
+
         lvl1_items = self.drive.batch_list_children([fid]).get(fid, [])
         lvl1_folders = [
             f
             for f in lvl1_items
             if f.get("mimeType") == "application/vnd.google-apps.folder"
-        ][:12]
-        f_ids = [f["id"] for f in lvl1_folders]
-        lvl2_batch = self.drive.batch_list_children(f_ids)
+        ]
+        if not lvl1_folders:
+            return []
 
-        entries = []
-        for f in lvl1_folders:
-            entry = self._build_entry_from_folder_items(
-                folder_id=f["id"],
-                display_name=f["name"],
-                raw_name=f["name"],
-                folder_link=f.get(
-                    "webViewLink",
-                    f"https://drive.google.com/drive/folders/{f['id']}",
-                ),
-                items=lvl2_batch.get(f["id"], []),
-                sub_batch_map={},
+        lvl1_map = {f["id"]: f for f in lvl1_folders}
+        lvl2_batch = self.drive.batch_list_children(list(lvl1_map.keys()))
+
+        leaf_folders = []
+        lvl2_subfolders = {}
+
+        for f1_id, children in lvl2_batch.items():
+            f1_meta = lvl1_map[f1_id]
+            sub_f = [
+                c
+                for c in children
+                if c.get("mimeType") == "application/vnd.google-apps.folder"
+                and "bookmatch" not in c.get("name", "").lower()
+                and "bm" not in c.get("name", "").lower()
+            ]
+            if sub_f:
+                for sf in sub_f:
+                    sf["stone_parent_name"] = f1_meta.get("name", "")
+                    lvl2_subfolders[sf["id"]] = sf
+            else:
+                leaf_folders.append(
+                    {
+                        "id": f1_id,
+                        "title": f1_meta.get("name", "").upper(),
+                        "raw_name": f1_meta.get("name", ""),
+                        "link": f1_meta.get(
+                            "webViewLink",
+                            f"https://drive.google.com/drive/folders/{f1_id}",
+                        ),
+                        "items": children,
+                    }
+                )
+
+        if lvl2_subfolders:
+            lvl3_batch = self.drive.batch_list_children(
+                list(lvl2_subfolders.keys())
             )
-            entries.append(entry)
-        return entries
+            for f2_id, children in lvl3_batch.items():
+                f2_meta = lvl2_subfolders[f2_id]
+                p_stone = f2_meta.get("stone_parent_name", "")
+                f2_name = f2_meta.get("name", "")
+                disp = (
+                    f"{p_stone} - {f2_name}"
+                    if p_stone
+                    and normalize_turkish_key(p_stone)
+                    not in normalize_turkish_key(f2_name)
+                    else f2_name
+                )
+                leaf_folders.append(
+                    {
+                        "id": f2_id,
+                        "title": disp.upper(),
+                        "raw_name": f2_name,
+                        "link": f2_meta.get(
+                            "webViewLink",
+                            f"https://drive.google.com/drive/folders/{f2_id}",
+                        ),
+                        "items": children,
+                    }
+                )
+
+        results = []
+        for lf in leaf_folders[:max_lots]:
+            items = lf.get("items", [])
+            excel_cand = None
+            imgs = []
+            for it in items:
+                if not excel_cand:
+                    excel_cand = DriveExplorer._extract_excel_candidate(it)
+                if it.get("mimeType", "").startswith("image/"):
+                    imgs.append(it)
+
+            parsed_data = None
+            if excel_cand:
+                ex_b = self.drive.download_file_bytes(
+                    excel_cand["id"], excel_cand["mimeType"]
+                )
+                if ex_b:
+                    parsed_data = self.parse_packing_list_bytes(
+                        ex_b, target_lot=lf["raw_name"]
+                    )
+
+            if not parsed_data:
+                parsed_data = {
+                    "total_m2": 0.0,
+                    "total_slabs": 0,
+                    "thickness": "2 cm",
+                    "surface": "Polished",
+                    "dimensions": "-",
+                    "clean_rows": [],
+                }
+
+            results.append(
+                {
+                    "title": lf["title"],
+                    "id": lf["id"],
+                    "link": lf["link"],
+                    "data": parsed_data,
+                    "imgs": imgs,
+                }
+            )
+        return results
 
     def generate_deep_scan_report(self) -> str:
         collections = [
@@ -1421,34 +1352,27 @@ class InventoryEngine:
         total_factory_slabs = 0
 
         for coll in collections:
-            entries = self.get_collection_entries(coll)
-            if not entries:
+            items = self.scan_collection_lots(coll, max_lots=35)
+            if not items:
                 continue
 
             report_lines.append(f"📁 <b>{coll.upper()}</b>")
             coll_m2 = 0.0
             coll_slabs = 0
 
-            for ent in entries:
-                d = ent.get("data", {})
-                m2 = d.get("total_m2", 0.0)
-                slabs = d.get("total_slabs", 0)
-                if m2 > 0:
+            for it in items:
+                d = it["data"]
+                if d["total_m2"] > 0:
                     report_lines.append(
-                        f"  ├ <b>{ent['title']}</b>: <code>{m2:,.2f} m²</code> ({slabs} Plaka)"
+                        f"  ├ <b>{it['title']}</b>: <code>{d['total_m2']:,.2f} m²</code> ({d['total_slabs']} Plaka)"
                     )
-                    coll_m2 += m2
-                    coll_slabs += slabs
-                    total_factory_m2 += m2
-                    total_factory_slabs += slabs
+                    coll_m2 += d["total_m2"]
+                    coll_slabs += d["total_slabs"]
+                    total_factory_m2 += d["total_m2"]
+                    total_factory_slabs += d["total_slabs"]
 
             report_lines.append(
                 f"  └ <i>Koleksiyon Toplamı: {coll_m2:,.2f} m² ({coll_slabs} Plaka)</i>\n"
-            )
-
-        if total_factory_m2 == 0 and self.is_indexing:
-            report_lines.append(
-                "⏳ <i>Arka plan Drive indekslemesi devam ediyor, 30 saniye sonra tüm rakamlar tam listelenecektir.</i>\n"
             )
 
         report_lines.append(
@@ -1458,7 +1382,7 @@ class InventoryEngine:
 
 
 # =====================================================================
-# 5. GÖMÜLÜ ORİJİNAL LOGOLU & STOK DETAYLI PREMIUM PDF MOTORU
+# 5. GÖMÜLÜ ORİJİNAL LOGOLU & DOĞRU METRAJLI PREMIUM PDF MOTORU
 # =====================================================================
 class PDFPresentationEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -1495,23 +1419,50 @@ class PDFPresentationEngine:
         queries: List[str],
         collection_folder_names: Optional[List[str]] = None,
     ) -> Tuple[bytes, str]:
-        entries_to_render: List[Dict[str, Any]] = []
+        cards: List[Dict[str, Any]] = []
 
         if collection_folder_names:
             titles_norm = [
                 normalize_turkish_key(c) for c in collection_folder_names
             ]
             pdf_title = f"{' & '.join(titles_norm)} — EXECUTIVE CATALOG PRESENTATION"
+            per_coll = max(6, int(18 / len(collection_folder_names)))
             for coll_name in collection_folder_names:
-                coll_entries = self.inventory.get_collection_entries(coll_name)
-                entries_to_render.extend(coll_entries[:12])
+                scanned = self.inventory.scan_collection_lots(
+                    coll_name, max_lots=per_coll
+                )
+                for item in scanned:
+                    img = self.drive.get_best_slab_image_for_pdf(
+                        item["id"], item["title"], pre_imgs=item.get("imgs")
+                    )
+                    cards.append(
+                        {
+                            "title": item["title"],
+                            "code": normalize_lot_code(item["title"]),
+                            "data": item["data"],
+                            "drive_link": item["link"],
+                            "image_bytes": img,
+                        }
+                    )
         else:
             pdf_title = "EXECUTIVE STOCK & SLAB PRESENTATION"
             for q in queries:
-                entries_to_render.append(self.inventory.get_lot_entry(q))
+                info = self.inventory.get_lot_info(q)
+                img = self.drive.get_best_slab_image_for_pdf(
+                    info["folder_id"], q
+                )
+                cards.append(
+                    {
+                        "title": info.get("title", q.upper()),
+                        "code": info.get("query", q.upper()),
+                        "data": info["data"],
+                        "drive_link": info["drive_link"],
+                        "image_bytes": img,
+                    }
+                )
 
-        if not entries_to_render:
-            raise ValueError("Belirtilen kriterler için klasör veya veri bulunamadı.")
+        if not cards:
+            raise ValueError("Belirtilen kriterler için klasör bulunamadı.")
 
         pdf_io = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -1574,77 +1525,59 @@ class PDFPresentationEngine:
 
         story: List[Any] = self._build_header_flowables(pdf_title, styles)
 
-        for idx, ent in enumerate(entries_to_render[:24], start=1):
-            d = ent.get("data", {})
+        for idx, card in enumerate(cards, start=1):
+            d = card["data"]
             m2 = d.get("total_m2", 0.0)
             slabs = d.get("total_slabs", 0)
 
-            if m2 > 0 or slabs > 0:
+            if m2 > 0:
                 stock_str = f"<b>{m2:,.2f} m²  ({slabs} Slabs)</b>"
                 heading_badge = (
                     f" — <font color='#9C5933'>{m2:,.2f} m² | {slabs} Slabs</font>"
                 )
             else:
-                stock_str = "<b>0.00 m² (0 Slabs)</b>"
+                stock_str = "<b>Packing List Not Found in Folder</b>"
                 heading_badge = ""
 
-            dims_str = d.get("dimensions", "Standard Slab Sizes")
-            if not dims_str or dims_str == "-":
-                dims_str = "Standard Slab Sizes"
-
-            surf_str = d.get("surface", "Polished")
-            if not surf_str or surf_str == "-":
-                surf_str = "Polished"
-
-            thick_str = d.get("thickness", "2 cm")
-            if not thick_str or thick_str == "-":
-                thick_str = "2 cm"
-
+            surf_str = d.get("surface", "Polished") or "Polished"
+            thick_str = d.get("thickness", "2 cm") or "2 cm"
             surf_thick_str = f"{surf_str} | {thick_str}"
 
-            # Hızlı Thumbnail (=s1200) üzerinden sadece düz plaka görselini indir
             rl_img = Paragraph("High-Res Slab Image in Drive", tdv_s)
-            slab_meta = ent.get("slab_img")
-            if slab_meta:
-                img_bytes = self.drive.download_fast_image(
-                    slab_meta.get("id"),
-                    slab_meta.get("thumb"),
-                    for_pdf=True,
-                )
-                if img_bytes:
-                    try:
-                        rl_img = RLImage(
-                            io.BytesIO(img_bytes), width=185, height=118
-                        )
-                    except Exception:
-                        pass
+            if card.get("image_bytes"):
+                try:
+                    rl_img = RLImage(
+                        io.BytesIO(card["image_bytes"]), width=185, height=118
+                    )
+                except Exception:
+                    pass
 
-            dlink = ent.get("drive_link")
+            dlink = card.get("drive_link")
             link_html = (
                 f"<link href='{dlink}' color='#0056b3'><u>Click to Open Google Drive Folder</u></link>"
                 if dlink
                 else "Available on Request"
             )
 
+            # Senin istediğin net tablo yapısı (Boş kalan Avg Slab Size ve Total Production kaldırıldı)
             spec_rows = [
                 [Paragraph("Specification", th_s), Paragraph("Technical Data", th_s)],
                 [
-                    Paragraph("Available Stock (m² / Slabs)", tdl_s),
+                    Paragraph("Available Stock", tdl_s),
                     Paragraph(stock_str, tdv_s),
                 ],
-                [Paragraph("Avg. Slab Size", tdl_s), Paragraph(dims_str, tdv_s)],
                 [
                     Paragraph("Surface & Thickness", tdl_s),
                     Paragraph(surf_thick_str, tdv_s),
                 ],
-                [Paragraph("Active Code", tdl_s), Paragraph(ent["title"], tdv_s)],
+                [Paragraph("Active Code", tdl_s), Paragraph(card["code"], tdv_s)],
                 [
                     Paragraph("High-Res Slab Photos", tdl_s),
                     Paragraph(link_html, tdv_s),
                 ],
             ]
 
-            st = Table(spec_rows, colWidths=[135, 195])
+            st = Table(spec_rows, colWidths=[130, 200])
             st.setStyle(
                 TableStyle(
                     [
@@ -1652,8 +1585,8 @@ class PDFPresentationEngine:
                         ("BACKGROUND", (0, 1), (-1, -1), LIGHT_BG),
                         ("GRID", (0, 0), (-1, -1), 0.5, BORD),
                         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                        ("TOPPADDING", (0, 0), (-1, -1), 5),
-                        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                        ("TOPPADDING", (0, 0), (-1, -1), 6),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                         ("LEFTPADDING", (0, 0), (-1, -1), 6),
                     ]
                 )
@@ -1674,9 +1607,9 @@ class PDFPresentationEngine:
             story.append(
                 KeepTogether(
                     [
-                        Paragraph(f"{idx}. {ent['title']}{heading_badge}", ch_s),
+                        Paragraph(f"{idx}. {card['title']}{heading_badge}", ch_s),
                         mr,
-                        Spacer(1, 13),
+                        Spacer(1, 14),
                     ]
                 )
             )
@@ -1695,13 +1628,13 @@ class PDFPresentationEngine:
         gc.collect()
 
         if collection_folder_names:
-            fname = f"Arslanlar_Collections_Presentation_{datetime.now().strftime('%H%M')}.pdf"
+            fname = f"Arslanlar_Collections_{datetime.now().strftime('%H%M')}.pdf"
         else:
             fname = f"Arslanlar_Presentation_{'_'.join(queries[:3])}.pdf"
         return pdf_bytes, fname
 
     def generate_packing_list_pdf(
-        self, clean_rows: List[Dict[str, Any]], lot_name: str
+        self, clean_rows: List[Dict[str, Any]], lot_name: str, total_m2_override: float = 0.0
     ) -> bytes:
         pdf_io = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -1765,12 +1698,12 @@ class PDFPresentationEngine:
             ]
         ]
 
-        total_m2 = 0.0
+        calc_sum = 0.0
         for idx, r in enumerate(clean_rows[:180], start=1):
             m2_val = r.get("m2", 0.0)
             l_cm = r.get("length_cm", 0.0)
             h_cm = r.get("height_cm", 0.0)
-            total_m2 += m2_val
+            calc_sum += m2_val
             table_data.append(
                 [
                     Paragraph(str(idx), td_p),
@@ -1781,6 +1714,8 @@ class PDFPresentationEngine:
                     Paragraph(f"{m2_val:.2f}", td_p),
                 ]
             )
+
+        final_area = total_m2_override if total_m2_override > 0 else calc_sum
 
         pl_table = Table(table_data, colWidths=[65, 110, 110, 110, 90, 110])
         pl_table.setStyle(
@@ -1797,7 +1732,7 @@ class PDFPresentationEngine:
         story.append(Spacer(1, 14))
         story.append(
             Paragraph(
-                f"<b>Total Slabs:</b> {len(clean_rows)} pcs | <b>Total Net Area:</b> {total_m2:,.2f} m²",
+                f"<b>Total Slabs:</b> {len(clean_rows)} pcs | <b>Total Net Area:</b> {final_area:,.2f} m²",
                 ParagraphStyle(
                     "Sum",
                     parent=styles["Normal"],
@@ -1820,7 +1755,7 @@ class ArgonBrain:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    def match_visual_stone(self, image_bytes: bytes, caption: str = "") -> List[str]:
+    def match_visual_stone(self, image_bytes: bytes) -> List[str]:
         if self.api_key:
             try:
                 b64_img = base64.b64encode(image_bytes).decode("utf-8")
@@ -1857,22 +1792,6 @@ class ArgonBrain:
                         return found[:2]
             except Exception:
                 pass
-
-        try:
-            with Image.open(io.BytesIO(image_bytes)) as im:
-                rgb_small = im.convert("RGB").resize((64, 64))
-                pixels = list(rgb_small.getdata())
-            r_avg = sum(p[0] for p in pixels) / len(pixels)
-            g_avg = sum(p[1] for p in pixels) / len(pixels)
-            b_avg = sum(p[2] for p in pixels) / len(pixels)
-            if r_avg > g_avg + 25 and r_avg > b_avg + 25:
-                return ["ROSSO LEVANTO", "A-283"]
-            if b_avg > r_avg + 10:
-                return ["BLUE ROOTS", "SILVER ROOTS"]
-            if r_avg > 165 and g_avg > 155:
-                return ["A-283", "TERRA MATER"]
-        except Exception:
-            pass
         return ["SILVER ROOTS", "SILVER RIVER"]
 
     def evaluate_intent(
@@ -1889,9 +1808,10 @@ class ArgonBrain:
         if not raw:
             return {"should_reply": False}
 
+        # Tam Lot Kodu Yakalayıcı (A-1009, A-383, A-96 vb.)
         lot_regex = re.compile(r"\b([A-Z]{1,4})[-\s]?(\d{1,5})\b")
         matched = [
-            f"{m.group(1)}-{m.group(2)}"
+            f"{m.group(1)}-{int(m.group(2))}"
             for m in lot_regex.finditer(raw)
             if m.group(1) not in ["M", "CM", "MM", "PDF", "TON", "KG"]
         ]
@@ -1965,7 +1885,7 @@ class ArgonBrain:
 
 
 # =====================================================================
-# 7. EŞZAMANLI (NON-BLOCKING) TELEGRAM SOHBET YÖNETİCİSİ
+# 7. TELEGRAM SOHBET YÖNETİCİSİ
 # =====================================================================
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(drive_explorer)
@@ -2009,7 +1929,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not intent.get("should_reply"):
         return
 
-    # 0. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA ÖZELLİĞİ
+    # 0. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA
     if intent.get("is_visual_search"):
         status = await msg.reply_text(
             "🔍 <b>Gönderdiğiniz mermer fotoğrafı analiz ediliyor...</b>",
@@ -2019,7 +1939,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo_file = await msg.photo[-1].get_file()
             img_bytes = bytes(await photo_file.download_as_bytearray())
             matched_stones = await asyncio.to_thread(
-                argon_brain.match_visual_stone, img_bytes, user_text
+                argon_brain.match_visual_stone, img_bytes
             )
             await status.delete()
             intent["matched_queries"] = matched_stones
@@ -2031,7 +1951,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     queries = intent.get("matched_queries", [])
     collection_folders: List[str] = intent.get("collection_folders", [])
 
-    # 1. DEEP SCAN (TOPLAM STOK RAPORU - RAM İNDEKSİNDEN ANINDA DÖNER)
+    # 1. DEEP SCAN (TOPLAM STOK RAPORU)
     if intent.get("want_deep_scan") and not queries and not collection_folders:
         status = await msg.reply_text(
             "🔎 <b>Argon Deep Scan Raporu Hazırlanıyor...</b>",
@@ -2049,8 +1969,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not queries and not collection_folders:
         if not is_group or bot_mentioned:
             await msg.reply_text(
-                "👋 <b>Argon Master V10 (Pre-Indexed Zero-Wait) Aktif.</b>\n"
-                "• Lot & Fotoğraf: <code>A-371</code> veya <code>A-371 fotoğraf</code>\n"
+                "👋 <b>Argon Master V11 Aktif.</b>\n"
+                "• Lot & Fotoğraf: <code>A-371</code> veya <code>A-1009</code>\n"
                 "• Drive Linki: <code>A-371 drive linki lütfen</code>\n"
                 "• Çoklu Tek PDF Sunum: <code>A-96 ve A-383 sunum hazırla</code>\n"
                 "• Koleksiyon PDF: <code>Arslanlar Collection sunum lütfen</code>\n"
@@ -2060,11 +1980,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
-    # 2. KOLEKSİYON (TEKLİ VEYA 3 KOLEKSİYON BİRDEN) PDF SUNUMU
+    # 2. KOLEKSİYON PDF SUNUMU
     if collection_folders and intent.get("want_pdf"):
         coll_label = ", ".join(collection_folders)
         status_msg = await msg.reply_text(
-            f"📁 <b>{coll_label}</b> için Bronz Aslan Logolu ve Stok Detaylı Premium PDF Kataloğu hazırlanıyor...",
+            f"📁 <b>{coll_label}</b> için Bronz Aslan Logolu ve Gerçek Excel Metrajlı PDF Kataloğu hazırlanıyor...",
             parse_mode=ParseMode.HTML,
         )
         try:
@@ -2084,10 +2004,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"⚠️ Koleksiyon PDF uyarısı: {e}")
         return
 
-    # 3. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU (TEK PDF'TE BİRLEŞTİRİR)
+    # 3. TEKLİ VEYA ÇOKLU LOT PDF SUNUMU (TEK PDF DOSYASINDA BİRLEŞTİRİR)
     if queries and intent.get("want_pdf"):
         status_msg = await msg.reply_text(
-            f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Stok Detaylı Premium PDF Sunumu hazırlanıyor...",
+            f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Gerçek Excel Metrajlı PDF Sunumu hazırlanıyor...",
             parse_mode=ParseMode.HTML,
         )
         try:
@@ -2108,63 +2028,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. STANDART LOT SORGUSU, LİNK VE ÇEKİ LİSTESİ (1 EXCEL + 1 PDF)
     for q in queries:
         try:
-            ent = await asyncio.to_thread(inventory_engine.get_lot_entry, q)
-            d = ent.get("data", {})
-            flink = ent.get("drive_link")
-            ex_meta = ent.get("excel_meta")
+            info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
+            d = info["data"]
+            fid = info["folder_id"]
+            flink = info["drive_link"]
 
             if intent.get("want_packing"):
-                ex_bytes = None
-                ex_name = f"PackingList_{q}.xlsx"
-                if ex_meta:
-                    ex_bytes = await asyncio.to_thread(
-                        drive_explorer.download_excel_or_sheet,
-                        ex_meta.get("id"),
-                        ex_meta.get("mimeType", ""),
-                    )
-                    ex_name = ex_meta.get("name", ex_name)
-                    if not ex_name.lower().endswith((".xlsx", ".xls")):
-                        ex_name += ".xlsx"
-
-                if ex_bytes:
+                if info["excel_bytes"]:
                     await msg.reply_document(
-                        document=io.BytesIO(ex_bytes),
-                        filename=ex_name,
+                        document=io.BytesIO(info["excel_bytes"]),
+                        filename=info["excel_name"],
                         caption=f"📦 <b>{q}</b> Orijinal Excel Çeki Listesi",
                         parse_mode=ParseMode.HTML,
                     )
-                elif d.get("clean_rows"):
-                    df_gen = pd.DataFrame(d["clean_rows"])
-                    ex_io = io.BytesIO()
-                    df_gen.to_excel(ex_io, index=False)
-                    ex_io.seek(0)
-                    await msg.reply_document(
-                        document=ex_io,
-                        filename=ex_name,
-                        caption=f"📦 <b>{q}</b> Excel Çeki Listesi",
-                        parse_mode=ParseMode.HTML,
-                    )
-
-                if d.get("clean_rows"):
-                    pdf_pack_bytes = await asyncio.to_thread(
-                        pdf_engine.generate_packing_list_pdf,
-                        d["clean_rows"],
-                        q,
-                    )
-                    await msg.reply_document(
-                        document=io.BytesIO(pdf_pack_bytes),
-                        filename=f"PackingList_{q}.pdf",
-                        caption=f"📄 <b>{q}</b> Resmi PDF Çeki Listesi",
-                        parse_mode=ParseMode.HTML,
-                    )
-                elif not ex_bytes:
+                    if d.get("clean_rows"):
+                        pdf_pack_bytes = await asyncio.to_thread(
+                            pdf_engine.generate_packing_list_pdf,
+                            d["clean_rows"],
+                            q,
+                            d.get("total_m2", 0.0),
+                        )
+                        await msg.reply_document(
+                            document=io.BytesIO(pdf_pack_bytes),
+                            filename=f"PackingList_{q}.pdf",
+                            caption=f"📄 <b>{q}</b> Resmi PDF Çeki Listesi ({d.get('total_m2', 0.0):,.2f} m²)",
+                            parse_mode=ParseMode.HTML,
+                        )
+                else:
                     link_note = (
                         f"\n📂 <a href='{flink}'>Drive Klasörünü Aç ({q})</a>"
                         if flink
                         else ""
                     )
                     await msg.reply_text(
-                        f"⚠️ <b>{q}</b> klasöründe henüz çeki listesi bulunamadı.{link_note}",
+                        f"⚠️ <b>{q}</b> klasöründe henüz Excel çeki listesi bulunamadı.{link_note}",
                         parse_mode=ParseMode.HTML,
                     )
                 continue
@@ -2173,8 +2070,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slabs_val = d.get("total_slabs", 0)
             stock_str = (
                 f"{m2_val:,.2f} m² ({slabs_val} Plaka)"
-                if (m2_val > 0 or slabs_val > 0)
-                else "0.00 m² (0 Plaka)"
+                if m2_val > 0
+                else "Klasörde Excel Bulunamadı"
             )
             link_html = (
                 f"<a href='{flink}'>Klasöre Git ({q})</a>"
@@ -2183,9 +2080,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             text_response = (
-                f"💎 <b>{ent.get('title', q.upper())}</b>\n"
+                f"💎 <b>{info.get('title', q.upper())}</b>\n"
                 f"• Mevcut Stok: <code>{stock_str}</code>\n"
-                f"• Ortalama Ebat: <code>{d.get('dimensions', 'Standard Slab Sizes')}</code>\n"
+                f"• Ortalama Ebat: <code>{d.get('dimensions', '-')}</code>\n"
                 f"• Yüzey & Kalınlık: <code>{d.get('surface', 'Polished')} ({d.get('thickness', '2 cm')})</code>\n"
                 f"• Drive Linki: {link_html}"
             )
@@ -2194,28 +2091,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
                 continue
 
-            slab_meta = ent.get("slab_img")
-            sec_meta = ent.get("second_img")
-
-            img1 = (
-                await asyncio.to_thread(
-                    drive_explorer.download_fast_image,
-                    slab_meta.get("id"),
-                    slab_meta.get("thumb"),
-                    False,
-                )
-                if slab_meta
-                else None
-            )
-            img2 = (
-                await asyncio.to_thread(
-                    drive_explorer.download_fast_image,
-                    sec_meta.get("id"),
-                    sec_meta.get("thumb"),
-                    False,
-                )
-                if sec_meta
-                else None
+            img1, img2 = await asyncio.to_thread(
+                drive_explorer.get_images_for_telegram, fid, q
             )
 
             media = []
@@ -2246,16 +2123,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =====================================================================
 # 8. ANA BAŞLATICI
 # =====================================================================
-def _start_background_indexer():
-    time.sleep(3)
-    inventory_engine.sync_all_collections_background()
-
 def main():
     if not TELEGRAM_TOKEN:
         logger.error("CRITICAL: TELEGRAM_TOKEN eksik!")
         return
-
-    threading.Thread(target=_start_background_indexer, daemon=True).start()
 
     application = (
         ApplicationBuilder()
@@ -2271,7 +2142,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V10 (Pre-Indexed Zero-Wait) başlatılıyor...")
+    logger.info("🚀 Argon Master V11 (Exact Match & Exact Excel M2) başlatılıyor...")
     application.run_polling(
         drop_pending_updates=True, poll_interval=1.0, timeout=15
     )
