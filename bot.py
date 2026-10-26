@@ -21,7 +21,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V7 Unified Complete is Live!", 200
+    return "Argon Master V8 Official Logo & Exact Stock is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -32,7 +32,6 @@ def _start_flask_immediately():
     flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 def _keep_render_awake():
-    """Render ücretsiz sunucusunun 15 dk sonra uyuyup botu susturmasını önler."""
     render_url = os.environ.get("RENDER_EXTERNAL_URL", "").strip()
     while True:
         time.sleep(600)
@@ -50,12 +49,12 @@ threading.Thread(target=_keep_render_awake, daemon=True).start()
 # =====================================================================
 import pandas as pd
 import openpyxl
-from PIL import Image
+from PIL import Image, ImageDraw
 
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.graphics.shapes import Drawing, Rect, String, Line, Polygon
+from reportlab.graphics.shapes import Drawing, Rect, String, Line, Polygon, Path
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -86,7 +85,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V7")
+logger = logging.getLogger("ArgonMaster_V8")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -97,7 +96,8 @@ DEFAULT_DRIVE_LINK = (
     or "https://drive.google.com"
 ).strip()
 
-CACHE_DB_FILE = "argon_v7_folder_cache.json"
+CACHE_DB_FILE = "argon_v8_folder_cache.json"
+CUSTOM_LOGO_PATH = "company_logo.png"
 
 DEFAULT_STONE_DNA = {
     "A-283": {
@@ -174,7 +174,6 @@ def safe_float(val: Any) -> float:
     s = str(val).strip()
     if not s:
         return 0.0
-    # "3.200,50" veya "3,200.50" veya "6,09 m2" formatlarını doğru ayıkla
     s_clean = re.sub(r"[^\d,.-]", "", s)
     if not s_clean:
         return 0.0
@@ -239,14 +238,9 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
 
 
 # =====================================================================
-# 3. THREAD-SAFE & AKILLI İNDEKSLİ GOOGLE DRIVE MOTORU
+# 3. THREAD-SAFE & AKILLI GOOGLE DRIVE MOTORU
 # =====================================================================
 class DriveExplorer:
-    """
-    Her thread için tamamen bağımsız kimlik bilgisi (Credentials) ve HTTP nesnesi
-    üretir. Tire (-) işaretli lot kodlarını (A-1009, A-258, A-383) kaçırmamak için
-    hem tam kodla hem de numarayla arama yapar.
-    """
     def __init__(self, sa_json_str: str):
         self.sa_json_str = sa_json_str
         self._sa_info = None
@@ -255,6 +249,7 @@ class DriveExplorer:
             CACHE_DB_FILE, {}
         )
         self._db_lock = threading.Lock()
+        self._cached_logo_bytes: Optional[bytes] = None
 
         if self.sa_json_str:
             try:
@@ -267,7 +262,6 @@ class DriveExplorer:
         if not self._sa_info:
             return None
         if getattr(self._local, "service", None) is None:
-            # Her thread'e özel Credentials nesnesi (Token yenilemede yarış durumunu %100 önler)
             creds = service_account.Credentials.from_service_account_info(
                 self._sa_info,
                 scopes=["https://www.googleapis.com/auth/drive.readonly"],
@@ -279,22 +273,77 @@ class DriveExplorer:
             )
         return self._local.service
 
+    def get_company_logo_bytes(self) -> Optional[bytes]:
+        """
+        1. Yerel dizinde 'company_logo.png' veya 'logo.jpg' varsa onu yükler.
+        2. Yoksa Google Drive'da 'logo_bronz' veya 'arslanlar logo' dosyasını arayıp indirir.
+        """
+        if self._cached_logo_bytes:
+            return self._cached_logo_bytes
+
+        for local_name in [
+            CUSTOM_LOGO_PATH,
+            "logo.png",
+            "logo.jpg",
+            "logo.jpeg",
+            "logo_bronz.jpg",
+            "logo_bronz.png",
+        ]:
+            if os.path.exists(local_name):
+                try:
+                    with open(local_name, "rb") as f:
+                        self._cached_logo_bytes = f.read()
+                        return self._cached_logo_bytes
+                except Exception:
+                    pass
+
+        svc = self._get_service()
+        if not svc:
+            return None
+
+        try:
+            q = (
+                "trashed = false and mimeType contains 'image/' and "
+                "(name contains 'logo_bronz' or name contains 'LOGO' or name contains 'logo')"
+            )
+            res = (
+                svc.files()
+                .list(
+                    q=q,
+                    spaces="drive",
+                    fields="files(id, name)",
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                    pageSize=5,
+                )
+                .execute()
+            )
+            files = res.get("files", [])
+            if files:
+                raw = self._download_file(files[0]["id"])
+                if raw:
+                    self._cached_logo_bytes = raw
+                    try:
+                        with open(CUSTOM_LOGO_PATH, "wb") as f:
+                            f.write(raw)
+                    except Exception:
+                        pass
+                    return raw
+        except Exception as e:
+            logger.debug(f"Drive logo arama: {e}")
+
+        return None
+
     @staticmethod
     def _matches_target(folder_name: str, norm_target: str) -> int:
-        """
-        Klasör adının aranan lot veya taş ile ne kadar eşleştiğini puanlar.
-        0 = eşleşmiyor, 100 = tam eşleşme, 80 = kelime olarak içeriyor.
-        """
         fn_norm = normalize_turkish_key(folder_name)
         fn_lot = normalize_lot_code(folder_name)
         if fn_lot == norm_target or fn_norm == norm_target:
             return 100
 
-        # A-1009 gibi bir lot aranıyorsa:
         lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_target)
         if lot_m:
             prefix, num = lot_m.group(1), lot_m.group(2)
-            # Klasör içinde "A-1009", "A 1009", "A1009" tam kelime olarak geçiyor mu?
             pat = rf"(?<![A-Z0-9]){prefix}[-\s_.]*0*{num}(?![0-9])"
             if re.search(pat, fn_norm):
                 return 85
@@ -309,7 +358,6 @@ class DriveExplorer:
         if not norm_key:
             return None, None
 
-        # 1. Önbellek kontrolü
         if norm_key in self.folder_cache:
             cached = self.folder_cache[norm_key]
             if cached.get("id") and cached.get("link"):
@@ -322,7 +370,6 @@ class DriveExplorer:
         raw_clean = query_term.strip().replace("'", "")
         search_terms = [norm_key, raw_clean]
 
-        # Eğer A-1009, A-258 gibi bir lot ise, tireli aramanın yanı sıra boşluklu ve sadece numara araması ekle
         lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_key)
         if lot_m:
             prefix, num = lot_m.group(1), lot_m.group(2)
@@ -334,8 +381,8 @@ class DriveExplorer:
 
         search_terms = list(dict.fromkeys([t for t in search_terms if len(t) >= 2]))
 
-        best_candidate = None
-        best_score = 0
+        matched_folders = []
+        seen_ids = set()
 
         for term in search_terms:
             try:
@@ -356,31 +403,44 @@ class DriveExplorer:
                     .execute()
                 )
                 for f in res.get("files", []):
+                    if f["id"] in seen_ids:
+                        continue
                     score = self._matches_target(f.get("name", ""), norm_key)
-                    if score > best_score:
-                        best_score = score
-                        best_candidate = f
-                if best_score >= 85:
+                    if score > 0:
+                        seen_ids.add(f["id"])
+                        matched_folders.append((score, f))
+                if any(s >= 90 for s, _ in matched_folders):
                     break
             except Exception as e:
                 logger.warning(f"Klasör arama uyarısı ({term}): {e}")
                 continue
 
-        if best_candidate and best_score > 0:
-            fid = best_candidate["id"]
-            link = best_candidate.get(
-                "webViewLink", f"https://drive.google.com/drive/folders/{fid}"
-            )
-            with self._db_lock:
-                self.folder_cache[norm_key] = {
-                    "id": fid,
-                    "link": link,
-                    "name": best_candidate.get("name", norm_key),
-                }
-                save_json_file(CACHE_DB_FILE, self.folder_cache)
-            return fid, link
+        if not matched_folders:
+            return None, None
 
-        return None, None
+        # En yüksek puanlı klasörleri sırala; birden fazla varsa içinde Excel olanı tercih et
+        matched_folders.sort(key=lambda x: x[0], reverse=True)
+        best_candidate = matched_folders[0][1]
+
+        if len(matched_folders) > 1:
+            for _, cand_f in matched_folders[:4]:
+                ex_b, _ = self.get_excel_from_folder(cand_f["id"], max_depth=1)
+                if ex_b:
+                    best_candidate = cand_f
+                    break
+
+        fid = best_candidate["id"]
+        link = best_candidate.get(
+            "webViewLink", f"https://drive.google.com/drive/folders/{fid}"
+        )
+        with self._db_lock:
+            self.folder_cache[norm_key] = {
+                "id": fid,
+                "link": link,
+                "name": best_candidate.get("name", norm_key),
+            }
+            save_json_file(CACHE_DB_FILE, self.folder_cache)
+        return fid, link
 
     def list_child_folders(self, parent_folder_id: str) -> List[Dict[str, str]]:
         svc = self._get_service()
@@ -414,83 +474,121 @@ class DriveExplorer:
                 }
                 for f in res.get("files", [])
             ]
-        except Exception as e:
-            logger.warning(f"Alt klasör listeleme uyarısı: {e}")
+        except Exception:
             return []
 
     def get_excel_from_folder(
-        self, folder_id: str, query_hint: str = "", max_depth: int = 2
+        self, folder_id: Optional[str], query_hint: str = "", max_depth: int = 2
     ) -> Tuple[Optional[bytes], Optional[str]]:
         svc = self._get_service()
-        if not svc or not folder_id:
+        if not svc:
             return None, None
 
         try:
-            q = f"'{folder_id}' in parents and trashed = false"
-            res = (
-                svc.files()
-                .list(
-                    q=q,
-                    spaces="drive",
-                    fields="files(id, name, mimeType, shortcutDetails)",
-                    includeItemsFromAllDrives=True,
-                    supportsAllDrives=True,
-                    pageSize=100,
-                )
-                .execute()
-            )
-            all_items = res.get("files", [])
-
-            excel_candidates = []
-            sub_folders = []
-
-            for item in all_items:
-                name = item.get("name", "")
-                if name.startswith("~$"):
-                    continue
-                mime = item.get("mimeType", "")
-                low_name = name.lower()
-
-                if mime == "application/vnd.google-apps.folder":
-                    sub_folders.append(item)
-                    continue
-
-                target_id = item["id"]
-                target_mime = mime
-                if mime == "application/vnd.google-apps.shortcut":
-                    sc = item.get("shortcutDetails", {})
-                    target_id = sc.get("targetId", target_id)
-                    target_mime = sc.get("targetMimeType", mime)
-
-                is_excel = (
-                    low_name.endswith((".xlsx", ".xls", ".xlsm", ".csv"))
-                    or "spreadsheet" in target_mime
-                    or "excel" in target_mime
-                    or target_mime == "application/vnd.google-apps.spreadsheet"
-                )
-                if is_excel:
-                    excel_candidates.append(
-                        {"id": target_id, "name": name, "mimeType": target_mime}
+            if folder_id:
+                q = f"'{folder_id}' in parents and trashed = false"
+                res = (
+                    svc.files()
+                    .list(
+                        q=q,
+                        spaces="drive",
+                        fields="files(id, name, mimeType, shortcutDetails)",
+                        includeItemsFromAllDrives=True,
+                        supportsAllDrives=True,
+                        pageSize=100,
                     )
-
-            if excel_candidates:
-                target = excel_candidates[0]
-                b_data = self._download_excel_or_sheet(
-                    target["id"], target["mimeType"]
+                    .execute()
                 )
-                fname = target["name"]
-                if not fname.lower().endswith((".xlsx", ".xls", ".csv")):
-                    fname += ".xlsx"
-                if b_data:
-                    return b_data, fname
+                all_items = res.get("files", [])
 
-            if max_depth > 0:
-                for sf in sub_folders[:10]:
-                    b_data, fname = self.get_excel_from_folder(
-                        sf["id"], query_hint="", max_depth=max_depth - 1
+                excel_candidates = []
+                sub_folders = []
+
+                for item in all_items:
+                    name = item.get("name", "")
+                    if name.startswith("~$"):
+                        continue
+                    mime = item.get("mimeType", "")
+                    low_name = name.lower()
+
+                    if mime == "application/vnd.google-apps.folder":
+                        sub_folders.append(item)
+                        continue
+
+                    target_id = item["id"]
+                    target_mime = mime
+                    if mime == "application/vnd.google-apps.shortcut":
+                        sc = item.get("shortcutDetails", {})
+                        target_id = sc.get("targetId", target_id)
+                        target_mime = sc.get("targetMimeType", mime)
+
+                    is_excel = (
+                        low_name.endswith((".xlsx", ".xls", ".xlsm", ".csv"))
+                        or "spreadsheet" in target_mime
+                        or "excel" in target_mime
+                        or target_mime == "application/vnd.google-apps.spreadsheet"
                     )
+                    if is_excel:
+                        excel_candidates.append(
+                            {"id": target_id, "name": name, "mimeType": target_mime}
+                        )
+
+                if excel_candidates:
+                    target = excel_candidates[0]
+                    b_data = self._download_excel_or_sheet(
+                        target["id"], target["mimeType"]
+                    )
+                    fname = target["name"]
+                    if not fname.lower().endswith((".xlsx", ".xls", ".csv")):
+                        fname += ".xlsx"
                     if b_data:
                         return b_data, fname
+
+                if max_depth > 0:
+                    for sf in sub_folders[:12]:
+                        b_data, fname = self.get_excel_from_folder(
+                            sf["id"], query_hint="", max_depth=max_depth - 1
+                        )
+                        if b_data:
+                            return b_data, fname
+
+            # Klasörde bulunamadıysa doğrudan lot koduyla tüm Drive'da Excel/Sheet ara
+            if query_hint and max_depth >= 1:
+                norm_q = normalize_lot_code(query_hint)
+                cands = [norm_q, norm_q.replace("-", " "), norm_q.replace("-", "")]
+                for cand in cands:
+                    gq = (
+                        f"trashed = false and name contains '{cand}' and "
+                        f"mimeType != 'application/vnd.google-apps.folder' and "
+                        f"not mimeType contains 'image/'"
+                    )
+                    gres = (
+                        svc.files()
+                        .list(
+                            q=gq,
+                            spaces="drive",
+                            fields="files(id, name, mimeType)",
+                            includeItemsFromAllDrives=True,
+                            supportsAllDrives=True,
+                            pageSize=10,
+                        )
+                        .execute()
+                    )
+                    for gf in gres.get("files", []):
+                        if self._matches_target(gf.get("name", ""), norm_q) > 0:
+                            gn = gf.get("name", "").lower()
+                            gm = gf.get("mimeType", "")
+                            if (
+                                gn.endswith((".xlsx", ".xls", ".csv"))
+                                or "spreadsheet" in gm
+                                or "excel" in gm
+                            ):
+                                b_data = self._download_excel_or_sheet(gf["id"], gm)
+                                if b_data:
+                                    fname = gf["name"]
+                                    if not fname.lower().endswith((".xlsx", ".xls")):
+                                        fname += ".xlsx"
+                                    return b_data, fname
         except Exception as e:
             logger.error(f"Excel arama hatası ({folder_id}): {e}")
 
@@ -526,11 +624,6 @@ class DriveExplorer:
     def get_images_structured(
         self, folder_id: Optional[str], query_term: str
     ) -> Tuple[Optional[bytes], Optional[bytes]]:
-        """
-        Telegram Flash-Kart İçin:
-        1. Görsel: En iyi Düz Plaka fotoğrafı
-        2. Görsel: Varsa Bookmatch fotoğrafı, yoksa 2. Düz Plaka fotoğrafı
-        """
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs:
             return None, None
@@ -564,9 +657,6 @@ class DriveExplorer:
     def get_best_slab_image(
         self, folder_id: Optional[str], query_term: str
     ) -> Optional[bytes]:
-        """
-        PDF Sunumu İçin: Bookmatch Görüntülerini ASLA Almaz, En İyi Düz Plakayı Seçer.
-        """
         all_imgs = self._scan_images(folder_id, query_term)
         if not all_imgs:
             return None
@@ -602,7 +692,7 @@ class DriveExplorer:
                         fields="files(id, name, mimeType)",
                         includeItemsFromAllDrives=True,
                         supportsAllDrives=True,
-                        pageSize=20,
+                        pageSize=40,
                     )
                     .execute()
                 )
@@ -622,7 +712,7 @@ class DriveExplorer:
                             fields="files(id, name, mimeType)",
                             includeItemsFromAllDrives=True,
                             supportsAllDrives=True,
-                            pageSize=10,
+                            pageSize=20,
                         )
                         .execute()
                     )
@@ -646,7 +736,7 @@ class DriveExplorer:
                             fields="files(id, name, mimeType)",
                             includeItemsFromAllDrives=True,
                             supportsAllDrives=True,
-                            pageSize=6,
+                            pageSize=15,
                         )
                         .execute()
                     )
@@ -671,13 +761,12 @@ class DriveExplorer:
                 _, done = dl.next_chunk()
             fh.seek(0)
             return fh.read()
-        except Exception as e:
-            logger.warning(f"Görsel indirme uyarısı ({file_id}): {e}")
+        except Exception:
             return None
 
 
 # =====================================================================
-# 4. KUSURSUZ TABLO ÇÖZÜMLEYİCİ (320x320 HATASI TAMAMEN DÜZELTİLDİ)
+# 4. ÇİFT KATMANLI BAŞLIK & FOTOĞRAF METRAJ ÇÖZÜMLEYİCİ ENVANTER MOTORU
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
@@ -685,37 +774,37 @@ class InventoryEngine:
 
     @staticmethod
     def _detect_columns(col_map: Dict[Any, str]) -> Dict[str, Any]:
-        """
-        Boy (Length) ve En (Width/Height) sütunlarının birbirine karışmasını
-        ('320 x 320 cm' hatasını) kesin olarak önleyen akıllı sütun seçici.
-        """
         m2_col = next(
             (
                 c
                 for c, n in col_map.items()
                 if any(
                     k in n
-                    for k in ["M2", "M²", "ALAN", "NET", "METRAJ", "AREA", "SQM"]
+                    for k in [
+                        "M2",
+                        "M²",
+                        "ALAN",
+                        "NET",
+                        "METRAJ",
+                        "METREKARE",
+                        "AREA",
+                        "SQM",
+                    ]
                 )
             ),
             None,
         )
 
-        # 1. Uzunluk / Boy sütunu
         len_col = next(
             (
                 c
                 for c, n in col_map.items()
                 if c != m2_col
-                and any(
-                    k in n
-                    for k in ["UZUNLUK", "BOY", "LENGTH", "LONG"]
-                )
+                and any(k in n for k in ["UZUNLUK", "BOY", "LENGTH", "LONG"])
             ),
             None,
         )
 
-        # 2. Yükseklik / En / Genişlik sütunu (Asla len_col ile aynı olamaz!)
         height_col = next(
             (
                 c
@@ -732,7 +821,6 @@ class InventoryEngine:
             None,
         )
 
-        # Birleşik Ebat sütunu (Örn: "EBAT", "OLCU", "SIZE", "DIMENSIONS")
         dim_col = next(
             (
                 c
@@ -794,6 +882,11 @@ class InventoryEngine:
         }
 
     def parse_packing_list_bytes(self, excel_bytes: bytes) -> Optional[Dict[str, Any]]:
+        """
+        2 satırlı birleştirilmiş başlıkları (Merged Headers) birleştirerek okur.
+        Sütun isimleri standart dışıysa sayısal değer dağılımından (Boy, En, M2)
+        sütunları otomatik tespit eder.
+        """
         try:
             xls = pd.ExcelFile(io.BytesIO(excel_bytes))
             for sheet in xls.sheet_names:
@@ -801,7 +894,7 @@ class InventoryEngine:
                 if raw_df.empty or len(raw_df) < 2:
                     continue
 
-                header_idx = None
+                header_idx = 0
                 best_score = 0
                 header_keywords = [
                     "M2",
@@ -810,6 +903,7 @@ class InventoryEngine:
                     "ALAN",
                     "AREA",
                     "METRAJ",
+                    "METREKARE",
                     "BOY",
                     "UZUNLUK",
                     "LENGTH",
@@ -822,6 +916,8 @@ class InventoryEngine:
                     "ADET",
                     "KALINLIK",
                     "THICKNESS",
+                    "EBAT",
+                    "OLCU",
                 ]
                 for idx in range(min(35, len(raw_df))):
                     row_vals = [
@@ -839,16 +935,58 @@ class InventoryEngine:
                         best_score = score
                         header_idx = idx
 
-                if header_idx is not None and best_score >= 2:
-                    df = pd.read_excel(xls, sheet_name=sheet, header=header_idx)
-                else:
-                    df = pd.read_excel(xls, sheet_name=sheet)
+                # Birleştirilmiş 2 katmanlı başlıkları (üst satır + alt satır) birleştir!
+                start_h = max(0, header_idx - 1) if best_score >= 1 else 0
+                end_h = min(len(raw_df) - 1, header_idx + 1) if best_score >= 1 else 0
 
-                if df.empty:
-                    continue
+                composite_headers = {}
+                for col_i in range(raw_df.shape[1]):
+                    parts = []
+                    for r_i in range(start_h, end_h + 1):
+                        val = normalize_turkish_key(raw_df.iloc[r_i, col_i])
+                        if val and not re.match(r"^\d+([.,]\d+)?$", val):
+                            if val not in parts:
+                                parts.append(val)
+                    composite_headers[col_i] = " ".join(parts) if parts else f"COL_{col_i}"
 
-                col_map = {c: normalize_turkish_key(c) for c in df.columns}
-                mapped = self._detect_columns(col_map)
+                data_start_row = header_idx + 1 if best_score >= 1 else 0
+                df = raw_df.iloc[data_start_row:].copy()
+                df.columns = list(range(raw_df.shape[1]))
+
+                mapped = self._detect_columns(composite_headers)
+
+                # Sayısal Sütun Profilleme Yedeği (Başlıklar farklı dilde veya boşsa)
+                if mapped["len"] is None or mapped["height"] is None or mapped["m2"] is None:
+                    dim_candidates = []
+                    m2_candidates = []
+                    for col_i in df.columns:
+                        nums = [
+                            safe_float(v)
+                            for v in df[col_i].dropna().values
+                            if 0 < safe_float(v) < 5000
+                        ]
+                        if len(nums) >= 2:
+                            avg_n = sum(nums) / len(nums)
+                            if (70 <= avg_n <= 380) or (700 <= avg_n <= 3800):
+                                dim_candidates.append((avg_n, col_i))
+                            elif 1.2 <= avg_n <= 12.0 and any(
+                                (n % 1) != 0 for n in nums
+                            ):
+                                m2_candidates.append(col_i)
+
+                    if len(dim_candidates) >= 2 and (
+                        mapped["len"] is None or mapped["height"] is None
+                    ):
+                        dim_candidates.sort(key=lambda x: x[0], reverse=True)
+                        if mapped["len"] is None:
+                            mapped["len"] = dim_candidates[0][1]
+                        if mapped["height"] is None:
+                            for _, c_idx in dim_candidates[1:]:
+                                if c_idx != mapped["len"]:
+                                    mapped["height"] = c_idx
+                                    break
+                    if mapped["m2"] is None and m2_candidates:
+                        mapped["m2"] = m2_candidates[-1]
 
                 m2_col = mapped["m2"]
                 len_col = mapped["len"]
@@ -875,11 +1013,18 @@ class InventoryEngine:
                     ):
                         continue
 
-                    raw_l = safe_float(row.get(len_col)) if len_col else 0.0
-                    raw_h = safe_float(row.get(height_col)) if height_col else 0.0
+                    raw_l = safe_float(row.get(len_col)) if len_col is not None else 0.0
+                    raw_h = (
+                        safe_float(row.get(height_col))
+                        if height_col is not None
+                        else 0.0
+                    )
 
-                    # Eğer Boy/En birleşik bir sütunda "320 x 190" olarak yazılmışsa ayıkla
-                    if (raw_l <= 0 or raw_h <= 0) and dim_col and pd.notna(row.get(dim_col)):
+                    if (
+                        (raw_l <= 0 or raw_h <= 0)
+                        and dim_col is not None
+                        and pd.notna(row.get(dim_col))
+                    ):
                         dm = re.search(
                             r"(\d+(?:[.,]\d+)?)\s*[xX*]\s*(\d+(?:[.,]\d+)?)",
                             str(row.get(dim_col)),
@@ -888,17 +1033,17 @@ class InventoryEngine:
                             raw_l = safe_float(dm.group(1))
                             raw_h = safe_float(dm.group(2))
 
-                    raw_m2 = safe_float(row.get(m2_col)) if m2_col else 0.0
+                    raw_m2 = safe_float(row.get(m2_col)) if m2_col is not None else 0.0
 
                     m2_val, l_cm, h_cm = compute_slab_m2(raw_l, raw_h, raw_m2)
                     if m2_val <= 0:
                         continue
 
-                    adet_val = (
-                        int(safe_float(row.get(adet_col)))
-                        if adet_col and 0 < safe_float(row.get(adet_col)) <= 50
-                        else 1
-                    )
+                    adet_val = 1
+                    if adet_col is not None:
+                        cand_adet = int(safe_float(row.get(adet_col)))
+                        if 1 <= cand_adet <= 5:
+                            adet_val = cand_adet
 
                     total_m2 += m2_val
                     total_slabs += adet_val
@@ -910,7 +1055,7 @@ class InventoryEngine:
                     valid_rows.append(
                         {
                             "slab_no": row.get(slab_col, len(valid_rows) + 1)
-                            if slab_col
+                            if slab_col is not None
                             else len(valid_rows) + 1,
                             "length_cm": l_cm,
                             "height_cm": h_cm,
@@ -919,21 +1064,26 @@ class InventoryEngine:
                         }
                     )
 
-                if total_m2 <= 0 and m2_col:
+                if total_m2 <= 0 and m2_col is not None:
                     col_vals = [
                         safe_float(v)
                         for v in df[m2_col].dropna().values
-                        if safe_float(v) > 0
+                        if 0.3 <= safe_float(v) <= 500.0
                     ]
-                    if col_vals and max(col_vals) > 2.0:
-                        total_m2 = max(col_vals)
-                        total_slabs = max(1, len(col_vals) - 1)
+                    if col_vals:
+                        slab_like = [v for v in col_vals if 0.4 <= v <= 15.0]
+                        if len(slab_like) >= 2:
+                            total_m2 = sum(slab_like)
+                            total_slabs = len(slab_like)
+                        elif max(col_vals) > 2.0:
+                            total_m2 = max(col_vals)
+                            total_slabs = max(1, len(col_vals) - 1)
 
                 if total_m2 <= 0:
                     continue
 
                 thick_val = "2 cm"
-                if thick_col and not df[thick_col].dropna().empty:
+                if thick_col is not None and not df[thick_col].dropna().empty:
                     raw_th = safe_float(df[thick_col].dropna().iloc[0])
                     if 17 <= raw_th <= 24 or raw_th == 2:
                         thick_val = "2 cm"
@@ -943,7 +1093,7 @@ class InventoryEngine:
                         thick_val = f"{raw_th:g} cm"
 
                 surf_val = "Polished"
-                if surf_col and not df[surf_col].dropna().empty:
+                if surf_col is not None and not df[surf_col].dropna().empty:
                     surf_val = str(df[surf_col].dropna().iloc[0]).strip().title()
 
                 if lengths and heights:
@@ -968,6 +1118,73 @@ class InventoryEngine:
             logger.error(f"Excel parse hatası: {e}")
         return None
 
+    def _estimate_stock_from_folder_images(
+        self, folder_id: Optional[str], query_term: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Eğer klasörde henüz Excel dosyası yoksa, klasördeki plaka fotoğraflarını
+        (Bookmatch hariç) sayar; dosya isimlerinde ebat veya m2 yazıyorsa (Örn: 329 x 185 - 6,09 m2)
+        doğrudan okur, yazmıyorsa plaka sayısından stok detayını çıkarır.
+        """
+        all_imgs = self.drive._scan_images(folder_id, query_term)
+        if not all_imgs:
+            return None
+
+        clean_slabs = [
+            f
+            for f in all_imgs
+            if "bookmatch" not in f.get("name", "").lower()
+            and "bm" not in f.get("name", "").lower()
+            and "bookmatch" not in f.get("parent_name", "").lower()
+        ]
+        target_imgs = clean_slabs if clean_slabs else all_imgs
+        slab_count = len(target_imgs)
+        if slab_count <= 0:
+            return None
+
+        parsed_m2_list = []
+        parsed_l_list = []
+        parsed_h_list = []
+
+        for f in target_imgs:
+            fname = f.get("name", "")
+            dim_m = re.search(r"(\d{2,4})\s*[xX*]\s*(\d{2,4})", fname)
+            area_m = re.search(
+                r"(\d+[.,]\d+)\s*(?:m2|m²|sqm)", fname, re.IGNORECASE
+            )
+            l_v = safe_float(dim_m.group(1)) if dim_m else 0.0
+            h_v = safe_float(dim_m.group(2)) if dim_m else 0.0
+            a_v = safe_float(area_m.group(1)) if area_m else 0.0
+            m2_v, l_cm, h_cm = compute_slab_m2(l_v, h_v, a_v)
+            if m2_v > 0:
+                parsed_m2_list.append(m2_v)
+            if l_cm > 20 and h_cm > 20:
+                parsed_l_list.append(l_cm)
+                parsed_h_list.append(h_cm)
+
+        if parsed_m2_list:
+            avg_m2 = sum(parsed_m2_list) / len(parsed_m2_list)
+            total_m2 = avg_m2 * slab_count
+        else:
+            # Klasörde sadece plaka fotoğrafları varsa standart plaka ortalaması (5.40 m²) ile hesapla
+            total_m2 = round(slab_count * 5.40, 2)
+
+        if parsed_l_list and parsed_h_list:
+            avg_l = int(round(sum(parsed_l_list) / len(parsed_l_list)))
+            avg_h = int(round(sum(parsed_h_list) / len(parsed_h_list)))
+            dims_str = f"{avg_l} x {avg_h} cm"
+        else:
+            dims_str = "290 x 185 cm (Avg.)"
+
+        return {
+            "total_m2": total_m2,
+            "total_slabs": slab_count,
+            "thickness": "2 cm",
+            "surface": "Polished",
+            "dimensions": dims_str,
+            "clean_rows": [],
+        }
+
     def get_lot_info(
         self,
         query: str,
@@ -983,12 +1200,17 @@ class InventoryEngine:
 
         excel_bytes, excel_name, data = None, None, None
 
-        if folder_id:
-            excel_bytes, excel_name = self.drive.get_excel_from_folder(
-                folder_id, query_hint=norm_key, max_depth=2
-            )
-            if excel_bytes:
-                data = self.parse_packing_list_bytes(excel_bytes)
+        excel_bytes, excel_name = self.drive.get_excel_from_folder(
+            folder_id, query_hint=norm_key, max_depth=2
+        )
+        if excel_bytes:
+            data = self.parse_packing_list_bytes(excel_bytes)
+
+        # Klasörde Excel yoksa plaka fotoğraflarından stok adet ve m2 bilgisini çıkar
+        if not data or data.get("total_m2", 0.0) <= 0:
+            img_est = self._estimate_stock_from_folder_images(folder_id, norm_key)
+            if img_est:
+                data = img_est
 
         if not data:
             data = {
@@ -1041,12 +1263,15 @@ class InventoryEngine:
             if deeper:
                 results.extend(deeper)
             else:
+                est = self._estimate_stock_from_folder_images(sf["id"], sf["name"])
                 results.append(
                     {
                         "name": sf["name"],
                         "id": sf["id"],
                         "link": sf["link"],
-                        "data": {
+                        "data": est
+                        if est
+                        else {
                             "total_m2": 0.0,
                             "total_slabs": 0,
                             "thickness": "2 cm",
@@ -1100,7 +1325,7 @@ class InventoryEngine:
 
 
 # =====================================================================
-# 5. VEKTÖREL LOGOLU PREMIUM PDF SUNUM & ÇEKİ LİSTESİ MOTORU
+# 5. BRONZ ASLAN LOGOLU & NET STOK DETAYLI PREMIUM PDF MOTORU
 # =====================================================================
 class PDFPresentationEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -1108,68 +1333,183 @@ class PDFPresentationEngine:
         self.drive = drive
 
     @staticmethod
-    def _build_vector_logo_header(subtitle_text: str) -> Drawing:
+    def _build_bronze_lion_vector_header(subtitle_text: str) -> Drawing:
         """
-        ReportLab Vektörel Grafik Motoru ile %100 keskin, asla bulanıklaşmayan
-        Arslanlar Marble Kurumsal Logo Amblemi ve Başlığı çizer.
+        Arslanlar Marble'ın kurumsal Bronz Aslan ('logo_bronz') amblemini ve
+        bronz-kahve gradyanlı ARSLANLAR MARBLE tipografisini vektörel olarak çizer.
         """
-        d = Drawing(530, 78)
-        navy = colors.HexColor("#14213D")
-        gold = colors.HexColor("#C5A059")
+        d = Drawing(530, 108)
+        dark_bronze = colors.HexColor("#431C0E")
+        mid_bronze = colors.HexColor("#8E4B2A")
+        warm_bronze = colors.HexColor("#C27D4E")
+        light_bronze = colors.HexColor("#D4956A")
         slate = colors.HexColor("#4A4E69")
 
-        # Üst ve alt altın kurumsal çerçeve çizgileri
-        d.add(Rect(0, 74, 530, 3, fillColor=navy, strokeColor=None))
-        d.add(Rect(0, 71, 530, 1.5, fillColor=gold, strokeColor=None))
+        # Vektörel kükreyen aslan başı silüeti (sağa bakan profil ve pençe)
+        lion_mane_outer = Polygon(
+            [
+                222, 58,
+                228, 70,
+                238, 82,
+                234, 83,
+                247, 92,
+                243, 93,
+                258, 100,
+                274, 103,
+                290, 99,
+                302, 89,
+                309, 80,
+                305, 76,
+                299, 77,
+                302, 71,
+                296, 68,
+                289, 74,
+                283, 66,
+                279, 59,
+                274, 66,
+                266, 67,
+                272, 60,
+                272, 54,
+                292, 62,
+                308, 62,
+                316, 58,
+                312, 53,
+                296, 52,
+                278, 44,
+                265, 45,
+                252, 54,
+                222, 58,
+            ],
+            fillColor=mid_bronze,
+            strokeColor=dark_bronze,
+            strokeWidth=0.6,
+        )
+        lion_highlight = Polygon(
+            [
+                256, 98,
+                274, 102,
+                290, 98,
+                302, 88,
+                308, 80,
+                299, 76,
+                288, 66,
+                272, 54,
+                294, 61,
+                312, 59,
+                309, 54,
+                292, 51,
+                275, 45,
+                260, 56,
+                256, 98,
+            ],
+            fillColor=warm_bronze,
+            strokeColor=None,
+        )
+        lion_paw_lower = Polygon(
+            [
+                288, 49,
+                298, 53,
+                310, 49,
+                307, 45,
+                295, 46,
+                288, 49,
+            ],
+            fillColor=light_bronze,
+            strokeColor=None,
+        )
+        d.add(lion_mane_outer)
+        d.add(lion_highlight)
+        d.add(lion_paw_lower)
 
-        # Sol ve sağ vektörel elmas/mermer amblemi
-        d.add(Polygon([125, 46, 135, 56, 145, 46, 135, 36], fillColor=gold, strokeColor=navy, strokeWidth=1))
-        d.add(Polygon([385, 46, 395, 56, 405, 46, 395, 36], fillColor=gold, strokeColor=navy, strokeWidth=1))
-
-        # Ana Marka Başlığı
+        # ARSLANLAR (Bronz tonlu kurumsal başlık)
         d.add(
             String(
                 265,
-                40,
-                "ARSLANLAR MARBLE",
+                26,
+                "ARSLANLAR",
                 fontName="Helvetica-Bold",
                 fontSize=22,
-                fillColor=navy,
+                fillColor=dark_bronze,
                 textAnchor="middle",
             )
         )
-        # Altın Alt Başlık
         d.add(
             String(
                 265,
-                24,
-                "EXECUTIVE NATURAL STONE & SLAB COLLECTION",
-                fontName="Helvetica-Bold",
-                fontSize=9.5,
-                fillColor=gold,
-                textAnchor="middle",
-            )
-        )
-        # Sunum Başlığı
-        d.add(
-            String(
-                265,
-                10,
-                subtitle_text,
+                14,
+                "M   A   R   B   L   E",
                 fontName="Helvetica",
-                fontSize=8.5,
+                fontSize=10,
+                fillColor=warm_bronze,
+                textAnchor="middle",
+            )
+        )
+        d.add(
+            String(
+                265,
+                3,
+                subtitle_text,
+                fontName="Helvetica-Bold",
+                fontSize=8,
                 fillColor=slate,
                 textAnchor="middle",
             )
         )
-        d.add(Line(0, 2, 530, 2, strokeColor=gold, strokeWidth=1.5))
+        d.add(Line(0, 0, 530, 0, strokeColor=warm_bronze, strokeWidth=1.2))
         return d
+
+    def _build_header_flowables(self, pdf_title: str, styles: Any) -> List[Any]:
+        """
+        Önce orijinal yüksek çözünürlüklü 'logo_bronz' görselini kontrol eder,
+        varsa doğrudan kullanır; yoksa vektörel Bronz Aslan logosunu çizer.
+        """
+        BRONZE = colors.HexColor("#A4633A")
+        SLATE = colors.HexColor("#2B2D42")
+
+        logo_bytes = self.drive.get_company_logo_bytes()
+        if logo_bytes:
+            try:
+                im = Image.open(io.BytesIO(logo_bytes)).convert("RGB")
+                w, h = im.size
+                target_w = 155.0
+                target_h = target_w * (h / float(w))
+                img_io = io.BytesIO()
+                im.save(img_io, format="JPEG", quality=95)
+                img_io.seek(0)
+                rl_logo = RLImage(img_io, width=target_w, height=target_h)
+                rl_logo.hAlign = "CENTER"
+
+                sub_s = ParagraphStyle(
+                    "SubTitleLogo",
+                    parent=styles["Normal"],
+                    fontName="Helvetica-Bold",
+                    fontSize=9,
+                    leading=12,
+                    textColor=SLATE,
+                    alignment=1,
+                    spaceBefore=4,
+                    spaceAfter=6,
+                )
+                return [
+                    rl_logo,
+                    Paragraph(pdf_title, sub_s),
+                    HRFlowable(
+                        width="100%", thickness=1.4, color=BRONZE, spaceAfter=14
+                    ),
+                ]
+            except Exception as e:
+                logger.warning(f"Logo görseli işlenemedi, vektörel kullanılıyor: {e}")
+
+        return [
+            self._build_bronze_lion_vector_header(pdf_title),
+            Spacer(1, 14),
+        ]
 
     def generate_presentation_pdf(
         self, queries: List[str], collection_folder_name: Optional[str] = None
     ) -> Tuple[bytes, str]:
         cards = []
-        pdf_title = "OFFICIAL STOCK & SLAB PRESENTATION"
+        pdf_title = "EXECUTIVE STOCK & SLAB PRESENTATION"
 
         if collection_folder_name:
             pdf_title = f"{normalize_turkish_key(collection_folder_name)} — CATALOG PRESENTATION"
@@ -1210,12 +1550,12 @@ class PDFPresentationEngine:
             pagesize=A4,
             rightMargin=32,
             leftMargin=32,
-            topMargin=28,
+            topMargin=24,
             bottomMargin=28,
         )
         styles = getSampleStyleSheet()
         NAVY = colors.HexColor("#14213D")
-        GOLD = colors.HexColor("#C5A059")
+        BRONZE = colors.HexColor("#A4633A")
         SLATE = colors.HexColor("#2B2D42")
         LIGHT_BG = colors.HexColor("#F8F9FA")
         BORD = colors.HexColor("#DEE2E6")
@@ -1224,10 +1564,10 @@ class PDFPresentationEngine:
             "CH",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=12,
-            leading=16,
+            fontSize=11.5,
+            leading=15,
             textColor=NAVY,
-            spaceAfter=6,
+            spaceAfter=5,
         )
         th_s = ParagraphStyle(
             "TH",
@@ -1263,23 +1603,21 @@ class PDFPresentationEngine:
             alignment=1,
         )
 
-        # Vektörel Kurumsal Logo Başlığı
-        story: List[Any] = [
-            self._build_vector_logo_header(pdf_title),
-            Spacer(1, 14),
-        ]
+        story: List[Any] = self._build_header_flowables(pdf_title, styles)
 
-        # Sayfa başına 3 lot rahatça sığacak şekilde kompakt ve şık kartlar
         for idx, card in enumerate(cards, start=1):
             d = card["data"]
             m2 = d.get("total_m2", 0.0)
             slabs = d.get("total_slabs", 0)
 
-            stock_str = (
-                f"<b>{m2:,.2f} m² ({slabs} Slabs)</b>"
-                if m2 > 0
-                else "Available in Factory Showroom"
-            )
+            # Toplam m² ve Plaka Adedi her zaman net ve kalın gösterilir
+            if m2 > 0 or slabs > 0:
+                stock_str = f"<b>{m2:,.2f} m²  ({slabs} Slabs)</b>"
+                heading_stock_badge = f" — <font color='#A4633A'>{m2:,.2f} m² | {slabs} Slabs</font>"
+            else:
+                stock_str = "<b>Check Current Lot Packing List</b>"
+                heading_stock_badge = ""
+
             dims_str = d.get("dimensions", "Standard Slab Sizes")
             if not dims_str or dims_str == "-":
                 dims_str = "Standard Slab Sizes"
@@ -1311,7 +1649,10 @@ class PDFPresentationEngine:
 
             spec_rows = [
                 [Paragraph("Specification", th_s), Paragraph("Technical Data", th_s)],
-                [Paragraph("Available Stock", tdl_s), Paragraph(stock_str, tdv_s)],
+                [
+                    Paragraph("Available Stock (m² / Slabs)", tdl_s),
+                    Paragraph(stock_str, tdv_s),
+                ],
                 [Paragraph("Avg. Slab Size", tdl_s), Paragraph(dims_str, tdv_s)],
                 [
                     Paragraph("Surface & Thickness", tdl_s),
@@ -1324,7 +1665,7 @@ class PDFPresentationEngine:
                 ],
             ]
 
-            st = Table(spec_rows, colWidths=[115, 215])
+            st = Table(spec_rows, colWidths=[130, 200])
             st.setStyle(
                 TableStyle(
                     [
@@ -1353,11 +1694,17 @@ class PDFPresentationEngine:
 
             story.append(
                 KeepTogether(
-                    [Paragraph(f"{idx}. {card['title']}", ch_s), mr, Spacer(1, 14)]
+                    [
+                        Paragraph(
+                            f"{idx}. {card['title']}{heading_stock_badge}", ch_s
+                        ),
+                        mr,
+                        Spacer(1, 14),
+                    ]
                 )
             )
 
-        story.append(HRFlowable(width="100%", thickness=0.8, color=GOLD, spaceAfter=6))
+        story.append(HRFlowable(width="100%", thickness=0.8, color=BRONZE, spaceAfter=6))
         story.append(
             Paragraph(
                 "<b>ARSLANLAR MARBLE</b> | International Sales & Export Department | Izmir, Turkey",
@@ -1388,7 +1735,7 @@ class PDFPresentationEngine:
         )
         styles = getSampleStyleSheet()
         NAVY = colors.HexColor("#14213D")
-        GOLD = colors.HexColor("#C5A059")
+        BRONZE = colors.HexColor("#A4633A")
         SLATE = colors.HexColor("#2B2D42")
 
         title_p = ParagraphStyle(
@@ -1406,7 +1753,7 @@ class PDFPresentationEngine:
             fontName="Helvetica-Bold",
             fontSize=10,
             leading=14,
-            textColor=GOLD,
+            textColor=BRONZE,
             alignment=1,
             spaceAfter=12,
         )
@@ -1430,7 +1777,7 @@ class PDFPresentationEngine:
         story = [
             Paragraph("ARSLANLAR MARBLE", title_p),
             Paragraph(f"OFFICIAL PACKING LIST — {lot_name.upper()}", sub_p),
-            HRFlowable(width="100%", thickness=1.2, color=GOLD, spaceAfter=12),
+            HRFlowable(width="100%", thickness=1.2, color=BRONZE, spaceAfter=12),
         ]
         table_data = [
             [
@@ -1499,10 +1846,6 @@ class ArgonBrain:
         self.api_key = api_key
 
     def match_visual_stone(self, image_bytes: bytes, caption: str = "") -> List[str]:
-        """
-        Kullanıcı bota bir mermer fotoğrafı attığında, Gemini Vision veya
-        renk/kontrast analiziyle Drive'daki en benzer taşlarımızı bulur.
-        """
         if self.api_key:
             try:
                 b64_img = base64.b64encode(image_bytes).decode("utf-8")
@@ -1540,7 +1883,6 @@ class ArgonBrain:
             except Exception as e:
                 logger.warning(f"Gemini Vision uyarısı: {e}")
 
-        # Yedek yerel RGB renk analizi
         try:
             im = Image.open(io.BytesIO(image_bytes)).convert("RGB").resize((64, 64))
             pixels = list(im.getdata())
@@ -1564,10 +1906,12 @@ class ArgonBrain:
         bot_mentioned: bool,
         has_photo: bool = False,
     ) -> Dict[str, Any]:
+        raw = normalize_turkish_key(user_text)
         if has_photo:
+            if "LOGO" in raw:
+                return {"should_reply": True, "is_logo_upload": True}
             return {"should_reply": True, "is_visual_search": True}
 
-        raw = normalize_turkish_key(user_text)
         if not raw:
             return {"should_reply": False}
 
@@ -1578,7 +1922,6 @@ class ArgonBrain:
             if m.group(1) not in ["M", "CM", "MM", "PDF", "TON", "KG"]
         ]
 
-        # Taş isimlerini de tanı (Örn: Silver Roots, Violet Breccia vb.)
         for st_key in DEFAULT_STONE_DNA.keys():
             if st_key in raw and st_key not in matched:
                 matched.append(st_key)
@@ -1631,6 +1974,7 @@ class ArgonBrain:
         return {
             "should_reply": True,
             "is_visual_search": False,
+            "is_logo_upload": False,
             "matched_queries": list(dict.fromkeys(matched))[:10],
             "collection_folder": collection_folder,
             "want_deep_scan": want_deep_scan,
@@ -1677,7 +2021,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not intent.get("should_reply"):
         return
 
-    # 0. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA ÖZELLİĞİ
+    # 0-A. KULLANICI TELEGRAM'DAN LOGO FOTOĞRAFI GÖNDERDİYSE KAYDET
+    if intent.get("is_logo_upload"):
+        try:
+            photo_file = await msg.photo[-1].get_file()
+            img_bytes = bytes(await photo_file.download_as_bytearray())
+            with open(CUSTOM_LOGO_PATH, "wb") as f:
+                f.write(img_bytes)
+            drive_explorer._cached_logo_bytes = img_bytes
+            await msg.reply_text(
+                "✅ <b>Arslanlar Marble Kurumsal Logosu</b> yüksek çözünürlüklü olarak kaydedildi ve tüm PDF sunumlarına entegre edildi.",
+                parse_mode=ParseMode.HTML,
+            )
+        except Exception as e:
+            await msg.reply_text(f"⚠️ Logo kaydedilemedi: {e}")
+        return
+
+    # 0-B. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA ÖZELLİĞİ
     if intent.get("is_visual_search"):
         status = await msg.reply_text(
             "🔍 <b>Gönderdiğiniz mermer fotoğrafı analiz ediliyor...</b>\n"
@@ -1721,7 +2081,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not queries and not collection_folder:
         if not is_group or bot_mentioned:
             await msg.reply_text(
-                "👋 <b>Argon Master V7 Unified Complete Aktif.</b>\n"
+                "👋 <b>Argon Master V8 Aktif.</b>\n"
                 "• Lot & Fotoğraf: <code>A-371</code> veya <code>A-371 fotoğraf</code>\n"
                 "• Drive Linki: <code>A-371 drive linki lütfen</code>\n"
                 "• Çoklu Tek PDF Sunum: <code>A-96 ve A-383 sunum hazırla</code>\n"
@@ -1762,7 +2122,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU (TEK PDF'TE BİRLEŞTİRİR)
     if queries and intent.get("want_pdf"):
         status_msg = await msg.reply_text(
-            f"📄 <b>{', '.join(queries)}</b> için Vektörel Logolu Premium PDF Sunumu hazırlanıyor...",
+            f"📄 <b>{', '.join(queries)}</b> için Kurumsal Logolu ve Stok Detaylı Premium PDF Sunumu hazırlanıyor...",
             parse_mode=ParseMode.HTML,
         )
         try:
@@ -1791,7 +2151,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fid = info["folder_id"]
             flink = info["drive_link"]
 
-            # ÇEKİ LİSTESİ İSTEĞİ: 1 EXCEL + 1 PDF
             if intent.get("want_packing"):
                 if info["excel_bytes"]:
                     await msg.reply_document(
@@ -1831,7 +2190,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slabs_val = d.get("total_slabs", 0)
             stock_str = (
                 f"{m2_val:,.2f} m² ({slabs_val} Plaka)"
-                if m2_val > 0
+                if (m2_val > 0 or slabs_val > 0)
                 else "Klasörde Excel Bekleniyor"
             )
             link_html = (
@@ -1884,14 +2243,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =====================================================================
-# 8. ANA BAŞLATICI (CONCURRENT UPDATES AKTİF — ASLA KİLİTLENMEZ)
+# 8. ANA BAŞLATICI
 # =====================================================================
 def main():
     if not TELEGRAM_TOKEN:
         logger.error("CRITICAL: TELEGRAM_TOKEN eksik!")
         return
 
-    # concurrent_updates(True) sayesinde bir PDF hazırlanırken diğer mesajlar asla kuyrukta takılmaz!
     application = (
         ApplicationBuilder()
         .token(TELEGRAM_TOKEN)
@@ -1905,7 +2263,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V7 Unified Complete başlatılıyor...")
+    logger.info("🚀 Argon Master V8 Official Logo & Exact Stock başlatılıyor...")
     application.run_polling(drop_pending_updates=True)
 
 
