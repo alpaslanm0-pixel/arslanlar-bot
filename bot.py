@@ -11,7 +11,7 @@ from collections import deque
 from typing import Dict, List, Optional, Tuple, Any
 
 # =====================================================================
-# 0. RENDER PORTUNU 0. SANİYEDE AÇ (DEPLOY TAKILMASINI %100 ÖNLER)
+# 0. RENDER PORTUNU 0. SANİYEDE AÇ (DEPLOY TAKILMASINI ÖNLER)
 # =====================================================================
 from flask import Flask
 
@@ -19,7 +19,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V6.1 Instant-Boot is Live!", 200
+    return "Argon Master V6.2 Thread-Safe is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -29,13 +29,13 @@ def _start_flask_immediately():
     port = int(os.environ.get("PORT", 10000))
     flask_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
-# Daha diğer kütüphaneler yüklenirken portu arka planda anında açıyoruz!
 threading.Thread(target=_start_flask_immediately, daemon=True).start()
 
 # =====================================================================
-# 1. DİĞER KÜTÜPHANELER VE SİSTEM AYARLARI
+# 1. KÜTÜPHANELER VE SİSTEM AYARLARI
 # =====================================================================
 import pandas as pd
+import openpyxl
 from PIL import Image
 
 from reportlab.lib.pagesizes import A4, landscape
@@ -61,7 +61,9 @@ from telegram.ext import (
     filters,
 )
 
+import httplib2
 from google.oauth2 import service_account
+from google_auth_httplib2 import AuthorizedHttp
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 
@@ -69,7 +71,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V6_1")
+logger = logging.getLogger("ArgonMaster_V6_2")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -124,20 +126,48 @@ def safe_float(val: Any) -> float:
     if isinstance(val, (int, float)):
         return float(val)
     s = str(val).strip()
-    s = re.sub(r"[^\d,.-]", "", s)
-    if not s:
+    # Metin içindeki ilk anlamlı ondalık sayıyı yakala (örn: "6,09 m2" -> "6,09")
+    m = re.search(r"[-+]?\d+(?:[.,]\d+)?", s)
+    if not m:
         return 0.0
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s:
-        s = s.replace(",", ".")
+    num_str = m.group(0).replace(",", ".")
     try:
-        return float(s)
+        return float(num_str)
     except Exception:
         return 0.0
+
+
+def compute_slab_m2(l_val: float, h_val: float, raw_m2: float) -> Tuple[float, float, float]:
+    """
+    Boy ve En değerlerini cm'ye normalize eder ve M2 değerini doğrular/hesaplar.
+    (mm, cm veya m cinsinden yazılmış tabloları otomatik algılar)
+    """
+    # Boy ve En birimlerini cm'ye çevir
+    if l_val > 600:  # mm yazılmış (örn: 2850)
+        l_cm = l_val / 10.0
+    elif 0 < l_val < 10:  # metre yazılmış (örn: 2.85)
+        l_cm = l_val * 100.0
+    else:
+        l_cm = l_val
+
+    if h_val > 600:
+        h_cm = h_val / 10.0
+    elif 0 < h_val < 10:
+        h_cm = h_val * 100.0
+    else:
+        h_cm = h_val
+
+    calc_m2 = (l_cm * h_cm) / 10000.0 if (l_cm > 20 and h_cm > 20) else 0.0
+
+    # Eğer raw_m2 cm2 veya mm2 olarak gelmişse düzelt
+    if raw_m2 > 1000:
+        raw_m2 = raw_m2 / 10000.0
+
+    if 0.2 <= raw_m2 <= 25.0:
+        return raw_m2, l_cm, h_cm
+    if 0.2 <= calc_m2 <= 25.0:
+        return calc_m2, l_cm, h_cm
+    return 0.0, l_cm, h_cm
 
 
 def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
@@ -145,9 +175,9 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
         return None
     try:
         img = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
-        img.thumbnail((1920, 1920), Image.Resampling.LANCZOS)
+        img.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
         out = io.BytesIO()
-        img.save(out, format="JPEG", quality=88)
+        img.save(out, format="JPEG", quality=86)
         return out.getvalue()
     except Exception as e:
         logger.warning(f"Görsel optimize edilemedi: {e}")
@@ -155,52 +185,53 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
 
 
 # =====================================================================
-# 3. LAZY-LOADED (TEMBEL YÜKLEMELİ) GOOGLE DRIVE MOTORU
+# 3. THREAD-SAFE GOOGLE DRIVE MOTORU (ASLA KİLİTLENMEZ)
 # =====================================================================
 class DriveExplorer:
     """
-    Deploy sırasında Google API'ye bağlanıp Render'ı kilitlemez!
-    Sadece ilk sorgu geldiğinde (_ensure_service ile) bağlantıyı açar.
+    Her thread için kendi httplib2/Drive istemcisini (thread-local) oluşturur.
+    Böylece arka arkaya 10 mesaj geldiğinde SSL kilitlenmesi (deadlock) yaşanmaz.
     """
     def __init__(self, sa_json_str: str):
-        self.service = None
         self.sa_json_str = sa_json_str
+        self._creds = None
+        self._local = threading.local()
         self.hyperlinks_db = load_json_file(HYPERLINKS_DB_FILE, {})
-        self._lock = threading.Lock()
+        self._db_lock = threading.Lock()
 
-    def _ensure_service(self) -> bool:
-        if self.service is not None:
-            return True
-        if not self.sa_json_str:
-            logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON eksik!")
-            return False
-        with self._lock:
-            if self.service is not None:
-                return True
+        if self.sa_json_str:
             try:
                 info = json.loads(self.sa_json_str)
-                creds = service_account.Credentials.from_service_account_info(
+                self._creds = service_account.Credentials.from_service_account_info(
                     info, scopes=["https://www.googleapis.com/auth/drive.readonly"]
                 )
-                self.service = build(
-                    "drive", "v3", credentials=creds, cache_discovery=False
-                )
-                logger.info("Drive API Bağlantısı (Lazy Load) Başarıyla Kuruldu.")
-                return True
+                logger.info("Google Drive Kimlik Bilgileri Hazır.")
             except Exception as e:
-                logger.error(f"Drive API Başlatma Hatası: {e}")
-                return False
+                logger.error(f"Google Service Account JSON Hatası: {e}")
+
+    def _get_service(self):
+        if not self._creds:
+            return None
+        if getattr(self._local, "service", None) is None:
+            http = httplib2.Http(timeout=18)
+            authed_http = AuthorizedHttp(self._creds, http=http)
+            self._local.service = build(
+                "drive", "v3", http=authed_http, cache_discovery=False
+            )
+        return self._local.service
 
     def find_folder(self, query_term: str) -> Tuple[Optional[str], Optional[str]]:
         norm_key = normalize_lot_code(query_term)
+        svc = self._get_service()
+        if not svc:
+            return None, None
+
+        # Önbellekte varsa bile geçerli olup olmadığını kontrol et
         if norm_key in self.hyperlinks_db:
             url = self.hyperlinks_db[norm_key]
             fid = self._extract_folder_id(url)
             if fid:
                 return fid, url
-
-        if not self._ensure_service():
-            return None, None
 
         raw_clean = query_term.strip().replace("'", "")
         cands = [
@@ -219,19 +250,20 @@ class DriveExplorer:
                     f"and trashed = false and name contains '{cand}'"
                 )
                 res = (
-                    self.service.files()
+                    svc.files()
                     .list(
                         q=q,
                         spaces="drive",
                         fields="files(id, name, webViewLink)",
                         includeItemsFromAllDrives=True,
                         supportsAllDrives=True,
-                        pageSize=15,
+                        pageSize=25,
                     )
                     .execute()
                 )
                 files = res.get("files", [])
                 if files:
+                    # En uygun klasörü seç (Tam eşleşen veya içinde Excel barındıran)
                     best = files[0]
                     for f in files:
                         fname_norm = normalize_lot_code(f["name"])
@@ -242,8 +274,9 @@ class DriveExplorer:
                     link = best.get(
                         "webViewLink", f"https://drive.google.com/drive/folders/{fid}"
                     )
-                    self.hyperlinks_db[norm_key] = link
-                    save_json_file(HYPERLINKS_DB_FILE, self.hyperlinks_db)
+                    with self._db_lock:
+                        self.hyperlinks_db[norm_key] = link
+                        save_json_file(HYPERLINKS_DB_FILE, self.hyperlinks_db)
                     return fid, link
             except Exception as e:
                 logger.warning(f"Klasör arama uyarısı ({cand}): {e}")
@@ -251,7 +284,8 @@ class DriveExplorer:
         return None, None
 
     def list_child_folders(self, parent_folder_id: str) -> List[Dict[str, str]]:
-        if not parent_folder_id or not self._ensure_service():
+        svc = self._get_service()
+        if not svc or not parent_folder_id:
             return []
         try:
             q = (
@@ -259,7 +293,7 @@ class DriveExplorer:
                 f"and mimeType = 'application/vnd.google-apps.folder'"
             )
             res = (
-                self.service.files()
+                svc.files()
                 .list(
                     q=q,
                     spaces="drive",
@@ -281,60 +315,127 @@ class DriveExplorer:
                 }
                 for f in res.get("files", [])
             ]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Alt klasör listeleme uyarısı: {e}")
             return []
 
     def get_excel_from_folder(
-        self, folder_id: str, max_depth: int = 2
+        self, folder_id: str, query_hint: str = "", max_depth: int = 2
     ) -> Tuple[Optional[bytes], Optional[str]]:
-        if not folder_id or not self._ensure_service():
+        """
+        Drive API'nin 'name contains .xls' kısıtlamasına takılmamak için
+        klasördeki TÜM dosyaları listeler ve Python tarafında Excel / Google Sheet
+        veya kısayol (shortcut) dosyalarını yakalar.
+        """
+        svc = self._get_service()
+        if not svc or not folder_id:
             return None, None
 
         try:
-            q = (
-                f"'{folder_id}' in parents and trashed = false and ("
-                f"name contains '.xls' or "
-                f"mimeType contains 'spreadsheet' or "
-                f"mimeType contains 'excel' or "
-                f"mimeType = 'application/vnd.google-apps.spreadsheet'"
-                f")"
-            )
+            q = f"'{folder_id}' in parents and trashed = false"
             res = (
-                self.service.files()
+                svc.files()
                 .list(
                     q=q,
                     spaces="drive",
-                    fields="files(id, name, mimeType)",
+                    fields="files(id, name, mimeType, shortcutDetails)",
                     includeItemsFromAllDrives=True,
                     supportsAllDrives=True,
-                    pageSize=5,
+                    pageSize=100,
                 )
                 .execute()
             )
-            files = [
-                f
-                for f in res.get("files", [])
-                if not f["name"].startswith("~$")
-            ]
+            all_items = res.get("files", [])
 
-            if files:
-                target = files[0]
+            excel_candidates = []
+            sub_folders = []
+
+            for item in all_items:
+                name = item.get("name", "")
+                if name.startswith("~$"):
+                    continue
+                mime = item.get("mimeType", "")
+                low_name = name.lower()
+
+                if mime == "application/vnd.google-apps.folder":
+                    sub_folders.append(item)
+                    continue
+
+                # Kısayol (Shortcut) ise hedef dosyayı kontrol et
+                target_id = item["id"]
+                target_mime = mime
+                if mime == "application/vnd.google-apps.shortcut":
+                    sc = item.get("shortcutDetails", {})
+                    target_id = sc.get("targetId", target_id)
+                    target_mime = sc.get("targetMimeType", mime)
+
+                is_excel = (
+                    low_name.endswith((".xlsx", ".xls", ".xlsm", ".csv"))
+                    or "spreadsheet" in target_mime
+                    or "excel" in target_mime
+                    or target_mime == "application/vnd.google-apps.spreadsheet"
+                )
+                if is_excel:
+                    excel_candidates.append(
+                        {"id": target_id, "name": name, "mimeType": target_mime}
+                    )
+
+            if excel_candidates:
+                target = excel_candidates[0]
                 b_data = self._download_excel_or_sheet(
-                    target["id"], target.get("mimeType", "")
+                    target["id"], target["mimeType"]
                 )
                 fname = target["name"]
-                if not fname.lower().endswith((".xlsx", ".xls")):
+                if not fname.lower().endswith((".xlsx", ".xls", ".csv")):
                     fname += ".xlsx"
                 if b_data:
                     return b_data, fname
 
+            # Alt klasörlere in
             if max_depth > 0:
-                for sf in self.list_child_folders(folder_id)[:12]:
+                for sf in sub_folders[:15]:
                     b_data, fname = self.get_excel_from_folder(
-                        sf["id"], max_depth=max_depth - 1
+                        sf["id"], query_hint="", max_depth=max_depth - 1
                     )
                     if b_data:
                         return b_data, fname
+
+            # Hâlâ bulunamadıysa ve query_hint (örn: A-383) varsa tüm Drive'da bu lot adıyla Excel ara
+            if query_hint and max_depth == 2:
+                norm_q = normalize_lot_code(query_hint)
+                for cand in [norm_q, norm_q.replace("-", " "), norm_q.replace("-", "")]:
+                    gq = (
+                        f"trashed = false and name contains '{cand}' and "
+                        f"mimeType != 'application/vnd.google-apps.folder' and "
+                        f"not mimeType contains 'image/'"
+                    )
+                    gres = (
+                        svc.files()
+                        .list(
+                            q=gq,
+                            spaces="drive",
+                            fields="files(id, name, mimeType)",
+                            includeItemsFromAllDrives=True,
+                            supportsAllDrives=True,
+                            pageSize=10,
+                        )
+                        .execute()
+                    )
+                    for gf in gres.get("files", []):
+                        gn = gf.get("name", "").lower()
+                        gm = gf.get("mimeType", "")
+                        if (
+                            gn.endswith((".xlsx", ".xls", ".csv"))
+                            or "spreadsheet" in gm
+                            or "excel" in gm
+                        ):
+                            b_data = self._download_excel_or_sheet(gf["id"], gm)
+                            if b_data:
+                                fname = gf["name"]
+                                if not fname.lower().endswith((".xlsx", ".xls")):
+                                    fname += ".xlsx"
+                                return b_data, fname
+
         except Exception as e:
             logger.error(f"Excel arama hatası ({folder_id}): {e}")
 
@@ -343,16 +444,17 @@ class DriveExplorer:
     def _download_excel_or_sheet(
         self, file_id: str, mime_type: str
     ) -> Optional[bytes]:
-        if not self._ensure_service():
+        svc = self._get_service()
+        if not svc:
             return None
         try:
             if mime_type == "application/vnd.google-apps.spreadsheet":
-                req = self.service.files().export_media(
+                req = svc.files().export_media(
                     fileId=file_id,
                     mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             else:
-                req = self.service.files().get_media(
+                req = svc.files().get_media(
                     fileId=file_id, supportsAllDrives=True
                 )
             fh = io.BytesIO()
@@ -363,7 +465,7 @@ class DriveExplorer:
             fh.seek(0)
             return fh.read()
         except Exception as e:
-            logger.error(f"Dosya indirme hatası ({file_id}): {e}")
+            logger.error(f"Tablo indirme hatası ({file_id}): {e}")
             return None
 
     def get_images_structured(
@@ -418,40 +520,35 @@ class DriveExplorer:
     def _scan_images(
         self, folder_id: Optional[str], query_term: str
     ) -> List[Dict[str, str]]:
-        if not self._ensure_service():
+        svc = self._get_service()
+        if not svc:
             return []
         all_imgs: List[Dict[str, str]] = []
         try:
             if folder_id:
-                q = (
-                    f"'{folder_id}' in parents and trashed = false and "
-                    f"(mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
-                )
+                q = f"'{folder_id}' in parents and trashed = false and mimeType contains 'image/'"
                 res = (
-                    self.service.files()
+                    svc.files()
                     .list(
                         q=q,
                         spaces="drive",
-                        fields="files(id, name)",
+                        fields="files(id, name, mimeType)",
                         includeItemsFromAllDrives=True,
                         supportsAllDrives=True,
-                        pageSize=15,
+                        pageSize=20,
                     )
                     .execute()
                 )
                 all_imgs.extend(res.get("files", []))
 
                 for sf in self.list_child_folders(folder_id)[:8]:
-                    sq = (
-                        f"'{sf['id']}' in parents and trashed = false and "
-                        f"(mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
-                    )
+                    sq = f"'{sf['id']}' in parents and trashed = false and mimeType contains 'image/'"
                     sres = (
-                        self.service.files()
+                        svc.files()
                         .list(
                             q=sq,
                             spaces="drive",
-                            fields="files(id, name)",
+                            fields="files(id, name, mimeType)",
                             includeItemsFromAllDrives=True,
                             supportsAllDrives=True,
                             pageSize=10,
@@ -465,16 +562,13 @@ class DriveExplorer:
             if not all_imgs and query_term:
                 norm_q = normalize_lot_code(query_term)
                 for cand in [norm_q, norm_q.replace("-", " ")]:
-                    q = (
-                        f"trashed = false and name contains '{cand}' and "
-                        f"(mimeType contains 'image/jpeg' or mimeType contains 'image/png')"
-                    )
+                    q = f"trashed = false and name contains '{cand}' and mimeType contains 'image/'"
                     res = (
-                        self.service.files()
+                        svc.files()
                         .list(
                             q=q,
                             spaces="drive",
-                            fields="files(id, name)",
+                            fields="files(id, name, mimeType)",
                             includeItemsFromAllDrives=True,
                             supportsAllDrives=True,
                             pageSize=6,
@@ -490,12 +584,11 @@ class DriveExplorer:
             return []
 
     def _download_file(self, file_id: str) -> Optional[bytes]:
-        if not self._ensure_service():
+        svc = self._get_service()
+        if not svc:
             return None
         try:
-            req = self.service.files().get_media(
-                fileId=file_id, supportsAllDrives=True
-            )
+            req = svc.files().get_media(fileId=file_id, supportsAllDrives=True)
             fh = io.BytesIO()
             dl = MediaIoBaseDownload(fh, req)
             done = False
@@ -503,7 +596,8 @@ class DriveExplorer:
                 _, done = dl.next_chunk()
             fh.seek(0)
             return fh.read()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Görsel indirme uyarısı ({file_id}): {e}")
             return None
 
     @staticmethod
@@ -518,13 +612,17 @@ class DriveExplorer:
 
 
 # =====================================================================
-# 4. AKILLI BAŞLIK DEDEKTÖRLÜ ENVANTER VE DEEP SCAN MOTORU
+# 4. AKILLI TABLO ÇÖZÜMLEYİCİ VE ENVANTER MOTORU
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
         self.drive = drive
 
     def parse_packing_list_bytes(self, excel_bytes: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Her türlü çeki listesi formatını (üstte firma anteti olanlar, birleştirilmiş
+        hücreliler, mm/cm/m farklılıkları, formüllü M2 sütunları) okur.
+        """
         try:
             xls = pd.ExcelFile(io.BytesIO(excel_bytes))
             for sheet in xls.sheet_names:
@@ -532,11 +630,12 @@ class InventoryEngine:
                 if raw_df.empty or len(raw_df) < 2:
                     continue
 
-                header_idx = 0
+                header_idx = None
                 best_score = 0
                 header_keywords = [
                     "M2",
                     "M²",
+                    "SQM",
                     "ALAN",
                     "AREA",
                     "METRAJ",
@@ -553,7 +652,7 @@ class InventoryEngine:
                     "KALINLIK",
                     "THICKNESS",
                 ]
-                for idx in range(min(25, len(raw_df))):
+                for idx in range(min(35, len(raw_df))):
                     row_vals = [
                         normalize_turkish_key(v)
                         for v in raw_df.iloc[idx].values
@@ -568,7 +667,7 @@ class InventoryEngine:
                         best_score = score
                         header_idx = idx
 
-                if best_score >= 2:
+                if header_idx is not None and best_score >= 2:
                     df = pd.read_excel(xls, sheet_name=sheet, header=header_idx)
                 else:
                     df = pd.read_excel(xls, sheet_name=sheet)
@@ -654,28 +753,37 @@ class InventoryEngine:
                     ):
                         continue
 
-                    l_val = safe_float(row.get(len_col)) if len_col else 0.0
-                    h_val = safe_float(row.get(height_col)) if height_col else 0.0
-                    m2_val = safe_float(row.get(m2_col)) if m2_col else 0.0
+                    raw_l = safe_float(row.get(len_col)) if len_col else 0.0
+                    raw_h = safe_float(row.get(height_col)) if height_col else 0.0
+                    raw_m2 = safe_float(row.get(m2_col)) if m2_col else 0.0
 
-                    if m2_val <= 0 and l_val > 20 and h_val > 20:
-                        m2_val = (l_val * h_val) / 10000.0
-
-                    if m2_val <= 0 or m2_val > 50:
+                    m2_val, l_cm, h_cm = compute_slab_m2(raw_l, raw_h, raw_m2)
+                    if m2_val <= 0:
                         continue
 
                     adet_val = (
                         int(safe_float(row.get(adet_col)))
-                        if adet_col and safe_float(row.get(adet_col)) > 0
+                        if adet_col and 0 < safe_float(row.get(adet_col)) <= 50
                         else 1
                     )
 
                     total_m2 += m2_val
                     total_slabs += adet_val
-                    if l_val > 0 and h_val > 0:
-                        lengths.append(l_val)
-                        heights.append(h_val)
+                    if l_cm > 0 and h_cm > 0:
+                        lengths.append(l_cm)
+                        heights.append(h_cm)
                     valid_rows.append(row)
+
+                # Eğer satır bazlı okuma sonuç vermediyse tüm tablodaki TOPLAM satırını ara
+                if total_m2 <= 0 and m2_col:
+                    col_vals = [
+                        safe_float(v) for v in df[m2_col].dropna().values if safe_float(v) > 0
+                    ]
+                    if col_vals:
+                        max_v = max(col_vals)
+                        if max_v > 2.0:
+                            total_m2 = max_v
+                            total_slabs = max(1, len(col_vals) - 1)
 
                 if total_m2 <= 0:
                     continue
@@ -700,7 +808,7 @@ class InventoryEngine:
                     else "Standard Sizes"
                 )
 
-                clean_df = pd.DataFrame(valid_rows)
+                clean_df = pd.DataFrame(valid_rows) if valid_rows else df
                 return {
                     "total_m2": total_m2,
                     "total_slabs": total_slabs,
@@ -738,7 +846,7 @@ class InventoryEngine:
 
         if folder_id:
             excel_bytes, excel_name = self.drive.get_excel_from_folder(
-                folder_id, max_depth=2
+                folder_id, query_hint=norm_key, max_depth=2
             )
             if excel_bytes:
                 data = self.parse_packing_list_bytes(excel_bytes)
@@ -773,7 +881,9 @@ class InventoryEngine:
 
         sub_folders = self.drive.list_child_folders(parent_id)
         for sf in sub_folders:
-            ex_bytes, _ = self.drive.get_excel_from_folder(sf["id"], max_depth=0)
+            ex_bytes, _ = self.drive.get_excel_from_folder(
+                sf["id"], query_hint="", max_depth=0
+            )
             if ex_bytes:
                 parsed = self.parse_packing_list_bytes(ex_bytes)
                 if parsed and parsed["total_m2"] > 0:
@@ -1141,11 +1251,10 @@ class PDFPresentationEngine:
         c_th = mapped_cols.get("thick")
 
         for _, row in raw_df.iterrows():
-            m2_val = safe_float(row.get(c_m2)) if c_m2 else 0.0
-            l_val = safe_float(row.get(c_len)) if c_len else 0.0
-            h_val = safe_float(row.get(c_h)) if c_h else 0.0
-            if m2_val <= 0 and l_val > 20 and h_val > 20:
-                m2_val = (l_val * h_val) / 10000.0
+            raw_m2 = safe_float(row.get(c_m2)) if c_m2 else 0.0
+            raw_l = safe_float(row.get(c_len)) if c_len else 0.0
+            raw_h = safe_float(row.get(c_h)) if c_h else 0.0
+            m2_val, l_cm, h_cm = compute_slab_m2(raw_l, raw_h, raw_m2)
             if m2_val <= 0:
                 continue
 
@@ -1155,8 +1264,8 @@ class PDFPresentationEngine:
                 [
                     Paragraph(str(row_count), td_p),
                     Paragraph(str(row.get(c_slab, row_count)), td_p),
-                    Paragraph(f"{l_val:g}" if l_val > 0 else "-", td_p),
-                    Paragraph(f"{h_val:g}" if h_val > 0 else "-", td_p),
+                    Paragraph(f"{l_cm:g}" if l_cm > 0 else "-", td_p),
+                    Paragraph(f"{h_cm:g}" if h_cm > 0 else "-", td_p),
                     Paragraph(str(row.get(c_th, "2 cm")), td_p),
                     Paragraph(f"{m2_val:.2f}", td_p),
                 ]
@@ -1237,8 +1346,12 @@ class ArgonBrain:
 
         want_pdf = any(kw in raw for kw in ["PDF", "SUNUM", "KATALOG"])
         want_packing = any(kw in raw for kw in ["CEKI", "PACKING", "SEVK"])
-        want_photo = any(
-            kw in raw for kw in ["FOTO", "RESIM", "GORSEL", "DRIVE", "LINK"]
+        want_only_link = any(kw in raw for kw in ["LINK", "DRIVE"]) and not any(
+            kw in raw for kw in ["FOTO", "RESIM", "GORSEL", "PDF", "SUNUM", "CEKI"]
+        )
+        want_photo = (
+            any(kw in raw for kw in ["FOTO", "RESIM", "GORSEL"])
+            or (bool(matched) and not want_only_link and not want_pdf and not want_packing)
         )
 
         if (
@@ -1248,6 +1361,7 @@ class ArgonBrain:
             and not want_pdf
             and not want_packing
             and not want_photo
+            and not want_only_link
             and not collection_folder
             and not want_deep_scan
         ):
@@ -1260,7 +1374,8 @@ class ArgonBrain:
             "want_deep_scan": want_deep_scan,
             "want_pdf": want_pdf,
             "want_packing": want_packing,
-            "want_photo": want_photo or bool(matched),
+            "want_only_link": want_only_link,
+            "want_photo": want_photo,
         }
 
 
@@ -1311,7 +1426,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             report = await asyncio.to_thread(inventory_engine.deep_scan_collections)
             await status.edit_text(report, parse_mode=ParseMode.HTML)
         except Exception as e:
-            await status.edit_text(f"Tarama tamamlanamadı: {e}")
+            await status.edit_text(f"Tarama uyarısı: {e}")
         return
 
     queries = intent.get("matched_queries", [])
@@ -1320,7 +1435,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not queries and not collection_folder:
         if not is_group or bot_mentioned:
             await msg.reply_text(
-                "👋 <b>Argon Master V6.1 Aktif.</b>\n"
+                "👋 <b>Argon Master V6.2 Aktif.</b>\n"
                 "• Lot sorgusu: <code>A-371</code>\n"
                 "• Çoklu Tek PDF Sunum: <code>A-96 ve A-383 sunum hazırla</code>\n"
                 "• Koleksiyon PDF: <code>Arslanlar Collection sunum hazırla</code>\n"
@@ -1382,95 +1497,107 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"⚠️ PDF oluşturulamadı: {e}")
         return
 
-    # 4. STANDART LOT SORGUSU VE ÇEKİ LİSTESİ (EXCEL + PDF)
+    # 4. STANDART LOT SORGUSU, LİNK VE ÇEKİ LİSTESİ (EXCEL + PDF)
     for q in queries:
-        info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
-        d = info["data"]
-        fid = info["folder_id"]
-        flink = info["drive_link"]
+        try:
+            info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
+            d = info["data"]
+            fid = info["folder_id"]
+            flink = info["drive_link"]
 
-        if intent.get("want_packing"):
-            if info["excel_bytes"]:
-                await context.bot.send_chat_action(
-                    chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT
-                )
-                await msg.reply_document(
-                    document=io.BytesIO(info["excel_bytes"]),
-                    filename=info["excel_name"],
-                    caption=f"📦 <b>{q}</b> Orijinal Excel Çeki Listesi",
-                    parse_mode=ParseMode.HTML,
-                )
-                if d.get("raw_df") is not None and not d["raw_df"].empty:
-                    try:
-                        pdf_pack_bytes = await asyncio.to_thread(
-                            pdf_engine.generate_packing_list_pdf,
-                            d["raw_df"],
-                            q,
-                            d["mapped_cols"],
-                        )
-                        await msg.reply_document(
-                            document=io.BytesIO(pdf_pack_bytes),
-                            filename=f"PackingList_{q}.pdf",
-                            caption=f"📄 <b>{q}</b> Resmi PDF Çeki Listesi",
-                            parse_mode=ParseMode.HTML,
-                        )
-                    except Exception as pe:
-                        logger.warning(f"PDF Çeki listesi hatası: {pe}")
-            else:
-                link_note = f"\n📂 <a href='{flink}'>Drive Klasörünü Aç</a>" if flink else ""
-                await msg.reply_text(
-                    f"⚠️ <b>{q}</b> klasöründe henüz Excel çeki listesi bulunamadı.{link_note}",
-                    parse_mode=ParseMode.HTML,
-                )
-            continue
+            if intent.get("want_packing"):
+                if info["excel_bytes"]:
+                    await context.bot.send_chat_action(
+                        chat_id=chat_id, action=ChatAction.UPLOAD_DOCUMENT
+                    )
+                    await msg.reply_document(
+                        document=io.BytesIO(info["excel_bytes"]),
+                        filename=info["excel_name"],
+                        caption=f"📦 <b>{q}</b> Orijinal Excel Çeki Listesi",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    if d.get("raw_df") is not None and not d["raw_df"].empty:
+                        try:
+                            pdf_pack_bytes = await asyncio.to_thread(
+                                pdf_engine.generate_packing_list_pdf,
+                                d["raw_df"],
+                                q,
+                                d["mapped_cols"],
+                            )
+                            await msg.reply_document(
+                                document=io.BytesIO(pdf_pack_bytes),
+                                filename=f"PackingList_{q}.pdf",
+                                caption=f"📄 <b>{q}</b> Resmi PDF Çeki Listesi",
+                                parse_mode=ParseMode.HTML,
+                            )
+                        except Exception as pe:
+                            logger.warning(f"PDF Çeki listesi uyarısı: {pe}")
+                else:
+                    link_note = f"\n📂 <a href='{flink}'>Drive Klasörünü Aç</a>" if flink else ""
+                    await msg.reply_text(
+                        f"⚠️ <b>{q}</b> klasöründe henüz Excel çeki listesi bulunamadı.{link_note}",
+                        parse_mode=ParseMode.HTML,
+                    )
+                continue
 
-        m2_val = d.get("total_m2", 0.0)
-        slabs_val = d.get("total_slabs", 0)
-        stock_str = (
-            f"{m2_val:,.2f} m² ({slabs_val} Plaka)"
-            if m2_val > 0
-            else "Klasörde Excel Bekleniyor"
-        )
-        link_html = (
-            f"<a href='{flink}'>Klasöre Git</a>"
-            if flink
-            else "Drive'da Klasör Bulunamadı"
-        )
-
-        text_response = (
-            f"💎 <b>{q.upper()}</b>\n"
-            f"• Mevcut Stok: <code>{stock_str}</code>\n"
-            f"• Ortalama Ebat: <code>{d.get('dimensions', '-')}</code>\n"
-            f"• Yüzey & Kalınlık: <code>{d.get('surface', 'Polished')} ({d.get('thickness', '2 cm')})</code>\n"
-            f"• Drive Linki: {link_html}"
-        )
-
-        img1, img2 = await asyncio.to_thread(
-            drive_explorer.get_images_structured, fid, q
-        )
-
-        media = []
-        if img1:
-            media.append(
-                InputMediaPhoto(
-                    media=img1, caption=text_response, parse_mode=ParseMode.HTML
-                )
+            m2_val = d.get("total_m2", 0.0)
+            slabs_val = d.get("total_slabs", 0)
+            stock_str = (
+                f"{m2_val:,.2f} m² ({slabs_val} Plaka)"
+                if m2_val > 0
+                else "Klasörde Excel Bekleniyor"
             )
-        if img2:
-            media.append(InputMediaPhoto(media=img2))
+            link_html = (
+                f"<a href='{flink}'>Klasöre Git ({q})</a>"
+                if flink
+                else "Drive'da Klasör Bulunamadı"
+            )
 
-        if media:
-            try:
-                await msg.reply_media_group(media=media)
-            except Exception as me:
-                logger.warning(f"Albüm gönderilemedi, tekli gönderiliyor: {me}")
+            text_response = (
+                f"💎 <b>{q.upper()}</b>\n"
+                f"• Mevcut Stok: <code>{stock_str}</code>\n"
+                f"• Ortalama Ebat: <code>{d.get('dimensions', '-')}</code>\n"
+                f"• Yüzey & Kalınlık: <code>{d.get('surface', 'Polished')} ({d.get('thickness', '2 cm')})</code>\n"
+                f"• Drive Linki: {link_html}"
+            )
+
+            # Eğer kullanıcı sadece "drive linki lütfen" dediyse fotoğrafları indirmekle vakit kaybetmeden anında yanıtla
+            if intent.get("want_only_link"):
                 await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
-        else:
-            await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
+                continue
+
+            img1, img2 = await asyncio.to_thread(
+                drive_explorer.get_images_structured, fid, q
+            )
+
+            media = []
+            if img1:
+                media.append(
+                    InputMediaPhoto(
+                        media=img1, caption=text_response, parse_mode=ParseMode.HTML
+                    )
+                )
+            if img2:
+                media.append(InputMediaPhoto(media=img2))
+
+            if media:
+                try:
+                    await msg.reply_media_group(media=media)
+                except Exception as me:
+                    logger.warning(f"Albüm gönderilemedi, tekli gönderiliyor: {me}")
+                    await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
+            else:
+                await msg.reply_text(text_response, parse_mode=ParseMode.HTML)
+        except Exception as ex:
+            logger.error(f"Sorgu hatası ({q}): {ex}")
+            await msg.reply_text(
+                f"⚠️ <b>{q}</b> sorgulanırken bağlantı zaman aşımına uğradı, lütfen tekrar deneyin.",
+                parse_mode=ParseMode.HTML,
+            )
 
 
 # =====================================================================
-# 8. ANA BAŞLATICI (PORT ZATEN 0. SANİYEDE AÇILDI)
+# 8. ANA BAŞLATICI
 # =====================================================================
 def main():
     if not TELEGRAM_TOKEN:
@@ -1485,7 +1612,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V6.1 Instant-Boot başlatılıyor...")
+    logger.info("🚀 Argon Master V6.2 Thread-Safe başlatılıyor...")
     application.run_polling(drop_pending_updates=True)
 
 
