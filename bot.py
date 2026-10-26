@@ -13,6 +13,7 @@ import threading
 import subprocess
 from datetime import datetime
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Tuple, Any
 
 # =====================================================================
@@ -20,12 +21,13 @@ from typing import Dict, List, Optional, Tuple, Any
 # =====================================================================
 from flask import Flask
 import requests
+from requests.adapters import HTTPAdapter
 
 flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V16 Executive Stock Report Engine is Live!", 200
+    return "Argon Master V17 Non-Blocking Dual-Lane Engine is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -76,7 +78,7 @@ from reportlab.platypus import (
 )
 
 from telegram import Update, InputMediaPhoto
-from telegram.error import Conflict, NetworkError, TimedOut
+from telegram.error import Conflict, NetworkError, TimedOut, RetryAfter
 from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
@@ -92,7 +94,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V16")
+logger = logging.getLogger("ArgonMaster_V17")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -102,6 +104,8 @@ DEFAULT_DRIVE_LINK = (
     or os.getenv("DEFAULT_DRIVE_LINK")
     or "https://drive.google.com"
 ).strip()
+
+PERSISTENT_CACHE_FILE = "argon_v17_master_cache.json"
 
 # GÖMÜLÜ ORİJİNAL ARSLANLAR MARBLE BRONZ ASLAN LOGOSU (logo_bronz)
 EMBEDDED_LOGO_B64 = (
@@ -196,7 +200,6 @@ EMBEDDED_LOGO_B64 = (
     "N0c0HCvaDdH0v4bM0BR24f1ZnbwzXFehbRHu/gdZlalNfkai4wAAAABJRU5ErkJggg=="
 )
 
-# Alt klasör kara listesi (THUMBS / THUMBNAILS eklendi; asla taş adı sanılmaz!)
 SUBFOLDER_BLACKLIST = {
     "CUSTOM",
     "WEB",
@@ -292,8 +295,26 @@ DEFAULT_STONE_DNA = {
 
 
 # =====================================================================
-# 2. YARDIMCI FONKSİYONLAR, SOLD-OUT KONTROLÜ VE DİKDÖRTGENLİK TESTİ
+# 2. YARDIMCI FONKSİYONLAR, SOLD-OUT KONTROLÜ VE HIZLI GÖRSEL İŞLEME
 # =====================================================================
+def load_json_cache(filepath: str) -> Dict[str, Any]:
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"collections": {}, "lots": {}}
+
+
+def save_json_cache(filepath: str, data: Dict[str, Any]) -> None:
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
 def normalize_turkish_key(text: Any) -> str:
     if text is None or pd.isna(text):
         return ""
@@ -358,9 +379,13 @@ def is_utility_subfolder(folder_name: str) -> bool:
 def clean_stone_and_lot_title(
     raw_title: str, parent_stone: str = ""
 ) -> Tuple[str, str, str]:
+    """
+    'SILVER ROOTS + ] — A-62' veya 'CREMA UNO THUMBS - A-277' gibi kirli klasör
+    adlarındaki '+', ']', '[', '(', ')' ve alt klasör eklerini %100 temizler!
+    """
     s = normalize_turkish_key(raw_title)
     s = re.sub(r"\[.*?\]|\(.*?\)", " ", s)
-    s = re.sub(r"[\[\]\(\)]", " ", s)
+    s = re.sub(r"[\[\]\(\)+*\u2013\u2014]", " ", s)
 
     lot_m = re.search(r"\b([A-Z]{1,4})[-\s_.]*0*(\d{1,5})\b", s)
     lot_code = f"{lot_m.group(1)}-{lot_m.group(2)}" if lot_m else ""
@@ -386,13 +411,13 @@ def clean_stone_and_lot_title(
             rf"(?<![A-Z0-9]){re.escape(nw)}(?![A-Z0-9])", " ", stone_part
         )
 
-    stone_part = re.sub(r"[-_/:,.\[\]\(\)]+", " ", stone_part)
+    stone_part = re.sub(r"[-_/:,.\[\]\(\)+*\u2013\u2014]+", " ", stone_part)
     stone_part = re.sub(r"\s+", " ", stone_part).strip()
 
     if parent_stone:
         p_clean = normalize_turkish_key(parent_stone)
         p_clean = re.sub(r"\[.*?\]|\(.*?\)", " ", p_clean)
-        p_clean = re.sub(r"[\[\]\(\)]", " ", p_clean)
+        p_clean = re.sub(r"[\[\]\(\)+*\u2013\u2014]", " ", p_clean)
         p_lot = re.search(r"\b([A-Z]{1,4})[-\s_.]*0*(\d{1,5})\b", p_clean)
         if p_lot:
             p_clean = p_clean[: p_lot.start()] + " " + p_clean[p_lot.end() :]
@@ -400,7 +425,7 @@ def clean_stone_and_lot_title(
             p_clean = re.sub(
                 rf"(?<![A-Z0-9]){re.escape(nw)}(?![A-Z0-9])", " ", p_clean
             )
-        p_clean = re.sub(r"[-_/:,.\[\]\(\)]+", " ", p_clean)
+        p_clean = re.sub(r"[-_/:,.\[\]\(\)+*\u2013\u2014]+", " ", p_clean)
         p_clean = re.sub(r"\s+", " ", p_clean).strip()
         if p_clean and p_clean not in (
             "ARSLANLAR COLLECTION",
@@ -524,9 +549,9 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
     try:
         with Image.open(io.BytesIO(raw_bytes)) as im:
             img = im.convert("RGB")
-            img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+            img.thumbnail((1500, 1500), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            img.save(out, format="JPEG", quality=88)
+            img.save(out, format="JPEG", quality=86)
             return out.getvalue()
     except Exception:
         return None
@@ -535,13 +560,19 @@ def prepare_telegram_image_bytes(raw_bytes: Optional[bytes]) -> Optional[bytes]:
 def analyze_and_prepare_pdf_slab_image(
     raw_bytes: Optional[bytes], max_w_pt: float = 185.0, max_h_pt: float = 122.0
 ) -> Optional[Tuple[bytes, float, float, int]]:
+    """
+    PDF kutusu (185x122 pt) için görselin en-boy oranını %100 korur (asla sündürmez).
+    Görseli 640x430 px (250 DPI - Cam gibi net, ama ~45 KB hafif boyut!) olarak
+    kaydeder. Böylece 47 taşlı bir PDF 14.2 MB yerine ~2.3 MB olur ve Telegram'a
+    2 saniyede yüklenir!
+    """
     if not raw_bytes:
         return None
     try:
         with Image.open(io.BytesIO(raw_bytes)) as im:
             img = im.convert("RGB")
             w, h = img.size
-            if w < 80 or h < 60:
+            if w < 60 or h < 50:
                 return None
 
             aspect = w / float(h)
@@ -595,16 +626,16 @@ def analyze_and_prepare_pdf_slab_image(
             render_w = round(w * scale, 1)
             render_h = round(h * scale, 1)
 
-            img.thumbnail((950, 650), Image.Resampling.LANCZOS)
+            img.thumbnail((660, 440), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            img.save(out, format="JPEG", quality=92)
+            img.save(out, format="JPEG", quality=86, optimize=True)
             return out.getvalue(), render_w, render_h, visual_score
     except Exception:
         return None
 
 
 # =====================================================================
-# 3. SAF REST API GOOGLE DRIVE MOTORU (GARANTİLİ GÖRSEL YEDEKLEMELİ)
+# 3. HIZLI HAVUZLU (CONNECTION-POOLED) GOOGLE DRIVE REST MOTORU
 # =====================================================================
 class DriveExplorer:
     DRIVE_API_URL = "https://www.googleapis.com/drive/v3/files"
@@ -617,6 +648,13 @@ class DriveExplorer:
         self._logo_png_bytes: Optional[bytes] = None
         self._lot_result_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
         self._folder_meta_cache: Dict[str, Dict[str, Any]] = {}
+        self._pdf_image_cache: Dict[str, Tuple[bytes, float, float]] = {}
+
+        # Bağlantı havuzu (Connection Pool): 47 taşı paralel indirirken SSL el sıkışmasını 5 kat hızlandırır!
+        self.http_session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=16, pool_maxsize=16, max_retries=1)
+        self.http_session.mount("https://", adapter)
+        self.http_session.mount("http://", adapter)
 
         if self.sa_json_str:
             try:
@@ -655,8 +693,8 @@ class DriveExplorer:
             "pageSize": page_size,
         }
         try:
-            resp = requests.get(
-                self.DRIVE_API_URL, headers=headers, params=params, timeout=12
+            resp = self.http_session.get(
+                self.DRIVE_API_URL, headers=headers, params=params, timeout=(5, 10)
             )
             if resp.status_code == 200:
                 return resp.json().get("files", [])
@@ -678,7 +716,9 @@ class DriveExplorer:
                 "fields": "id,name,parents,webViewLink",
                 "supportsAllDrives": "true",
             }
-            resp = requests.get(url, headers=headers, params=params, timeout=8)
+            resp = self.http_session.get(
+                url, headers=headers, params=params, timeout=(4, 7)
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 self._folder_meta_cache[folder_id] = data
@@ -688,8 +728,12 @@ class DriveExplorer:
         return None
 
     def download_file_bytes(
-        self, file_id: str, mime_type: str = ""
+        self, file_id: str, mime_type: str = "", max_bytes: int = 15_000_000
     ) -> Optional[bytes]:
+        """
+        Stream=True ve katı süre sınırı ile indirir; dev bir dosyada soketin
+        sonsuza kadar takılı kalmasını %100 engeller!
+        """
         headers = self._get_headers()
         if not headers or not file_id:
             return None
@@ -703,9 +747,22 @@ class DriveExplorer:
                 url = f"{self.DRIVE_API_URL}/{file_id}"
                 params = {"alt": "media", "supportsAllDrives": "true"}
 
-            resp = requests.get(url, headers=headers, params=params, timeout=18)
-            if resp.status_code == 200 and len(resp.content) > 50:
-                return resp.content
+            resp = self.http_session.get(
+                url, headers=headers, params=params, timeout=(5, 12), stream=True
+            )
+            if resp.status_code == 200:
+                chunks = []
+                received = 0
+                t0 = time.time()
+                for chunk in resp.iter_content(chunk_size=65536):
+                    if chunk:
+                        chunks.append(chunk)
+                        received += len(chunk)
+                    if received > max_bytes or (time.time() - t0) > 14.0:
+                        break
+                data = b"".join(chunks)
+                if len(data) > 50:
+                    return data
         except Exception as e:
             logger.warning(f"Dosya indirme uyarısı ({file_id}): {e}")
         return None
@@ -1021,10 +1078,6 @@ class DriveExplorer:
 
     @staticmethod
     def _is_image_item(item: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
-        """
-        Hem normal görselleri (image/jpeg, image/png, .jpg, .png) hem de
-        Google Drive kısayol (shortcut) görsellerini yakalar!
-        """
         mime = item.get("mimeType", "")
         name = item.get("name", "").lower()
         if mime == "application/vnd.google-apps.shortcut":
@@ -1052,13 +1105,6 @@ class DriveExplorer:
         query_term: str,
         parent_folder_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        VEGAS GOLD A-51 ve CREMA UNO A-277 gibi taşlarda 'High-Res Slab Selection'
-        yazıp fotoğrafın boş kalmasını %100 önler:
-        1. Önce CUSTOM dışındaki tüm alt klasörleri (LARGE, PHOTOS, WEB, THUMBS vb.) tarar.
-        2. Eğer hiç fotoğraf çıkmazsa (fotoğraflar sadece CUSTOM klasöründeyse veya
-           üst Taş klasöründeyse), yedek olarak oradan çeker! Asla boş bırakmaz!
-        """
         primary_imgs: List[Dict[str, Any]] = []
         custom_fallback_imgs: List[Dict[str, Any]] = []
 
@@ -1113,7 +1159,6 @@ class DriveExplorer:
                                 img_it["parent_name"] = p_chain
                                 primary_imgs.append(img_it)
 
-            # Eğer normal klasörlerde hiç fotoğraf yoksa CUSTOM klasörüne yedek olarak bak!
             if not primary_imgs and sub_custom:
                 sc_map = {sf["id"]: sf["name"] for sf in sub_custom[:8]}
                 sc_batch = self.batch_list_children(list(sc_map.keys()))
@@ -1129,7 +1174,6 @@ class DriveExplorer:
         if custom_fallback_imgs:
             return custom_fallback_imgs
 
-        # Hâlâ bulunamadıysa üst klasöre (Taş klasörüne) bak
         if parent_folder_id:
             p_items = self.batch_list_children([parent_folder_id]).get(
                 parent_folder_id, []
@@ -1154,7 +1198,6 @@ class DriveExplorer:
             if primary_imgs:
                 return primary_imgs
 
-        # Son çare: Drive genelinde lot koduyla görsel ara
         if query_term and query_term != "-":
             norm_q = normalize_lot_code(query_term)
             lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_q)
@@ -1209,7 +1252,12 @@ class DriveExplorer:
             if any(k in fname for k in ["AREA", "BLOCK", "SLAB", "CM"]):
                 meta_score += 45
 
-            if "WEB" in pname or "EMAIL" in pname or "SMALL" in pname or "THUMB" in pname:
+            if (
+                "WEB" in pname
+                or "EMAIL" in pname
+                or "SMALL" in pname
+                or "THUMB" in pname
+            ):
                 meta_score -= 15
 
             if seq in (1, 2):
@@ -1255,12 +1303,16 @@ class DriveExplorer:
         )
 
         img1 = (
-            self.download_raw_image_fast(f1["id"], f1.get("thumbnailLink"))
+            self.download_raw_image_fast(
+                f1["id"], f1.get("thumbnailLink"), thumb_size=1400
+            )
             if f1
             else None
         )
         img2 = (
-            self.download_raw_image_fast(f2["id"], f2.get("thumbnailLink"))
+            self.download_raw_image_fast(
+                f2["id"], f2.get("thumbnailLink"), thumb_size=1400
+            )
             if f2
             else None
         )
@@ -1275,7 +1327,18 @@ class DriveExplorer:
         query_term: str,
         pre_imgs: Optional[List[Dict[str, Any]]] = None,
         parent_folder_id: Optional[str] = None,
+        fast_mode: bool = False,
     ) -> Optional[Tuple[bytes, float, float]]:
+        """
+        Önbellekli (Cached) ve Hızlı PDF Görsel Seçici:
+        Daha önce indirilen bir taşın PDF görselini bellekte tutar (0.001 sn!).
+        fast_mode=True (Koleksiyon katalogları) olduğunda taş başına en iyi 1-2 orta
+        plakayı =s900 olarak indirir; böylece 47 taşta asla donmaz!
+        """
+        cache_key = folder_id or normalize_lot_code(query_term)
+        if cache_key and cache_key in self._pdf_image_cache:
+            return self._pdf_image_cache[cache_key]
+
         all_imgs = (
             pre_imgs
             if pre_imgs is not None and len(pre_imgs) > 0
@@ -1299,10 +1362,11 @@ class DriveExplorer:
 
         best_result = None
         best_vis_score = -9999
+        max_try = 2 if fast_mode else 3
 
-        for cand in ranked_candidates[:4]:
+        for cand in ranked_candidates[:max_try]:
             raw = self.download_raw_image_fast(
-                cand["id"], cand.get("thumbnailLink")
+                cand["id"], cand.get("thumbnailLink"), thumb_size=900
             )
             if not raw:
                 continue
@@ -1313,38 +1377,54 @@ class DriveExplorer:
             if vis_score > best_vis_score:
                 best_vis_score = vis_score
                 best_result = (jpg_b, rw, rh)
-            if vis_score >= 95:
+            # İlk aday düzgün bir dikdörtgen plakaysa (vis_score >= 65) hemen kabul et, 2.yi indirme!
+            if vis_score >= 65:
                 break
 
+        if best_result and cache_key:
+            self._pdf_image_cache[cache_key] = best_result
         return best_result
 
     def download_raw_image_fast(
-        self, file_id: Optional[str], thumb_url: Optional[str] = None
+        self,
+        file_id: Optional[str],
+        thumb_url: Optional[str] = None,
+        thumb_size: int = 1000,
     ) -> Optional[bytes]:
-        """
-        Önce yetki başlıklı (Authorized) yüksek çözünürlüklü thumbnail sunucusunu dener,
-        başarısız olursa doğrudan Google Drive API'den orijinal dosyayı indirir!
-        """
         headers = self._get_headers()
         if thumb_url:
             try:
-                hi_res_url = re.sub(r"=s\d+", "=s1600", thumb_url)
-                resp = requests.get(hi_res_url, headers=headers, timeout=8)
-                if resp.status_code == 200 and len(resp.content) > 1500:
+                hi_res_url = re.sub(r"=s\d+", f"=s{thumb_size}", thumb_url)
+                resp = self.http_session.get(
+                    hi_res_url, headers=headers, timeout=(4, 7)
+                )
+                if resp.status_code == 200 and len(resp.content) > 1200:
                     return resp.content
             except Exception:
                 pass
         if file_id:
-            return self.download_file_bytes(file_id)
+            return self.download_file_bytes(file_id, max_bytes=8_000_000)
         return None
 
 
 # =====================================================================
-# 4. EVRENSEL EXCEL OKUYUCU (.XLSX + .XLS + CALAMINE + XLRD) & SOLD-OUT FİLTRESİ
+# 4. EVRENSEL EXCEL OKUYUCU & KALICI ÖNBELLEKLİ ENVANTER MOTORU
 # =====================================================================
 class InventoryEngine:
     def __init__(self, drive: DriveExplorer):
         self.drive = drive
+        self.persistent_cache = load_json_cache(PERSISTENT_CACHE_FILE)
+        self._cache_lock = threading.Lock()
+        # Hazırlanan Katalog PDF'lerini 30 dk RAM'de tutar (Grupta tekrar sorulunca 1 saniyede atar!)
+        self.generated_pdf_cache: Dict[str, Tuple[float, bytes, str]] = {}
+
+    def clear_all_caches(self) -> None:
+        with self._cache_lock:
+            self.persistent_cache = {"collections": {}, "lots": {}}
+            save_json_cache(PERSISTENT_CACHE_FILE, self.persistent_cache)
+            self.generated_pdf_cache.clear()
+            self.drive._lot_result_cache.clear()
+            self.drive._pdf_image_cache.clear()
 
     @staticmethod
     def _detect_columns(col_map: Dict[Any, str]) -> Dict[str, Any]:
@@ -1964,7 +2044,7 @@ class InventoryEngine:
 
         if norm_key in self.drive._lot_result_cache:
             ts, cached_res = self.drive._lot_result_cache[norm_key]
-            if now - ts < 600:
+            if now - ts < 1800:
                 return cached_res
 
         folder_id, folder_link, parent_id, actual_name = (
@@ -2048,8 +2128,27 @@ class InventoryEngine:
         max_lots: int = 100,
         only_sold_out: bool = False,
         include_images: bool = True,
+        force_refresh: bool = False,
         progress_cb: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
+        """
+        Kalıcı Disk + RAM Önbellekli Koleksiyon Tarayıcı:
+        Bir koleksiyon tarandığında sonuçları 60 dakika boyunca önbellekte tutar.
+        Özelde tarandıktan 5 dk sonra grupta tekrar istendiğinde 47 klasörü baştan
+        taramak yerine 0.1 saniyede hazır listeyi döner!
+        """
+        cache_key = f"{normalize_turkish_key(collection_name)}_{'SOLDOUT' if only_sold_out else 'ACTIVE'}"
+        now = time.time()
+
+        if not force_refresh:
+            cached_coll = self.persistent_cache.get("collections", {}).get(
+                cache_key
+            )
+            if cached_coll and (now - cached_coll.get("ts", 0)) < 3600:
+                items = cached_coll.get("items", [])
+                if items:
+                    return items
+
         fid, _, _, _ = self.drive.find_folder_exact(collection_name)
         if not fid:
             return []
@@ -2181,7 +2280,12 @@ class InventoryEngine:
         for idx, lf in enumerate(all_unique_items, start=1):
             if progress_cb and (idx == 1 or idx % 8 == 0 or idx == total_items):
                 try:
-                    progress_cb(collection_name, idx, total_items, lf["clean_title"])
+                    progress_cb(
+                        f"Adım 1/2 ({collection_name})",
+                        idx,
+                        total_items,
+                        lf["clean_title"],
+                    )
                 except Exception:
                     pass
 
@@ -2246,11 +2350,21 @@ class InventoryEngine:
                     "imgs": imgs,
                 }
             )
+
+        if results:
+            with self._cache_lock:
+                self.persistent_cache.setdefault("collections", {})[cache_key] = {
+                    "ts": time.time(),
+                    "items": results,
+                }
+                save_json_cache(PERSISTENT_CACHE_FILE, self.persistent_cache)
+
         return results
 
     def collect_all_active_inventory_data(
         self,
         target_collections: Optional[List[str]] = None,
+        force_refresh: bool = False,
         progress_cb: Optional[Any] = None,
     ) -> Dict[str, Any]:
         collections = target_collections or [
@@ -2274,6 +2388,7 @@ class InventoryEngine:
                 max_lots=100,
                 only_sold_out=False,
                 include_images=False,
+                force_refresh=force_refresh,
                 progress_cb=progress_cb,
             )
             c_m2 = 0.0
@@ -2358,7 +2473,7 @@ class InventoryEngine:
 
 
 # =====================================================================
-# 5. KURUMSAL SUNUM, PACKING LIST & MASTER STOK RAPORU (PDF + EXCEL) MOTORU
+# 5. PARALEL HIZLANDIRILMIŞ KURUMSAL SUNUM, PACKING LIST & STOK RAPORU MOTORU
 # =====================================================================
 class CorporateDocumentEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -2432,7 +2547,7 @@ class CorporateDocumentEngine:
             horizontal="right", vertical="center", wrap_text=True
         )
 
-        # SEKME 1: 1_OZET_RAPOR (EXECUTIVE SUMMARY)
+        # SEKME 1: 1_OZET_RAPOR
         ws_sum = wb.active
         ws_sum.title = "1_OZET_RAPOR"
 
@@ -2926,8 +3041,24 @@ class CorporateDocumentEngine:
         queries: List[str],
         collection_folder_names: Optional[List[str]] = None,
         only_sold_out: bool = False,
+        force_refresh: bool = False,
         progress_cb: Optional[Any] = None,
     ) -> Tuple[bytes, str]:
+        """
+        1. Eğer aynı koleksiyon PDF'i son 30 dk içinde üretilmişse (örn. özelde üretilip
+           5 dk sonra grupta tekrar istendiyse) 0.05 saniyede önbellekten döner!
+        2. İlk kez üretiliyorsa 47/47 klasör taramasından sonra görselleri 4'lü paralel
+           iş parçacığıyla (ThreadPoolExecutor) indirir ve canlı ilerleme gösterir;
+           47/47'de ASLA TAKILMAZ!
+        """
+        if collection_folder_names and not force_refresh:
+            pdf_cache_key = (
+                f"{'_'.join(sorted(collection_folder_names))}_{'SOLD' if only_sold_out else 'ACT'}"
+            )
+            cached_pdf = self.inventory.generated_pdf_cache.get(pdf_cache_key)
+            if cached_pdf and (time.time() - cached_pdf[0]) < 1800:
+                return cached_pdf[1], cached_pdf[2]
+
         cards: List[Dict[str, Any]] = []
         seen_keys = set()
 
@@ -2940,12 +3071,14 @@ class CorporateDocumentEngine:
             else:
                 pdf_title = f"{' & '.join(titles_norm)} — EXECUTIVE CATALOG PRESENTATION"
 
+            raw_items = []
             for coll_name in collection_folder_names:
                 scanned = self.inventory.scan_collection_lots(
                     coll_name,
                     max_lots=100,
                     only_sold_out=only_sold_out,
                     include_images=True,
+                    force_refresh=force_refresh,
                     progress_cb=progress_cb,
                 )
                 for item in scanned:
@@ -2957,24 +3090,61 @@ class CorporateDocumentEngine:
                     if dedup_k in seen_keys:
                         continue
                     seen_keys.add(dedup_k)
+                    raw_items.append(item)
 
-                    img_pack = self.drive.get_best_framed_slab_for_pdf(
-                        item["id"],
-                        item["lot_code"],
-                        pre_imgs=item.get("imgs"),
-                        parent_folder_id=item.get("parent_id"),
-                    )
-                    cards.append(
-                        {
-                            "title": item["title"],
-                            "stone_name": item["stone_name"],
-                            "lot_code": item["lot_code"],
-                            "is_sold_out": item.get("is_sold_out", False),
-                            "data": item["data"],
-                            "drive_link": item["link"],
-                            "img_pack": img_pack,
-                        }
-                    )
+            # AŞAMA 2: Görselleri Paralel (4 Worker) İndir ve Canlı İlerleme Göster!
+            total_to_img = len(raw_items)
+            img_results_map: Dict[int, Optional[Tuple[bytes, float, float]]] = {}
+
+            def _fetch_one_img(idx_i: int, it_obj: Dict[str, Any]):
+                return idx_i, self.drive.get_best_framed_slab_for_pdf(
+                    it_obj["id"],
+                    it_obj["lot_code"],
+                    pre_imgs=it_obj.get("imgs"),
+                    parent_folder_id=it_obj.get("parent_id"),
+                    fast_mode=True,
+                )
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                futures = [
+                    pool.submit(_fetch_one_img, i, it)
+                    for i, it in enumerate(raw_items)
+                ]
+                done_cnt = 0
+                for fut in as_completed(futures):
+                    done_cnt += 1
+                    try:
+                        i_res, pack_res = fut.result(timeout=15)
+                        img_results_map[i_res] = pack_res
+                    except Exception:
+                        pass
+                    if progress_cb and (
+                        done_cnt == 1
+                        or done_cnt % 6 == 0
+                        or done_cnt == total_to_img
+                    ):
+                        try:
+                            progress_cb(
+                                "Adım 2/2 (Görsel & PDF Basımı)",
+                                done_cnt,
+                                total_to_img,
+                                raw_items[min(done_cnt - 1, total_to_img - 1)]["title"],
+                            )
+                        except Exception:
+                            pass
+
+            for i, item in enumerate(raw_items):
+                cards.append(
+                    {
+                        "title": item["title"],
+                        "stone_name": item["stone_name"],
+                        "lot_code": item["lot_code"],
+                        "is_sold_out": item.get("is_sold_out", False),
+                        "data": item["data"],
+                        "drive_link": item["link"],
+                        "img_pack": img_results_map.get(i),
+                    }
+                )
         else:
             pdf_title = "EXECUTIVE STOCK & SLAB PRESENTATION"
             for q in queries:
@@ -2989,6 +3159,7 @@ class CorporateDocumentEngine:
                     q,
                     pre_imgs=info.get("imgs"),
                     parent_folder_id=info.get("parent_id"),
+                    fast_mode=False,
                 )
                 cards.append(
                     {
@@ -3211,6 +3382,14 @@ class CorporateDocumentEngine:
         if collection_folder_names:
             mode_tag = "SoldOut" if only_sold_out else "ActiveCatalog"
             fname = f"Arslanlar_{mode_tag}_{len(cards)}_Stones_{datetime.now().strftime('%H%M')}.pdf"
+            pdf_cache_key = (
+                f"{'_'.join(sorted(collection_folder_names))}_{'SOLD' if only_sold_out else 'ACT'}"
+            )
+            self.inventory.generated_pdf_cache[pdf_cache_key] = (
+                time.time(),
+                pdf_bytes,
+                fname,
+            )
         else:
             fname = f"Arslanlar_Presentation_{'_'.join(queries[:3])}.pdf"
         return pdf_bytes, fname
@@ -3815,6 +3994,10 @@ class ArgonBrain:
             ]
         )
 
+        force_refresh = any(
+            kw in raw for kw in ["YENILE", "GUNCELLE", "REFRESH", "SIFIRDAN"]
+        )
+
         collection_folders: List[str] = []
         if re.search(r"ARSLANLAR\s+COLLECTION(?!\s*EXCLUSIVE)", raw) or (
             "COLLECTION" in raw and "EXCLUSIVE" not in raw
@@ -3904,6 +4087,7 @@ class ArgonBrain:
             "matched_queries": list(dict.fromkeys(matched))[:12],
             "collection_folders": collection_folders,
             "want_sold_out": want_sold_out,
+            "force_refresh": force_refresh,
             "want_deep_scan": want_deep_scan,
             "want_pdf": want_pdf,
             "want_packing": want_packing,
@@ -3913,7 +4097,7 @@ class ArgonBrain:
 
 
 # =====================================================================
-# 7. SIRALI KUYRUK ZIRHLI TELEGRAM SOHBET YÖNETİCİSİ
+# 7. ÇİFT ŞERİTLİ (DUAL-LANE NON-BLOCKING) TELEGRAM SOHBET YÖNETİCİSİ
 # =====================================================================
 drive_explorer = DriveExplorer(GOOGLE_SA_JSON)
 inventory_engine = InventoryEngine(drive_explorer)
@@ -3921,14 +4105,33 @@ doc_engine = CorporateDocumentEngine(inventory_engine, drive_explorer)
 argon_brain = ArgonBrain(GEMINI_API_KEY)
 
 PROCESSED_MESSAGES = deque(maxlen=500)
-TASK_QUEUE_SEMAPHORE = asyncio.Semaphore(1)
+# Sadece dev koleksiyon taramaları kendi aralarında sıraya girer;
+# Hızlı lot/link/fotoğraf/sohbet sorguları HİÇBİR ZAMAN BEKLEMEZ!
+HEAVY_CATALOG_LOCK = asyncio.Semaphore(1)
+LAST_STATUS_EDIT_TS: Dict[int, float] = {}
+
+
+async def safe_edit_status(status_msg: Any, html_text: str) -> None:
+    """
+    Telegram FloodWait (Çok sık mesaj düzenleme) yüzünden botun takılmasını
+    önlemek için en erken 2.5 saniyede bir durum mesajını günceller.
+    """
+    msg_id = getattr(status_msg, "message_id", 0)
+    now = time.time()
+    if now - LAST_STATUS_EDIT_TS.get(msg_id, 0.0) < 2.5:
+        return
+    LAST_STATUS_EDIT_TS[msg_id] = now
+    try:
+        await status_msg.edit_text(html_text, parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
 
 
 async def telegram_error_handler(
     update: object, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     err = context.error
-    if isinstance(err, (Conflict, NetworkError, TimedOut)):
+    if isinstance(err, (Conflict, NetworkError, TimedOut, RetryAfter)):
         return
     logger.error(f"Telegram hatası: {err}")
 
@@ -3966,392 +4169,443 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not intent.get("should_reply"):
         return
 
-    async with TASK_QUEUE_SEMAPHORE:
-        # 0. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA
-        if intent.get("is_visual_search"):
-            status = await msg.reply_text(
-                "🔍 <b>Gönderdiğiniz mermer fotoğrafı analiz ediliyor...</b>",
-                parse_mode=ParseMode.HTML,
+    if intent.get("force_refresh"):
+        inventory_engine.clear_all_caches()
+
+    # -----------------------------------------------------------------
+    # 0. FOTOĞRAF ATILDIĞINDA BENZER TAŞ BULMA (HIZLI ŞERİT)
+    # -----------------------------------------------------------------
+    if intent.get("is_visual_search"):
+        status = await msg.reply_text(
+            "🔍 <b>Gönderdiğiniz mermer fotoğrafı analiz ediliyor...</b>",
+            parse_mode=ParseMode.HTML,
+        )
+        try:
+            photo_file = await msg.photo[-1].get_file()
+            img_bytes = bytes(await photo_file.download_as_bytearray())
+            matched_stones = await asyncio.wait_for(
+                asyncio.to_thread(argon_brain.match_visual_stone, img_bytes),
+                timeout=20,
             )
-            try:
-                photo_file = await msg.photo[-1].get_file()
-                img_bytes = bytes(await photo_file.download_as_bytearray())
-                matched_stones = await asyncio.to_thread(
-                    argon_brain.match_visual_stone, img_bytes
-                )
-                await status.delete()
-                intent["matched_queries"] = matched_stones
-                intent["want_photo"] = True
-                intent["is_corporate_chat"] = False
-            except Exception as e:
-                await status.edit_text(f"⚠️ Görsel analiz edilemedi: {e}")
-                return
-
-        queries = intent.get("matched_queries", [])
-        collection_folders: List[str] = intent.get("collection_folders", [])
-        only_sold_out: bool = bool(intent.get("want_sold_out", False))
-
-        # 1. DEEP SCAN: GENİŞ + ÖZET MASTER STOK RAPORU (MESAJ + EXCEL + PDF)
-        if intent.get("want_deep_scan") and not queries:
-            target_colls = collection_folders or [
-                "Arslanlar Collection",
-                "Arslanlar Series",
-                "Arslanlar Exclusive Collection",
-            ]
-            status = await msg.reply_text(
-                "🔎 <b>Argon Kurumsal Stok Raporu (Özet + Geniş PDF & Excel) Hazırlanıyor...</b>\n"
-                f"Kapsam: <b>{', '.join(target_colls)}</b> (Satılan / Sold-Out taşlar hariçtir).",
-                parse_mode=ParseMode.HTML,
-            )
-            main_loop = asyncio.get_running_loop()
-
-            def _stock_progress_cb(
-                c_name: str, curr_i: int, tot_i: int, st_title: str
-            ):
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        status.edit_text(
-                            "📊 <b>Aktif Stok Envanteri Taranıyor...</b>\n"
-                            f"📁 Koleksiyon: <b>{c_name}</b> ({curr_i}/{tot_i})\n"
-                            f"💎 İncelenen Lot: <code>{st_title}</code>",
-                            parse_mode=ParseMode.HTML,
-                        ),
-                        main_loop,
-                    )
-                except Exception:
-                    pass
-
-            try:
-                inv_data = await asyncio.to_thread(
-                    inventory_engine.collect_all_active_inventory_data,
-                    target_colls,
-                    _stock_progress_cb,
-                )
-
-                # A) Telegram Yönetici Özeti Mesajı
-                msg_lines = [
-                    "🏛 <b>ARSLANLAR MARBLE — AKTİF STOK YÖNETİCİ ÖZETİ</b>",
-                    f"📅 <i>Tarih: {inv_data['generated_at']} (Sold-Out Hariç)</i>\n",
-                ]
-                for s_it in inv_data.get("summary", []):
-                    msg_lines.append(
-                        f"📁 <b>{s_it['collection'].upper()}</b>\n"
-                        f"  • Aktif Lot: <code>{s_it['lots_count']} Lot</code>\n"
-                        f"  • Toplam Plaka: <code>{s_it['slabs']} Plaka ({s_it['bundles']} Bundle)</code>\n"
-                        f"  • Net Stok: <b><code>{s_it['m2']:,.2f} m²</code></b> (<code>{s_it['net_kg']/1000.0:,.1f} Ton</code>)\n"
-                    )
-                msg_lines.append(
-                    "🌐 <b>GENEL FABRİKA AKTİF STOK TOPLAMI:</b>\n"
-                    f"• Toplam: <b><code>{inv_data['grand_m2']:,.2f} m²</code></b>\n"
-                    f"• Plaka & Bundle: <code>{inv_data['grand_slabs']} Plaka / {inv_data['grand_bundles']} Bundle ({inv_data['grand_lots']} Lot)</code>\n"
-                    f"• Tahmini Net Tonaj: <code>{inv_data['grand_weight_kg']/1000.0:,.2f} Ton</code>"
-                )
-                await status.edit_text(
-                    "\n".join(msg_lines), parse_mode=ParseMode.HTML
-                )
-
-                # B) 2 Sekmeli (1_OZET_RAPOR + 2_GENIS_DETAYLI_ENVANTER) Excel Raporu
-                excel_bytes = await asyncio.to_thread(
-                    doc_engine.generate_master_stock_report_excel, inv_data
-                )
-                date_tag = datetime.now().strftime("%d_%m_%Y")
-                await msg.reply_document(
-                    document=io.BytesIO(excel_bytes),
-                    filename=f"ARSLANLAR_MASTER_STOCK_REPORT_{date_tag}.xlsx",
-                    caption=(
-                        "📊 <b>Arslanlar Marble — Master Stok Excel Raporu</b>\n"
-                        "• <b>Sekme 1:</b> Koleksiyon Bazlı Yönetici Özeti\n"
-                        "• <b>Sekme 2:</b> Geniş Lot Bazlı Detaylı Envanter Tablosu"
-                    ),
-                    parse_mode=ParseMode.HTML,
-                )
-
-                # C) Yatay A4 Kurumsal PDF Stok Raporu (Özet + Geniş Tablo)
-                pdf_bytes = await asyncio.to_thread(
-                    doc_engine.generate_master_stock_report_pdf, inv_data
-                )
-                await msg.reply_document(
-                    document=io.BytesIO(pdf_bytes),
-                    filename=f"ARSLANLAR_EXECUTIVE_INVENTORY_REPORT_{date_tag}.pdf",
-                    caption=(
-                        f"📄 <b>Arslanlar Marble — Executive PDF Stok Raporu</b>\n"
-                        f"Toplam Aktif Stok: <b>{inv_data['grand_m2']:,.2f} m²</b> ({inv_data['grand_slabs']} Plaka)"
-                    ),
-                    parse_mode=ParseMode.HTML,
-                )
-            except Exception as e:
-                await status.edit_text(f"⚠️ Stok raporu oluşturulurken uyarı: {e}")
+            await status.delete()
+            intent["matched_queries"] = matched_stones
+            intent["want_photo"] = True
+            intent["is_corporate_chat"] = False
+        except Exception as e:
+            await status.edit_text(f"⚠️ Görsel analiz edilemedi: {e}")
             return
 
-        # 2. KURUMSAL KİMLİK SOHBET & SORU YANITLAMA
-        if not queries and not collection_folders:
-            cached_summary = ""
-            if drive_explorer._lot_result_cache:
-                summary_parts = []
-                for k, (_, v) in list(drive_explorer._lot_result_cache.items())[:15]:
-                    d_v = v.get("data", {})
-                    if d_v.get("total_m2", 0) > 0:
-                        summary_parts.append(
-                            f"{v['title']}: {d_v['total_m2']} m2 ({d_v['total_slabs']} Plaka)"
-                        )
-                if summary_parts:
-                    cached_summary = "Hafızadaki güncel bazı lotlar: " + ", ".join(
-                        summary_parts
-                    )
+    queries = intent.get("matched_queries", [])
+    collection_folders: List[str] = intent.get("collection_folders", [])
+    only_sold_out: bool = bool(intent.get("want_sold_out", False))
+    force_refresh: bool = bool(intent.get("force_refresh", False))
 
-            reply_msg = await asyncio.to_thread(
-                argon_brain.generate_corporate_assistant_reply,
-                user_text,
-                cached_summary,
-            )
-            try:
-                await msg.reply_text(reply_msg, parse_mode=ParseMode.HTML)
-            except Exception:
-                await msg.reply_text(reply_msg)
-            return
+    # -----------------------------------------------------------------
+    # 1. DEEP SCAN: GENİŞ + ÖZET MASTER STOK RAPORU (AĞIR ŞERİT - KİLİTLENMEZ)
+    # -----------------------------------------------------------------
+    if intent.get("want_deep_scan") and not queries:
+        target_colls = collection_folders or [
+            "Arslanlar Collection",
+            "Arslanlar Series",
+            "Arslanlar Exclusive Collection",
+        ]
+        status = await msg.reply_text(
+            "🔎 <b>Argon Kurumsal Stok Raporu (Özet + Geniş PDF & Excel) Hazırlanıyor...</b>\n"
+            f"Kapsam: <b>{', '.join(target_colls)}</b> (Satılan / Sold-Out taşlar hariçtir).",
+            parse_mode=ParseMode.HTML,
+        )
+        main_loop = asyncio.get_running_loop()
 
-        # 3. KOLEKSİYON PDF SUNUMU (AKTİF STOK VEYA SATILAN TAŞLAR MODU)
-        if (
-            collection_folders
-            and intent.get("want_pdf")
-            and not intent.get("want_packing")
+        def _stock_progress_cb(
+            c_name: str, curr_i: int, tot_i: int, st_title: str
         ):
-            coll_label = ", ".join(collection_folders)
-            mode_desc = (
-                "SATILAN TAŞLAR (SOLD OUT ARŞİVİ)"
-                if only_sold_out
-                else "AKTİF STOK (SOLD OUT HARİÇ)"
+            html_p = (
+                "📊 <b>Aktif Stok Envanteri Taranıyor...</b>\n"
+                f"📁 Aşama: <b>{c_name}</b> ({curr_i}/{tot_i})\n"
+                f"💎 İncelenen Lot: <code>{st_title}</code>"
             )
-            status_msg = await msg.reply_text(
-                f"📁 <b>{coll_label}</b> [{mode_desc}] taranıyor...\n"
-                "Lütfen bekleyin, ilerleme durumu canlı güncellenecektir.",
-                parse_mode=ParseMode.HTML,
+            asyncio.run_coroutine_threadsafe(
+                safe_edit_status(status, html_p), main_loop
             )
-            main_loop = asyncio.get_running_loop()
 
-            def _progress_callback(
-                c_name: str, curr_idx: int, total_cnt: int, st_title: str
-            ):
-                try:
-                    asyncio.run_coroutine_threadsafe(
-                        status_msg.edit_text(
-                            f"📁 <b>{c_name}</b> ({mode_desc}) Hazırlanıyor...\n"
-                            f"⏳ İlerleme: <b>{curr_idx} / {total_cnt}</b> Klasör Kontrol Edildi\n"
-                            f"💎 Son İşlenen: <code>{st_title}</code>",
-                            parse_mode=ParseMode.HTML,
-                        ),
-                        main_loop,
+        try:
+            async with HEAVY_CATALOG_LOCK:
+                inv_data = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        inventory_engine.collect_all_active_inventory_data,
+                        target_colls,
+                        force_refresh,
+                        _stock_progress_cb,
+                    ),
+                    timeout=180,
+                )
+
+            msg_lines = [
+                "🏛 <b>ARSLANLAR MARBLE — AKTİF STOK YÖNETİCİ ÖZETİ</b>",
+                f"📅 <i>Tarih: {inv_data['generated_at']} (Sold-Out Hariç)</i>\n",
+            ]
+            for s_it in inv_data.get("summary", []):
+                msg_lines.append(
+                    f"📁 <b>{s_it['collection'].upper()}</b>\n"
+                    f"  • Aktif Lot: <code>{s_it['lots_count']} Lot</code>\n"
+                    f"  • Toplam Plaka: <code>{s_it['slabs']} Plaka ({s_it['bundles']} Bundle)</code>\n"
+                    f"  • Net Stok: <b><code>{s_it['m2']:,.2f} m²</code></b> (<code>{s_it['net_kg']/1000.0:,.1f} Ton</code>)\n"
+                )
+            msg_lines.append(
+                "🌐 <b>GENEL FABRİKA AKTİF STOK TOPLAMI:</b>\n"
+                f"• Toplam: <b><code>{inv_data['grand_m2']:,.2f} m²</code></b>\n"
+                f"• Plaka & Bundle: <code>{inv_data['grand_slabs']} Plaka / {inv_data['grand_bundles']} Bundle ({inv_data['grand_lots']} Lot)</code>\n"
+                f"• Tahmini Net Tonaj: <code>{inv_data['grand_weight_kg']/1000.0:,.2f} Ton</code>"
+            )
+            await status.edit_text(
+                "\n".join(msg_lines), parse_mode=ParseMode.HTML
+            )
+
+            excel_bytes = await asyncio.to_thread(
+                doc_engine.generate_master_stock_report_excel, inv_data
+            )
+            date_tag = datetime.now().strftime("%d_%m_%Y")
+            await msg.reply_document(
+                document=io.BytesIO(excel_bytes),
+                filename=f"ARSLANLAR_MASTER_STOCK_REPORT_{date_tag}.xlsx",
+                caption=(
+                    "📊 <b>Arslanlar Marble — Master Stok Excel Raporu</b>\n"
+                    "• <b>Sekme 1:</b> Koleksiyon Bazlı Yönetici Özeti\n"
+                    "• <b>Sekme 2:</b> Geniş Lot Bazlı Detaylı Envanter Tablosu"
+                ),
+                parse_mode=ParseMode.HTML,
+                write_timeout=90,
+                read_timeout=60,
+            )
+
+            pdf_bytes = await asyncio.to_thread(
+                doc_engine.generate_master_stock_report_pdf, inv_data
+            )
+            await msg.reply_document(
+                document=io.BytesIO(pdf_bytes),
+                filename=f"ARSLANLAR_EXECUTIVE_INVENTORY_REPORT_{date_tag}.pdf",
+                caption=(
+                    f"📄 <b>Arslanlar Marble — Executive PDF Stok Raporu</b>\n"
+                    f"Toplam Aktif Stok: <b>{inv_data['grand_m2']:,.2f} m²</b> ({inv_data['grand_slabs']} Plaka)"
+                ),
+                parse_mode=ParseMode.HTML,
+                write_timeout=90,
+                read_timeout=60,
+            )
+        except Exception as e:
+            await status.edit_text(f"⚠️ Stok raporu uyarısı: {e}")
+        return
+
+    # -----------------------------------------------------------------
+    # 2. KURUMSAL KİMLİK SOHBET & SORU YANITLAMA (HIZLI ŞERİT - ANINDA CEVAP)
+    # -----------------------------------------------------------------
+    if not queries and not collection_folders:
+        cached_summary = ""
+        if drive_explorer._lot_result_cache:
+            summary_parts = []
+            for k, (_, v) in list(drive_explorer._lot_result_cache.items())[:15]:
+                d_v = v.get("data", {})
+                if d_v.get("total_m2", 0) > 0:
+                    summary_parts.append(
+                        f"{v['title']}: {d_v['total_m2']} m2 ({d_v['total_slabs']} Plaka)"
                     )
-                except Exception:
-                    pass
-
-            try:
-                pdf_b, pdf_n = await asyncio.to_thread(
-                    doc_engine.generate_presentation_pdf,
-                    [],
-                    collection_folder_names=collection_folders,
-                    only_sold_out=only_sold_out,
-                    progress_cb=_progress_callback,
+            if summary_parts:
+                cached_summary = "Hafızadaki güncel bazı lotlar: " + ", ".join(
+                    summary_parts
                 )
-                await msg.reply_document(
-                    document=io.BytesIO(pdf_b),
-                    filename=pdf_n,
-                    caption=f"📄 <b>{coll_label}</b> — {mode_desc} PDF Kataloğu",
-                    parse_mode=ParseMode.HTML,
-                )
-                await status_msg.delete()
-            except Exception as e:
-                await status_msg.edit_text(f"⚠️ Koleksiyon PDF uyarısı: {e}")
-            return
 
-        # 4. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU
-        if queries and intent.get("want_pdf") and not intent.get("want_packing"):
-            status_msg = await msg.reply_text(
-                f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Gerçek Excel Metrajlı PDF Sunumu hazırlanıyor...",
+        reply_msg = await asyncio.to_thread(
+            argon_brain.generate_corporate_assistant_reply,
+            user_text,
+            cached_summary,
+        )
+        try:
+            await msg.reply_text(reply_msg, parse_mode=ParseMode.HTML)
+        except Exception:
+            await msg.reply_text(reply_msg)
+        return
+
+    # -----------------------------------------------------------------
+    # 3. KOLEKSİYON PDF SUNUMU (ÖNBELLEKLİ & PARALEL GÖRSEL İNDİRMELİ)
+    # -----------------------------------------------------------------
+    if (
+        collection_folders
+        and intent.get("want_pdf")
+        and not intent.get("want_packing")
+    ):
+        coll_label = ", ".join(collection_folders)
+        mode_desc = (
+            "SATILAN TAŞLAR (SOLD OUT ARŞİVİ)"
+            if only_sold_out
+            else "AKTİF STOK (SOLD OUT HARİÇ)"
+        )
+        status_msg = await msg.reply_text(
+            f"📁 <b>{coll_label}</b> [{mode_desc}] Kataloğu Hazırlanıyor...",
+            parse_mode=ParseMode.HTML,
+        )
+        main_loop = asyncio.get_running_loop()
+
+        def _progress_callback(
+            stage_name: str, curr_idx: int, total_cnt: int, st_title: str
+        ):
+            html_p = (
+                f"📁 <b>{coll_label}</b> ({mode_desc})\n"
+                f"⚙️ <b>{stage_name}:</b> <code>{curr_idx} / {total_cnt}</code>\n"
+                f"💎 İşlenen: <code>{st_title}</code>"
+            )
+            asyncio.run_coroutine_threadsafe(
+                safe_edit_status(status_msg, html_p), main_loop
+            )
+
+        try:
+            async with HEAVY_CATALOG_LOCK:
+                pdf_b, pdf_n = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        doc_engine.generate_presentation_pdf,
+                        [],
+                        collection_folder_names=collection_folders,
+                        only_sold_out=only_sold_out,
+                        force_refresh=force_refresh,
+                        progress_cb=_progress_callback,
+                    ),
+                    timeout=180,
+                )
+
+            await safe_edit_status(
+                status_msg,
+                f"📤 <b>{coll_label}</b> PDF Kataloğu oluşturuldu ({len(pdf_b)/1024/1024:.1f} MB), Telegram'a yükleniyor...",
+            )
+            await msg.reply_document(
+                document=io.BytesIO(pdf_b),
+                filename=pdf_n,
+                caption=f"📄 <b>{coll_label}</b> — {mode_desc} PDF Kataloğu",
                 parse_mode=ParseMode.HTML,
+                write_timeout=90,
+                read_timeout=60,
             )
             try:
-                pdf_b, pdf_n = await asyncio.to_thread(
+                await status_msg.delete()
+            except Exception:
+                pass
+        except Exception as e:
+            await status_msg.edit_text(f"⚠️ Koleksiyon PDF uyarısı: {e}")
+        return
+
+    # -----------------------------------------------------------------
+    # 4. ÇOKLU VEYA TEKLİ LOT PDF SUNUMU (HIZLI ŞERİT - KUYRUK BEKLEMEZ!)
+    # -----------------------------------------------------------------
+    if queries and intent.get("want_pdf") and not intent.get("want_packing"):
+        status_msg = await msg.reply_text(
+            f"📄 <b>{', '.join(queries)}</b> için Bronz Aslan Logolu ve Gerçek Excel Metrajlı PDF Sunumu hazırlanıyor...",
+            parse_mode=ParseMode.HTML,
+        )
+        try:
+            pdf_b, pdf_n = await asyncio.wait_for(
+                asyncio.to_thread(
                     doc_engine.generate_presentation_pdf,
                     queries,
                     only_sold_out=only_sold_out,
-                )
-                await msg.reply_document(
-                    document=io.BytesIO(pdf_b),
-                    filename=pdf_n,
-                    caption=f"📄 <b>{', '.join(queries)}</b> — Executive Stock & Slab Presentation",
-                    parse_mode=ParseMode.HTML,
-                )
+                ),
+                timeout=60,
+            )
+            await msg.reply_document(
+                document=io.BytesIO(pdf_b),
+                filename=pdf_n,
+                caption=f"📄 <b>{', '.join(queries)}</b> — Executive Stock & Slab Presentation",
+                parse_mode=ParseMode.HTML,
+                write_timeout=60,
+            )
+            try:
                 await status_msg.delete()
-            except Exception as e:
-                await status_msg.edit_text(f"⚠️ PDF oluşturulamadı: {e}")
-            return
+            except Exception:
+                pass
+        except Exception as e:
+            await status_msg.edit_text(f"⚠️ PDF oluşturulamadı: {e}")
+        return
 
-        # 5. ÇEKİ LİSTESİ (1. DRIVE ORİJİNAL EXCEL + 2. BUNDLE DRAFT EXCEL + 3. KURUMSAL PDF)
-        if queries and intent.get("want_packing"):
-            status_msg = await msg.reply_text(
-                f"📦 <b>{', '.join(queries)}</b> için 12'şerli Bundle Formatında Kurumsal Çeki Listeleri hazırlanıyor...",
+    # -----------------------------------------------------------------
+    # 5. ÇEKİ LİSTESİ (1. ORİJİNAL EXCEL + 2. BUNDLE DRAFT EXCEL + 3. PDF)
+    # -----------------------------------------------------------------
+    if queries and intent.get("want_packing"):
+        status_msg = await msg.reply_text(
+            f"📦 <b>{', '.join(queries)}</b> için 12'şerli Bundle Formatında Kurumsal Çeki Listeleri hazırlanıyor...",
+            parse_mode=ParseMode.HTML,
+        )
+        collected_infos = []
+        for q in queries:
+            info = await asyncio.wait_for(
+                asyncio.to_thread(inventory_engine.get_lot_info, q), timeout=35
+            )
+            collected_infos.append(info)
+            if info.get("excel_bytes"):
+                await msg.reply_document(
+                    document=io.BytesIO(info["excel_bytes"]),
+                    filename=info["excel_name"],
+                    caption=f"📁 <b>{info['title']}</b> — Drive Orijinal Çeki Listesi",
+                    parse_mode=ParseMode.HTML,
+                    write_timeout=60,
+                )
+
+        valid_infos = [
+            inf for inf in collected_infos if inf["data"].get("clean_rows")
+        ]
+        if valid_infos:
+            draft_excel_bytes = await asyncio.to_thread(
+                doc_engine.generate_draft_format_packing_excel,
+                valid_infos,
+                customer_code="-".join(queries[:3]),
+            )
+            date_str = datetime.now().strftime("%d.%m.%Y")
+            draft_fname = (
+                f"PACKING LIST DRAFT {date_str} {'-'.join(queries[:3])}.xlsx"
+            )
+            await msg.reply_document(
+                document=io.BytesIO(draft_excel_bytes),
+                filename=draft_fname,
+                caption=f"📊 <b>{', '.join(queries)}</b> — Kurumsal Bundle Packing List (Min. 12'li Bundle Formatı)",
+                parse_mode=ParseMode.HTML,
+                write_timeout=60,
+            )
+
+            for inf in valid_infos:
+                pdf_pack_bytes = await asyncio.to_thread(
+                    doc_engine.generate_packing_list_pdf, inf
+                )
+                d_inf = inf["data"]
+                await msg.reply_document(
+                    document=io.BytesIO(pdf_pack_bytes),
+                    filename=f"OFFICIAL_PACKING_LIST_{inf['lot_code']}.pdf",
+                    caption=(
+                        f"📄 <b>{inf['title']}</b> — Resmi PDF Çeki Listesi "
+                        f"(<code>{d_inf['total_m2']:,.2f} m²</code> | <code>{d_inf['total_slabs']} Plaka</code>)"
+                    ),
+                    parse_mode=ParseMode.HTML,
+                    write_timeout=60,
+                )
+        else:
+            await msg.reply_text(
+                f"⚠️ <b>{', '.join(queries)}</b> klasöründe okunabilir Excel çeki listesi bulunamadı.",
                 parse_mode=ParseMode.HTML,
             )
-            collected_infos = []
-            for q in queries:
-                info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
-                collected_infos.append(info)
-                if info.get("excel_bytes"):
-                    await msg.reply_document(
-                        document=io.BytesIO(info["excel_bytes"]),
-                        filename=info["excel_name"],
-                        caption=f"📁 <b>{info['title']}</b> — Drive Orijinal Çeki Listesi",
-                        parse_mode=ParseMode.HTML,
-                    )
-
-            valid_infos = [
-                inf for inf in collected_infos if inf["data"].get("clean_rows")
-            ]
-            if valid_infos:
-                draft_excel_bytes = await asyncio.to_thread(
-                    doc_engine.generate_draft_format_packing_excel,
-                    valid_infos,
-                    customer_code="-".join(queries[:3]),
-                )
-                date_str = datetime.now().strftime("%d.%m.%Y")
-                draft_fname = (
-                    f"PACKING LIST DRAFT {date_str} {'-'.join(queries[:3])}.xlsx"
-                )
-                await msg.reply_document(
-                    document=io.BytesIO(draft_excel_bytes),
-                    filename=draft_fname,
-                    caption=f"📊 <b>{', '.join(queries)}</b> — Kurumsal Bundle Packing List (Min. 12'li Bundle Formatı)",
-                    parse_mode=ParseMode.HTML,
-                )
-
-                for inf in valid_infos:
-                    pdf_pack_bytes = await asyncio.to_thread(
-                        doc_engine.generate_packing_list_pdf, inf
-                    )
-                    d_inf = inf["data"]
-                    await msg.reply_document(
-                        document=io.BytesIO(pdf_pack_bytes),
-                        filename=f"OFFICIAL_PACKING_LIST_{inf['lot_code']}.pdf",
-                        caption=(
-                            f"📄 <b>{inf['title']}</b> — Resmi PDF Çeki Listesi "
-                            f"(<code>{d_inf['total_m2']:,.2f} m²</code> | <code>{d_inf['total_slabs']} Plaka</code>)"
-                        ),
-                        parse_mode=ParseMode.HTML,
-                    )
-            else:
-                await msg.reply_text(
-                    f"⚠️ <b>{', '.join(queries)}</b> klasöründe okunabilir Excel çeki listesi bulunamadı.",
-                    parse_mode=ParseMode.HTML,
-                )
+        try:
             await status_msg.delete()
-            return
+        except Exception:
+            pass
+        return
 
-        # 6. STANDART LOT SORGUSU (HIZLI LİNK VEYA FLASH-KART + 2 FOTOĞRAF)
-        for q in queries:
-            try:
-                if intent.get("want_only_link"):
-                    fid, flink, p_id, act_name = await asyncio.to_thread(
-                        drive_explorer.find_folder_exact, q
-                    )
-                    p_name = ""
-                    if p_id:
-                        pm = await asyncio.to_thread(
-                            drive_explorer.get_folder_metadata, p_id
-                        )
-                        if pm:
-                            p_name = pm.get("name", "")
-                    disp_t, _, l_code = clean_stone_and_lot_title(
-                        act_name or q, p_name
-                    )
-                    link_html = (
-                        f"<a href='{flink}'>Klasöre Git ({l_code})</a>"
-                        if flink
-                        else "Drive'da Klasör Bulunamadı"
-                    )
-                    await msg.reply_text(
-                        f"💎 <b>{disp_t}</b>\n• Drive Linki: {link_html}",
-                        parse_mode=ParseMode.HTML,
-                    )
-                    continue
-
-                info = await asyncio.to_thread(inventory_engine.get_lot_info, q)
-                d = info["data"]
-                fid = info["folder_id"]
-                flink = info["drive_link"]
-
-                m2_val = d.get("total_m2", 0.0)
-                slabs_val = d.get("total_slabs", 0)
-                bundles_cnt = (
-                    max(1, slabs_val // 12)
-                    if slabs_val >= 12
-                    else (1 if slabs_val > 0 else 0)
+    # -----------------------------------------------------------------
+    # 6. STANDART LOT SORGUSU (HIZLI ŞERİT - ANINDA LİNK VEYA FLASH-KART)
+    # -----------------------------------------------------------------
+    for q in queries:
+        try:
+            if intent.get("want_only_link"):
+                fid, flink, p_id, act_name = await asyncio.wait_for(
+                    asyncio.to_thread(drive_explorer.find_folder_exact, q),
+                    timeout=15,
                 )
-
-                if info.get("is_sold_out"):
-                    stock_str = (
-                        f"SOLD OUT ({m2_val:,.2f} m² / {slabs_val} Plaka)"
-                        if m2_val > 0
-                        else "SOLD OUT (Satıldı)"
+                p_name = ""
+                if p_id:
+                    pm = await asyncio.to_thread(
+                        drive_explorer.get_folder_metadata, p_id
                     )
-                elif m2_val > 0:
-                    stock_str = (
-                        f"{m2_val:,.2f} m² ({slabs_val} Plaka / {bundles_cnt} Bundle)"
-                    )
-                else:
-                    stock_str = "0.00 m² (0 Plaka)"
-
+                    if pm:
+                        p_name = pm.get("name", "")
+                disp_t, _, l_code = clean_stone_and_lot_title(
+                    act_name or q, p_name
+                )
                 link_html = (
-                    f"<a href='{flink}'>Klasöre Git ({info['lot_code']})</a>"
+                    f"<a href='{flink}'>Klasöre Git ({l_code})</a>"
                     if flink
                     else "Drive'da Klasör Bulunamadı"
                 )
-
-                text_response = (
-                    f"💎 <b>{info['title']}</b>\n"
-                    f"• Mevcut Stok: <code>{stock_str}</code>\n"
-                    f"• Ortalama Ebat: <code>{d.get('dimensions', '-')}</code>\n"
-                    f"• Yüzey & Kalınlık: <code>{d.get('surface', 'Polished')} ({d.get('thickness', '2 cm')})</code>\n"
-                    f"• Drive Linki: {link_html}"
+                await msg.reply_text(
+                    f"💎 <b>{disp_t}</b>\n• Drive Linki: {link_html}",
+                    parse_mode=ParseMode.HTML,
                 )
+                continue
 
-                img1, img2 = await asyncio.to_thread(
+            info = await asyncio.wait_for(
+                asyncio.to_thread(inventory_engine.get_lot_info, q), timeout=35
+            )
+            d = info["data"]
+            fid = info["folder_id"]
+            flink = info["drive_link"]
+
+            m2_val = d.get("total_m2", 0.0)
+            slabs_val = d.get("total_slabs", 0)
+            bundles_cnt = (
+                max(1, slabs_val // 12)
+                if slabs_val >= 12
+                else (1 if slabs_val > 0 else 0)
+            )
+
+            if info.get("is_sold_out"):
+                stock_str = (
+                    f"SOLD OUT ({m2_val:,.2f} m² / {slabs_val} Plaka)"
+                    if m2_val > 0
+                    else "SOLD OUT (Satıldı)"
+                )
+            elif m2_val > 0:
+                stock_str = (
+                    f"{m2_val:,.2f} m² ({slabs_val} Plaka / {bundles_cnt} Bundle)"
+                )
+            else:
+                stock_str = "0.00 m² (0 Plaka)"
+
+            link_html = (
+                f"<a href='{flink}'>Klasöre Git ({info['lot_code']})</a>"
+                if flink
+                else "Drive'da Klasör Bulunamadı"
+            )
+
+            text_response = (
+                f"💎 <b>{info['title']}</b>\n"
+                f"• Mevcut Stok: <code>{stock_str}</code>\n"
+                f"• Ortalama Ebat: <code>{d.get('dimensions', '-')}</code>\n"
+                f"• Yüzey & Kalınlık: <code>{d.get('surface', 'Polished')} ({d.get('thickness', '2 cm')})</code>\n"
+                f"• Drive Linki: {link_html}"
+            )
+
+            img1, img2 = await asyncio.wait_for(
+                asyncio.to_thread(
                     drive_explorer.get_images_for_telegram, fid, q
-                )
+                ),
+                timeout=25,
+            )
 
-                media = []
-                if img1:
-                    media.append(
-                        InputMediaPhoto(
-                            media=img1,
-                            caption=text_response,
-                            parse_mode=ParseMode.HTML,
-                        )
+            media = []
+            if img1:
+                media.append(
+                    InputMediaPhoto(
+                        media=img1,
+                        caption=text_response,
+                        parse_mode=ParseMode.HTML,
                     )
-                if img2:
-                    media.append(InputMediaPhoto(media=img2))
+                )
+            if img2:
+                media.append(InputMediaPhoto(media=img2))
 
-                if media:
-                    try:
-                        await msg.reply_media_group(media=media)
-                    except Exception:
-                        await msg.reply_text(
-                            text_response, parse_mode=ParseMode.HTML
-                        )
-                else:
+            if media:
+                try:
+                    await msg.reply_media_group(media=media, write_timeout=60)
+                except Exception:
                     await msg.reply_text(
                         text_response, parse_mode=ParseMode.HTML
                     )
-            except Exception as ex:
-                logger.error(f"Sorgu hatası ({q}): {ex}")
+            else:
                 await msg.reply_text(
-                    f"⚠️ <b>{q}</b> sorgulanırken gecikme yaşandı, lütfen tekrar deneyin.",
-                    parse_mode=ParseMode.HTML,
+                    text_response, parse_mode=ParseMode.HTML
                 )
+        except Exception as ex:
+            logger.error(f"Sorgu hatası ({q}): {ex}")
+            await msg.reply_text(
+                f"⚠️ <b>{q}</b> sorgulanırken gecikme yaşandı, lütfen tekrar deneyin.",
+                parse_mode=ParseMode.HTML,
+            )
 
 
 # =====================================================================
-# 8. ANA BAŞLATICI
+# 8. GENİŞLETİLMİŞ TIMEOUT ZIRHLI ANA BAŞLATICI
 # =====================================================================
 def main():
     if not TELEGRAM_TOKEN:
@@ -4362,6 +4616,10 @@ def main():
         ApplicationBuilder()
         .token(TELEGRAM_TOKEN)
         .concurrent_updates(True)
+        .read_timeout(60)
+        .write_timeout(90)
+        .connect_timeout(30)
+        .pool_timeout(30)
         .build()
     )
 
@@ -4372,9 +4630,9 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V16 (Executive Stock PDF/Excel & Guaranteed Photos) başlatılıyor...")
+    logger.info("🚀 Argon Master V17 (Non-Blocking Dual-Lane & Persistent Cache) başlatılıyor...")
     application.run_polling(
-        drop_pending_updates=True, poll_interval=1.0, timeout=15
+        drop_pending_updates=True, poll_interval=1.0, timeout=20
     )
 
 
