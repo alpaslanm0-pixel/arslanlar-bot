@@ -25,7 +25,7 @@ flask_app = Flask(__name__)
 
 @flask_app.route("/")
 def health_check():
-    return "Argon Master V15 Sold-Out Filter & Full Excel Engine is Live!", 200
+    return "Argon Master V16 Executive Stock Report Engine is Live!", 200
 
 @flask_app.route("/healthz")
 def healthz():
@@ -38,10 +38,6 @@ def _start_flask_immediately():
 threading.Thread(target=_start_flask_immediately, daemon=True).start()
 
 def _ensure_excel_readers():
-    """
-    Render'da eski .xls ve farklı formatlı Excel tablolarının (A-221 vb.)
-    'Import python-calamine / xlrd failed' hatası vermesini %100 önler.
-    """
     for pkg, mod in [("python-calamine", "python_calamine"), ("xlrd", "xlrd")]:
         try:
             __import__(mod)
@@ -96,7 +92,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
-logger = logging.getLogger("ArgonMaster_V15")
+logger = logging.getLogger("ArgonMaster_V16")
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -200,7 +196,7 @@ EMBEDDED_LOGO_B64 = (
     "N0c0HCvaDdH0v4bM0BR24f1ZnbwzXFehbRHu/gdZlalNfkai4wAAAABJRU5ErkJggg=="
 )
 
-# Alt klasör kara listesi (Bunlar asla ayrı bir taş veya lot olarak listelenmez!)
+# Alt klasör kara listesi (THUMBS / THUMBNAILS eklendi; asla taş adı sanılmaz!)
 SUBFOLDER_BLACKLIST = {
     "CUSTOM",
     "WEB",
@@ -217,6 +213,10 @@ SUBFOLDER_BLACKLIST = {
     "FOTOGRAFLAR",
     "PICTURES",
     "IMAGES",
+    "THUMBS",
+    "THUMB",
+    "THUMBNAILS",
+    "THUMBNAIL",
     "BOOKMATCH",
     "BM",
     "PACKING",
@@ -314,10 +314,6 @@ def sanitize_pdf_text(text: Any) -> str:
 
 
 def is_sold_out_name(name_or_path: str) -> bool:
-    """
-    Klasör adında veya üst klasör yolunda 'SOLD OUT', 'SATILDI', 'SATILAN'
-    ifadesi geçip geçmediğini kontrol eder.
-    """
     norm = normalize_turkish_key(name_or_path)
     return any(m in norm for m in SOLD_OUT_MARKERS)
 
@@ -362,13 +358,8 @@ def is_utility_subfolder(folder_name: str) -> bool:
 def clean_stone_and_lot_title(
     raw_title: str, parent_stone: str = ""
 ) -> Tuple[str, str, str]:
-    """
-    'SILVER ROOTS ] — A-221' veya 'SOLD OUT SILVER ROOTS — A-84' gibi klasör adlarındaki
-    tek kalmış köşeli parantezleri (']', '[') ve gürültü kelimelerini %100 temizler!
-    """
     s = normalize_turkish_key(raw_title)
     s = re.sub(r"\[.*?\]|\(.*?\)", " ", s)
-    # Eşleşmemiş tek kalan '[', ']', '(', ')' parantezlerini de sil!
     s = re.sub(r"[\[\]\(\)]", " ", s)
 
     lot_m = re.search(r"\b([A-Z]{1,4})[-\s_.]*0*(\d{1,5})\b", s)
@@ -550,7 +541,7 @@ def analyze_and_prepare_pdf_slab_image(
         with Image.open(io.BytesIO(raw_bytes)) as im:
             img = im.convert("RGB")
             w, h = img.size
-            if w < 120 or h < 100:
+            if w < 80 or h < 60:
                 return None
 
             aspect = w / float(h)
@@ -613,7 +604,7 @@ def analyze_and_prepare_pdf_slab_image(
 
 
 # =====================================================================
-# 3. SAF REST API GOOGLE DRIVE MOTORU
+# 3. SAF REST API GOOGLE DRIVE MOTORU (GARANTİLİ GÖRSEL YEDEKLEMELİ)
 # =====================================================================
 class DriveExplorer:
     DRIVE_API_URL = "https://www.googleapis.com/drive/v3/files"
@@ -712,7 +703,7 @@ class DriveExplorer:
                 url = f"{self.DRIVE_API_URL}/{file_id}"
                 params = {"alt": "media", "supportsAllDrives": "true"}
 
-            resp = requests.get(url, headers=headers, params=params, timeout=16)
+            resp = requests.get(url, headers=headers, params=params, timeout=18)
             if resp.status_code == 200 and len(resp.content) > 50:
                 return resp.content
         except Exception as e:
@@ -793,6 +784,7 @@ class DriveExplorer:
                             "LARGE",
                             "EMAIL",
                             "PHOTOS",
+                            "THUMBS",
                             "BOOKMATCH",
                         ]
                     ):
@@ -835,7 +827,15 @@ class DriveExplorer:
             fn_up = normalize_turkish_key(best.get("name", ""))
             if any(
                 re.search(rf"(?<![A-Z0-9]){bw}(?![A-Z0-9])", fn_up)
-                for bw in ["CUSTOM", "WEB", "LARGE", "EMAIL", "PHOTOS", "BOOKMATCH"]
+                for bw in [
+                    "CUSTOM",
+                    "WEB",
+                    "LARGE",
+                    "EMAIL",
+                    "PHOTOS",
+                    "THUMBS",
+                    "BOOKMATCH",
+                ]
             ):
                 p_meta = self.get_folder_metadata(parent_id)
                 if p_meta and exact_lot_match_in_text(p_meta.get("name", ""), norm_key) > 0:
@@ -1019,24 +1019,67 @@ class DriveExplorer:
 
         return None, None
 
+    @staticmethod
+    def _is_image_item(item: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+        """
+        Hem normal görselleri (image/jpeg, image/png, .jpg, .png) hem de
+        Google Drive kısayol (shortcut) görsellerini yakalar!
+        """
+        mime = item.get("mimeType", "")
+        name = item.get("name", "").lower()
+        if mime == "application/vnd.google-apps.shortcut":
+            sc = item.get("shortcutDetails", {})
+            t_id = sc.get("targetId")
+            t_mime = sc.get("targetMimeType", "")
+            if t_id and (
+                t_mime.startswith("image/")
+                or name.endswith((".jpg", ".jpeg", ".png", ".webp"))
+            ):
+                copy_it = dict(item)
+                copy_it["id"] = t_id
+                copy_it["mimeType"] = t_mime or "image/jpeg"
+                return True, copy_it
+        if mime.startswith("image/") or (
+            mime != "application/vnd.google-apps.folder"
+            and name.endswith((".jpg", ".jpeg", ".png", ".webp"))
+        ):
+            return True, dict(item)
+        return False, item
+
     def scan_images_deep(
-        self, folder_id: Optional[str], query_term: str
+        self,
+        folder_id: Optional[str],
+        query_term: str,
+        parent_folder_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        all_imgs: List[Dict[str, Any]] = []
+        """
+        VEGAS GOLD A-51 ve CREMA UNO A-277 gibi taşlarda 'High-Res Slab Selection'
+        yazıp fotoğrafın boş kalmasını %100 önler:
+        1. Önce CUSTOM dışındaki tüm alt klasörleri (LARGE, PHOTOS, WEB, THUMBS vb.) tarar.
+        2. Eğer hiç fotoğraf çıkmazsa (fotoğraflar sadece CUSTOM klasöründeyse veya
+           üst Taş klasöründeyse), yedek olarak oradan çeker! Asla boş bırakmaz!
+        """
+        primary_imgs: List[Dict[str, Any]] = []
+        custom_fallback_imgs: List[Dict[str, Any]] = []
+
         if folder_id:
             lvl1 = self.batch_list_children([folder_id]).get(folder_id, [])
-            sub_1 = []
+            sub_normal = []
+            sub_custom = []
             for it in lvl1:
                 mime = it.get("mimeType", "")
                 if mime == "application/vnd.google-apps.folder":
                     if "CUSTOM" in normalize_turkish_key(it.get("name", "")):
-                        continue
-                    sub_1.append(it)
-                elif mime.startswith("image/"):
-                    all_imgs.append(it)
+                        sub_custom.append(it)
+                    else:
+                        sub_normal.append(it)
+                else:
+                    ok, img_it = self._is_image_item(it)
+                    if ok:
+                        primary_imgs.append(img_it)
 
-            if sub_1:
-                sf1_map = {sf["id"]: sf["name"] for sf in sub_1[:12]}
+            if sub_normal:
+                sf1_map = {sf["id"]: sf["name"] for sf in sub_normal[:15]}
                 lvl2_batch = self.batch_list_children(list(sf1_map.keys()))
                 sub_2 = []
                 for sf_id, sf_items in lvl2_batch.items():
@@ -1045,14 +1088,16 @@ class DriveExplorer:
                         mime = it.get("mimeType", "")
                         if mime == "application/vnd.google-apps.folder":
                             if "CUSTOM" in normalize_turkish_key(it.get("name", "")):
-                                continue
-                            it_copy = dict(it)
-                            it_copy["parent_chain"] = f"{p_name}/{it.get('name', '')}"
-                            sub_2.append(it_copy)
-                        elif mime.startswith("image/"):
-                            img_copy = dict(it)
-                            img_copy["parent_name"] = p_name
-                            all_imgs.append(img_copy)
+                                sub_custom.append(it)
+                            else:
+                                it_copy = dict(it)
+                                it_copy["parent_chain"] = f"{p_name}/{it.get('name', '')}"
+                                sub_2.append(it_copy)
+                        else:
+                            ok, img_it = self._is_image_item(it)
+                            if ok:
+                                img_it["parent_name"] = p_name
+                                primary_imgs.append(img_it)
 
                 if sub_2:
                     sf2_map = {
@@ -1062,13 +1107,76 @@ class DriveExplorer:
                     lvl3_batch = self.batch_list_children(list(sf2_map.keys()))
                     for sf2_id, sf2_items in lvl3_batch.items():
                         p_chain = sf2_map.get(sf2_id, "")
-                        for img in sf2_items:
-                            if img.get("mimeType", "").startswith("image/"):
-                                img_copy = dict(img)
-                                img_copy["parent_name"] = p_chain
-                                all_imgs.append(img_copy)
+                        for it in sf2_items:
+                            ok, img_it = self._is_image_item(it)
+                            if ok:
+                                img_it["parent_name"] = p_chain
+                                primary_imgs.append(img_it)
 
-        return all_imgs
+            # Eğer normal klasörlerde hiç fotoğraf yoksa CUSTOM klasörüne yedek olarak bak!
+            if not primary_imgs and sub_custom:
+                sc_map = {sf["id"]: sf["name"] for sf in sub_custom[:8]}
+                sc_batch = self.batch_list_children(list(sc_map.keys()))
+                for sc_id, sc_items in sc_batch.items():
+                    for it in sc_items:
+                        ok, img_it = self._is_image_item(it)
+                        if ok:
+                            img_it["parent_name"] = "CUSTOM_FALLBACK"
+                            custom_fallback_imgs.append(img_it)
+
+        if primary_imgs:
+            return primary_imgs
+        if custom_fallback_imgs:
+            return custom_fallback_imgs
+
+        # Hâlâ bulunamadıysa üst klasöre (Taş klasörüne) bak
+        if parent_folder_id:
+            p_items = self.batch_list_children([parent_folder_id]).get(
+                parent_folder_id, []
+            )
+            p_subs = []
+            for it in p_items:
+                if it.get("mimeType") == "application/vnd.google-apps.folder":
+                    p_subs.append(it)
+                else:
+                    ok, img_it = self._is_image_item(it)
+                    if ok:
+                        primary_imgs.append(img_it)
+            if not primary_imgs and p_subs:
+                ps_map = {sf["id"]: sf["name"] for sf in p_subs[:10]}
+                ps_batch = self.batch_list_children(list(ps_map.keys()))
+                for ps_id, ps_items in ps_batch.items():
+                    for it in ps_items:
+                        ok, img_it = self._is_image_item(it)
+                        if ok:
+                            img_it["parent_name"] = ps_map.get(ps_id, "")
+                            primary_imgs.append(img_it)
+            if primary_imgs:
+                return primary_imgs
+
+        # Son çare: Drive genelinde lot koduyla görsel ara
+        if query_term and query_term != "-":
+            norm_q = normalize_lot_code(query_term)
+            lot_m = re.match(r"^([A-Z]+)-(\d+)$", norm_q)
+            cands = (
+                [
+                    f"{lot_m.group(1)}-{lot_m.group(2)}",
+                    f"{lot_m.group(1)} {lot_m.group(2)}",
+                    f"{lot_m.group(1)}{lot_m.group(2)}",
+                ]
+                if lot_m
+                else [norm_q]
+            )
+            for cand in cands:
+                q = f"trashed = false and name contains '{cand}' and mimeType contains 'image/'"
+                found = self.api_list_files(q, page_size=20)
+                for img in found:
+                    if exact_lot_match_in_text(img.get("name", ""), norm_q) > 0:
+                        primary_imgs.append(img)
+                if primary_imgs:
+                    break
+
+        return primary_imgs
 
     @staticmethod
     def _rank_candidates_preferring_middle_slabs(
@@ -1089,11 +1197,11 @@ class DriveExplorer:
         for f, seq in zip(imgs, seq_nums):
             fname = normalize_turkish_key(f.get("name", ""))
             pname = normalize_turkish_key(f.get("parent_name", ""))
-            if "CUSTOM" in pname or "CUSTOM" in fname:
-                continue
 
             meta_score = 50
-            if "LARGE" in pname or "LARGE" in fname or "ORJ" in pname:
+            if "CUSTOM" in pname or "CUSTOM" in fname:
+                meta_score -= 60
+            elif "LARGE" in pname or "LARGE" in fname or "ORJ" in pname:
                 meta_score += 45
             elif "PHOTOS" in pname or "FOTO" in pname:
                 meta_score += 35
@@ -1101,7 +1209,7 @@ class DriveExplorer:
             if any(k in fname for k in ["AREA", "BLOCK", "SLAB", "CM"]):
                 meta_score += 45
 
-            if "WEB" in pname or "EMAIL" in pname or "SMALL" in pname:
+            if "WEB" in pname or "EMAIL" in pname or "SMALL" in pname or "THUMB" in pname:
                 meta_score -= 15
 
             if seq in (1, 2):
@@ -1166,11 +1274,14 @@ class DriveExplorer:
         folder_id: Optional[str],
         query_term: str,
         pre_imgs: Optional[List[Dict[str, Any]]] = None,
+        parent_folder_id: Optional[str] = None,
     ) -> Optional[Tuple[bytes, float, float]]:
         all_imgs = (
             pre_imgs
             if pre_imgs is not None and len(pre_imgs) > 0
-            else self.scan_images_deep(folder_id, query_term)
+            else self.scan_images_deep(
+                folder_id, query_term, parent_folder_id=parent_folder_id
+            )
         )
         if not all_imgs:
             return None
@@ -1189,7 +1300,7 @@ class DriveExplorer:
         best_result = None
         best_vis_score = -9999
 
-        for cand in ranked_candidates[:3]:
+        for cand in ranked_candidates[:4]:
             raw = self.download_raw_image_fast(
                 cand["id"], cand.get("thumbnailLink")
             )
@@ -1210,11 +1321,16 @@ class DriveExplorer:
     def download_raw_image_fast(
         self, file_id: Optional[str], thumb_url: Optional[str] = None
     ) -> Optional[bytes]:
+        """
+        Önce yetki başlıklı (Authorized) yüksek çözünürlüklü thumbnail sunucusunu dener,
+        başarısız olursa doğrudan Google Drive API'den orijinal dosyayı indirir!
+        """
+        headers = self._get_headers()
         if thumb_url:
             try:
                 hi_res_url = re.sub(r"=s\d+", "=s1600", thumb_url)
-                resp = requests.get(hi_res_url, timeout=8)
-                if resp.status_code == 200 and len(resp.content) > 2000:
+                resp = requests.get(hi_res_url, headers=headers, timeout=8)
+                if resp.status_code == 200 and len(resp.content) > 1500:
                     return resp.content
             except Exception:
                 pass
@@ -1411,15 +1527,8 @@ class InventoryEngine:
     def _extract_sheets_as_dataframes(
         self, excel_bytes: bytes
     ) -> List[Tuple[str, pd.DataFrame]]:
-        """
-        1. openpyxl (ws üzerinde unmerge yapmadan doğrudan Python matrisinde çözerek!)
-        2. calamine (.xls, .xlsx, .xlsb, .ods evrensel hızlı okuyucu)
-        3. xlrd (.xls eski Excel 97-2003 okuyucu)
-        sırasıyla deneyerek A-221 dahil AÇILAMAYAN HİÇBİR EXCEL BIRAKMAZ!
-        """
         sheets_list: List[Tuple[str, pd.DataFrame]] = []
 
-        # 1. Yöntem: openpyxl (Python matrisi üzerinde güvenli birleştirilmiş hücre çözümü)
         try:
             wb = openpyxl.load_workbook(io.BytesIO(excel_bytes), data_only=True)
             for s_name in wb.sheetnames:
@@ -1453,7 +1562,6 @@ class InventoryEngine:
         except Exception:
             pass
 
-        # 2. Yöntem: calamine / xlrd / varsayılan Pandas motorları (.xls dosyaları için!)
         for eng in ["calamine", "xlrd", "openpyxl", None]:
             try:
                 xls = (
@@ -1884,7 +1992,9 @@ class InventoryEngine:
         if excel_bytes:
             data = self.parse_packing_list_bytes(excel_bytes, target_lot=norm_key)
 
-        all_imgs = self.drive.scan_images_deep(folder_id, norm_key)
+        all_imgs = self.drive.scan_images_deep(
+            folder_id, norm_key, parent_folder_id=parent_id
+        )
 
         if not data:
             data = {
@@ -1923,6 +2033,7 @@ class InventoryEngine:
             "is_sold_out": sold_out_flag,
             "drive_link": folder_link,
             "folder_id": folder_id,
+            "parent_id": parent_id,
             "excel_name": excel_name or f"{norm_key}_Original_PackingList.xlsx",
             "excel_bytes": excel_bytes,
             "data": data,
@@ -1936,15 +2047,9 @@ class InventoryEngine:
         collection_name: str,
         max_lots: int = 100,
         only_sold_out: bool = False,
+        include_images: bool = True,
         progress_cb: Optional[Any] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        only_sold_out=False (Varsayılan):
-          - Klasör adında veya üst klasöründe 'SOLD OUT / SATILAN' geçen taşları KESİNLİKLE ATLAR!
-          - Sadece aktif stokta olan ve Excel metrajı (m2 > 0) okunabilen taşları sunuma koyar!
-        only_sold_out=True ('Satılan taşların sunumu' istendiğinde):
-          - Sadece 'SOLD OUT / SATILAN' klasörlerindeki taşları tarayıp getirir!
-        """
         fid, _, _, _ = self.drive.find_folder_exact(collection_name)
         if not fid:
             return []
@@ -2047,9 +2152,6 @@ class InventoryEngine:
                         }
                     )
 
-        # SOLD OUT FİLTRESİ:
-        # Normal sunumda satılan taşları kesin olarak çıkar!
-        # "Satılan taşların sunumu" istendiğinde ise sadece satılan taşları al!
         filtered_candidates = [
             cf
             for cf in candidate_lot_folders
@@ -2077,9 +2179,9 @@ class InventoryEngine:
         results = []
 
         for idx, lf in enumerate(all_unique_items, start=1):
-            if progress_cb and (idx == 1 or idx % 10 == 0 or idx == total_items):
+            if progress_cb and (idx == 1 or idx % 8 == 0 or idx == total_items):
                 try:
-                    progress_cb(idx, total_items, lf["clean_title"])
+                    progress_cb(collection_name, idx, total_items, lf["clean_title"])
                 except Exception:
                     pass
 
@@ -2111,7 +2213,6 @@ class InventoryEngine:
                     "clean_rows": [],
                 }
 
-            # Aktif koleksiyon sunumunda Excel'i olmayan / metrajı 0.00 olan boş klasörü sunuma koyma!
             if not only_sold_out and parsed_data.get("total_m2", 0.0) <= 0:
                 continue
 
@@ -2123,15 +2224,23 @@ class InventoryEngine:
                 final_lot_code = parsed_data["detected_lot"]
                 final_title = f"{final_stone} — {final_lot_code}"
 
-            imgs = self.drive.scan_images_deep(lf["id"], q_hint)
+            imgs = (
+                self.drive.scan_images_deep(
+                    lf["id"], q_hint, parent_folder_id=lf["parent_id"]
+                )
+                if include_images
+                else []
+            )
 
             results.append(
                 {
+                    "collection": collection_name,
                     "title": sanitize_pdf_text(final_title),
                     "stone_name": sanitize_pdf_text(final_stone),
                     "lot_code": sanitize_pdf_text(final_lot_code),
                     "is_sold_out": bool(lf.get("is_sold_out", False)),
                     "id": lf["id"],
+                    "parent_id": lf["parent_id"],
                     "link": lf["link"],
                     "data": parsed_data,
                     "imgs": imgs,
@@ -2139,50 +2248,117 @@ class InventoryEngine:
             )
         return results
 
-    def generate_deep_scan_report(self) -> str:
-        collections = [
+    def collect_all_active_inventory_data(
+        self,
+        target_collections: Optional[List[str]] = None,
+        progress_cb: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        collections = target_collections or [
             "Arslanlar Collection",
             "Arslanlar Series",
             "Arslanlar Exclusive Collection",
         ]
-        report_lines = ["🔍 <b>ARGON MASTER - AKTİF STOK DEEP SCAN RAPORU</b> 🔍\n"]
-        total_factory_m2 = 0.0
-        total_factory_slabs = 0
+        summary_by_collection: List[Dict[str, Any]] = []
+        all_active_lots: List[Dict[str, Any]] = []
+        seen_global_lots = set()
+
+        grand_m2 = 0.0
+        grand_slabs = 0
+        grand_bundles = 0
+        grand_lots = 0
+        grand_weight_kg = 0.0
 
         for coll in collections:
             items = self.scan_collection_lots(
-                coll, max_lots=100, only_sold_out=False
+                coll,
+                max_lots=100,
+                only_sold_out=False,
+                include_images=False,
+                progress_cb=progress_cb,
             )
-            if not items:
-                continue
-
-            report_lines.append(f"📁 <b>{coll.upper()} ({len(items)} Aktif Lot)</b>")
-            coll_m2 = 0.0
-            coll_slabs = 0
+            c_m2 = 0.0
+            c_slabs = 0
+            c_bundles = 0
+            c_lots = 0
+            c_weight_kg = 0.0
 
             for it in items:
                 d = it["data"]
-                if d["total_m2"] > 0:
-                    report_lines.append(
-                        f"  ├ <b>{it['title']}</b>: <code>{d['total_m2']:,.2f} m²</code> ({d['total_slabs']} Plaka)"
-                    )
-                    coll_m2 += d["total_m2"]
-                    coll_slabs += d["total_slabs"]
-                    total_factory_m2 += d["total_m2"]
-                    total_factory_slabs += d["total_slabs"]
+                m2 = d.get("total_m2", 0.0)
+                slabs = d.get("total_slabs", 0)
+                if m2 <= 0:
+                    continue
 
-            report_lines.append(
-                f"  └ <i>Koleksiyon Toplamı: {coll_m2:,.2f} m² ({coll_slabs} Plaka)</i>\n"
+                dedup_k = (
+                    it["lot_code"]
+                    if it["lot_code"] != "-"
+                    else f"{coll}_{it['title']}"
+                )
+                if dedup_k in seen_global_lots:
+                    continue
+                seen_global_lots.add(dedup_k)
+
+                bundles = (
+                    max(1, slabs // 12)
+                    if slabs >= 12
+                    else (1 if slabs > 0 else 0)
+                )
+                thick_str = d.get("thickness", "2 cm")
+                kg_factor = 85.5 if "3" in thick_str else 57.0
+                net_kg = round(m2 * kg_factor, 2)
+
+                c_m2 += m2
+                c_slabs += slabs
+                c_bundles += bundles
+                c_lots += 1
+                c_weight_kg += net_kg
+
+                lot_record = {
+                    "collection": coll,
+                    "title": it["title"],
+                    "stone_name": it["stone_name"],
+                    "lot_code": it["lot_code"],
+                    "surface": d.get("surface", "Polished"),
+                    "thickness": thick_str,
+                    "dimensions": d.get("dimensions", "-"),
+                    "slabs": slabs,
+                    "bundles": bundles,
+                    "m2": round(m2, 2),
+                    "net_kg": net_kg,
+                    "link": it.get("link", DEFAULT_DRIVE_LINK),
+                }
+                all_active_lots.append(lot_record)
+
+            summary_by_collection.append(
+                {
+                    "collection": coll,
+                    "lots_count": c_lots,
+                    "slabs": c_slabs,
+                    "bundles": c_bundles,
+                    "m2": round(c_m2, 2),
+                    "net_kg": round(c_weight_kg, 2),
+                }
             )
+            grand_m2 += c_m2
+            grand_slabs += c_slabs
+            grand_bundles += c_bundles
+            grand_lots += c_lots
+            grand_weight_kg += c_weight_kg
 
-        report_lines.append(
-            f"🌐 <b>GENEL FABRİKA AKTİF STOK TOPLAMI: {total_factory_m2:,.2f} m² | {total_factory_slabs} Plaka</b>"
-        )
-        return "\n".join(report_lines)
+        return {
+            "summary": summary_by_collection,
+            "lots": all_active_lots,
+            "grand_m2": round(grand_m2, 2),
+            "grand_slabs": grand_slabs,
+            "grand_bundles": grand_bundles,
+            "grand_lots": grand_lots,
+            "grand_weight_kg": round(grand_weight_kg, 2),
+            "generated_at": datetime.now().strftime("%d.%m.%Y %H:%M"),
+        }
 
 
 # =====================================================================
-# 5. KURUMSAL SUNUM PDF (AKTİF & SOLD-OUT MODLU) & PACKING LIST MOTORU
+# 5. KURUMSAL SUNUM, PACKING LIST & MASTER STOK RAPORU (PDF + EXCEL) MOTORU
 # =====================================================================
 class CorporateDocumentEngine:
     def __init__(self, inventory: InventoryEngine, drive: DriveExplorer):
@@ -2214,6 +2390,537 @@ class CorporateDocumentEngine:
             HRFlowable(width="100%", thickness=1.5, color=BRONZE, spaceAfter=14),
         ]
 
+    def generate_master_stock_report_excel(
+        self, inv_data: Dict[str, Any]
+    ) -> bytes:
+        wb = openpyxl.Workbook()
+
+        font_title = Font(name="Calibri", size=14, bold=True, color="14213D")
+        font_company = Font(name="Calibri", size=10, bold=True, color="4A4E69")
+        font_header = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        font_bold = Font(name="Calibri", size=10, bold=True, color="14213D")
+        font_reg = Font(name="Calibri", size=10, bold=False, color="14213D")
+        font_link = Font(
+            name="Calibri", size=10, bold=True, color="0056B3", underline="single"
+        )
+
+        fill_navy = PatternFill(
+            start_color="14213D", end_color="14213D", fill_type="solid"
+        )
+        fill_bronze = PatternFill(
+            start_color="9C5933", end_color="9C5933", fill_type="solid"
+        )
+        fill_total = PatternFill(
+            start_color="F2E6D8", end_color="F2E6D8", fill_type="solid"
+        )
+        fill_zebra = PatternFill(
+            start_color="F8F9FA", end_color="F8F9FA", fill_type="solid"
+        )
+
+        thin_s = Side(border_style="thin", color="CCCCCC")
+        med_s = Side(border_style="medium", color="14213D")
+        b_cell = Border(left=thin_s, right=thin_s, top=thin_s, bottom=thin_s)
+        b_box = Border(left=med_s, right=med_s, top=med_s, bottom=med_s)
+
+        al_center = Alignment(
+            horizontal="center", vertical="center", wrap_text=True
+        )
+        al_left = Alignment(
+            horizontal="left", vertical="center", wrap_text=True
+        )
+        al_right = Alignment(
+            horizontal="right", vertical="center", wrap_text=True
+        )
+
+        # SEKME 1: 1_OZET_RAPOR (EXECUTIVE SUMMARY)
+        ws_sum = wb.active
+        ws_sum.title = "1_OZET_RAPOR"
+
+        sum_widths = {
+            "A": 4.0,
+            "B": 36.0,
+            "C": 18.0,
+            "D": 18.0,
+            "E": 18.0,
+            "F": 22.0,
+            "G": 22.0,
+            "H": 16.0,
+        }
+        for col_l, w in sum_widths.items():
+            ws_sum.column_dimensions[col_l].width = w
+
+        try:
+            logo_png = self.drive.get_official_logo_png()
+            xl_logo1 = XLImage(io.BytesIO(logo_png))
+            xl_logo1.width = 210
+            xl_logo1.height = 125
+            ws_sum.add_image(xl_logo1, "B2")
+        except Exception:
+            pass
+
+        ws_sum["E3"] = "ARSLANLAR MARBLE — EXECUTIVE STOCK SUMMARY REPORT"
+        ws_sum["E3"].font = font_title
+        ws_sum["E4"] = "ARSLANLAR TAAHHUT INS. HAFR.MAD.SAN.TİC.LTD.ŞTİ (Menderes / İzmir)"
+        ws_sum["E4"].font = font_company
+        ws_sum["E5"] = f"Rapor Tarihi / Report Date: {inv_data['generated_at']}"
+        ws_sum["E5"].font = font_bold
+        ws_sum["E6"] = "Kapsam: Satılmamış Aktif Plaka Stokları (SOLD OUT Klasörleri Hariçtir)"
+        ws_sum["E6"].font = font_company
+
+        sum_headers = [
+            "KOLEKSİYON / COLLECTION NAME",
+            "AKTİF LOT SAYISI\n(ACTIVE LOTS)",
+            "TOPLAM PLAKA\n(TOTAL SLABS)",
+            "TOPLAM BUNDLE\n(WOODEN BUNDLES)",
+            "TOPLAM NET ALAN\n(TOTAL NET m²)",
+            "TAHMİNİ NET AĞIRLIK\n(NET WEIGHT kg)",
+            "STOK PAYI\n(SHARE %)",
+        ]
+        ws_sum.row_dimensions[10].height = 30
+        for idx, h_txt in enumerate(sum_headers, start=2):
+            c = ws_sum.cell(10, idx, h_txt)
+            c.font = font_header
+            c.fill = fill_navy
+            c.alignment = al_center
+            c.border = b_box
+
+        grand_m2 = max(0.01, inv_data.get("grand_m2", 0.0))
+        curr_r = 11
+        for s_item in inv_data.get("summary", []):
+            ws_sum.row_dimensions[curr_r].height = 24
+            share_pct = (
+                (s_item["m2"] / grand_m2) * 100.0
+                if inv_data.get("grand_m2", 0) > 0
+                else 0.0
+            )
+            ws_sum.cell(curr_r, 2, s_item["collection"]).alignment = al_left
+            ws_sum.cell(curr_r, 3, s_item["lots_count"]).alignment = al_center
+            ws_sum.cell(curr_r, 4, s_item["slabs"]).alignment = al_center
+            ws_sum.cell(curr_r, 5, s_item["bundles"]).alignment = al_center
+
+            c_m2 = ws_sum.cell(curr_r, 6, s_item["m2"])
+            c_m2.number_format = "#,##0.00"
+            c_m2.alignment = al_right
+
+            c_kg = ws_sum.cell(curr_r, 7, s_item["net_kg"])
+            c_kg.number_format = "#,##0.00"
+            c_kg.alignment = al_right
+
+            c_sh = ws_sum.cell(curr_r, 8, f"%{share_pct:.1f}")
+            c_sh.alignment = al_center
+
+            for c_i in range(2, 9):
+                cell = ws_sum.cell(curr_r, c_i)
+                cell.font = font_bold if c_i in (2, 6) else font_reg
+                cell.border = b_cell
+            curr_r += 1
+
+        ws_sum.row_dimensions[curr_r].height = 26
+        ws_sum.cell(curr_r, 2, "GENEL FABRİKA TOPLAMI / GRAND TOTAL").alignment = al_left
+        ws_sum.cell(curr_r, 3, inv_data["grand_lots"]).alignment = al_center
+        ws_sum.cell(curr_r, 4, inv_data["grand_slabs"]).alignment = al_center
+        ws_sum.cell(curr_r, 5, inv_data["grand_bundles"]).alignment = al_center
+
+        gt_m2 = ws_sum.cell(curr_r, 6, inv_data["grand_m2"])
+        gt_m2.number_format = "#,##0.00"
+        gt_m2.alignment = al_right
+
+        gt_kg = ws_sum.cell(curr_r, 7, inv_data["grand_weight_kg"])
+        gt_kg.number_format = "#,##0.00"
+        gt_kg.alignment = al_right
+
+        ws_sum.cell(curr_r, 8, "%100.0").alignment = al_center
+
+        for c_i in range(2, 9):
+            c = ws_sum.cell(curr_r, c_i)
+            c.font = font_bold
+            c.fill = fill_total
+            c.border = b_box
+
+        # SEKME 2: 2_GENIS_DETAYLI_ENVANTER
+        ws_det = wb.create_sheet(title="2_GENIS_DETAYLI_ENVANTER")
+        det_widths = {
+            "A": 6.0,
+            "B": 28.0,
+            "C": 28.0,
+            "D": 15.0,
+            "E": 15.0,
+            "F": 13.0,
+            "G": 18.0,
+            "H": 14.0,
+            "I": 14.0,
+            "J": 18.0,
+            "K": 18.0,
+            "L": 26.0,
+        }
+        for col_l, w in det_widths.items():
+            ws_det.column_dimensions[col_l].width = w
+
+        ws_det["B2"] = (
+            f"ARSLANLAR MARBLE — GENİŞ DETAYLI AKTİF PLAKA ENVANTERİ ({inv_data['generated_at']})"
+        )
+        ws_det["B2"].font = font_title
+
+        det_headers = [
+            "NO",
+            "KOLEKSİYON\n(COLLECTION)",
+            "TAŞ ADI\n(STONE DESCRIPTION)",
+            "BLOK / LOT NO\n(BLOCK CODE)",
+            "YÜZEY\n(SURFACE)",
+            "KALINLIK\n(THICKNESS)",
+            "ORTALAMA EBAT\n(AVG. SIZE)",
+            "PLAKA ADEDİ\n(SLABS)",
+            "BUNDLE SAYISI\n(BUNDLES)",
+            "NET STOK (m²)\n(NET AREA m²)",
+            "NET AĞIRLIK (kg)\n(NET WEIGHT kg)",
+            "GOOGLE DRIVE KLASÖRÜ\n(HIGH-RES GALLERY)",
+        ]
+        ws_det.row_dimensions[4].height = 30
+        for idx, h_txt in enumerate(det_headers, start=1):
+            c = ws_det.cell(4, idx, h_txt)
+            c.font = font_header
+            c.fill = fill_navy if idx != 10 else fill_bronze
+            c.alignment = al_center
+            c.border = b_box
+
+        r_idx = 5
+        for i_no, lot in enumerate(inv_data.get("lots", []), start=1):
+            ws_det.row_dimensions[r_idx].height = 20
+            ws_det.cell(r_idx, 1, i_no).alignment = al_center
+            ws_det.cell(r_idx, 2, lot["collection"]).alignment = al_left
+            ws_det.cell(r_idx, 3, lot["stone_name"]).alignment = al_left
+            ws_det.cell(r_idx, 4, lot["lot_code"]).alignment = al_center
+            ws_det.cell(r_idx, 5, lot["surface"]).alignment = al_center
+            ws_det.cell(r_idx, 6, lot["thickness"]).alignment = al_center
+            ws_det.cell(r_idx, 7, lot["dimensions"]).alignment = al_center
+            ws_det.cell(r_idx, 8, lot["slabs"]).alignment = al_center
+            ws_det.cell(r_idx, 9, lot["bundles"]).alignment = al_center
+
+            c_m2 = ws_det.cell(r_idx, 10, lot["m2"])
+            c_m2.number_format = "#,##0.00"
+            c_m2.alignment = al_right
+
+            c_kg = ws_det.cell(r_idx, 11, lot["net_kg"])
+            c_kg.number_format = "#,##0.00"
+            c_kg.alignment = al_right
+
+            c_lnk = ws_det.cell(r_idx, 12, "Klasörü Aç (Open Drive)")
+            if lot.get("link"):
+                c_lnk.hyperlink = lot["link"]
+            c_lnk.alignment = al_center
+
+            for c_i in range(1, 13):
+                cell = ws_det.cell(r_idx, c_i)
+                if c_i == 12:
+                    cell.font = font_link
+                elif c_i in (3, 4, 10):
+                    cell.font = font_bold
+                else:
+                    cell.font = font_reg
+                cell.border = b_cell
+                if i_no % 2 == 0 and c_i != 12:
+                    cell.fill = fill_zebra
+
+            r_idx += 1
+
+        ws_det.row_dimensions[r_idx].height = 24
+        ws_det.cell(r_idx, 1, "TOPLAM")
+        ws_det.merge_cells(start_row=r_idx, start_column=1, end_row=r_idx, end_column=7)
+        ws_det.cell(r_idx, 8, inv_data["grand_slabs"]).alignment = al_center
+        ws_det.cell(r_idx, 9, inv_data["grand_bundles"]).alignment = al_center
+
+        dt_m2 = ws_det.cell(r_idx, 10, inv_data["grand_m2"])
+        dt_m2.number_format = "#,##0.00"
+        dt_m2.alignment = al_right
+
+        dt_kg = ws_det.cell(r_idx, 11, inv_data["grand_weight_kg"])
+        dt_kg.number_format = "#,##0.00"
+        dt_kg.alignment = al_right
+
+        ws_det.cell(r_idx, 12, f"{inv_data['grand_lots']} Aktif Lot").alignment = al_center
+
+        for c_i in range(1, 13):
+            c = ws_det.cell(r_idx, c_i)
+            c.font = font_bold
+            c.fill = fill_total
+            c.border = b_box
+            if c_i <= 7:
+                c.alignment = al_center
+
+        out_io = io.BytesIO()
+        wb.save(out_io)
+        out_io.seek(0)
+        return out_io.read()
+
+    def generate_master_stock_report_pdf(
+        self, inv_data: Dict[str, Any]
+    ) -> bytes:
+        pdf_io = io.BytesIO()
+        doc = SimpleDocTemplate(
+            pdf_io,
+            pagesize=landscape(A4),
+            rightMargin=22,
+            leftMargin=22,
+            topMargin=18,
+            bottomMargin=18,
+        )
+        styles = getSampleStyleSheet()
+        NAVY = colors.HexColor("#14213D")
+        BRONZE = colors.HexColor("#9C5933")
+        SLATE = colors.HexColor("#2B2D42")
+        LIGHT_BG = colors.HexColor("#F8F9FA")
+        TOTAL_BG = colors.HexColor("#F2E6D8")
+        BORD = colors.HexColor("#DEE2E6")
+
+        logo_bytes = self.drive.get_official_logo_jpeg()
+        rl_logo = RLImage(io.BytesIO(logo_bytes), width=120, height=71.7)
+
+        comp_info_style = ParagraphStyle(
+            "CompInfo",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            leading=12,
+            textColor=NAVY,
+            alignment=2,
+        )
+        comp_html = (
+            "<b>ARSLANLAR MARBLE — EXECUTIVE STOCK &amp; INVENTORY REPORT</b><br/>"
+            "ARSLANLAR TAAHHUT INS. HAFR.MAD.SAN.TIC.LTD.STI | Menderes / Izmir, Turkey<br/>"
+            f"<b>Report Date:</b> {inv_data['generated_at']} &nbsp;|&nbsp; "
+            "<b>Scope:</b> Active Unsold Slabs (Sold-Out Excluded)<br/>"
+            f"<font color='#9C5933'><b>GRAND TOTAL ACTIVE STOCK: {inv_data['grand_m2']:,.2f} m² ({inv_data['grand_slabs']} Slabs / {inv_data['grand_bundles']} Bundles)</b></font>"
+        )
+        top_header_table = Table(
+            [[rl_logo, Paragraph(comp_html, comp_info_style)]],
+            colWidths=[180, 615],
+        )
+        top_header_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                    ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                ]
+            )
+        )
+
+        sec_h = ParagraphStyle(
+            "SecH",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=10.5,
+            leading=14,
+            textColor=NAVY,
+            spaceBefore=6,
+            spaceAfter=6,
+        )
+        th_p = ParagraphStyle(
+            "TH",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=10,
+            textColor=colors.whitesmoke,
+            alignment=1,
+        )
+        td_c = ParagraphStyle(
+            "TDC",
+            parent=styles["Normal"],
+            fontName="Helvetica",
+            fontSize=7.8,
+            leading=10,
+            textColor=SLATE,
+            alignment=1,
+        )
+        td_l = ParagraphStyle(
+            "TDL",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=7.8,
+            leading=10,
+            textColor=NAVY,
+            alignment=0,
+        )
+        td_b = ParagraphStyle(
+            "TDB",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=10,
+            textColor=NAVY,
+            alignment=1,
+        )
+
+        story: List[Any] = [
+            top_header_table,
+            Spacer(1, 6),
+            HRFlowable(width="100%", thickness=1.5, color=BRONZE, spaceAfter=8),
+            Paragraph(
+                "1. EXECUTIVE SUMMARY BY COLLECTION (KOLEKSIYON BAZLI OZET RAPOR)",
+                sec_h,
+            ),
+        ]
+
+        sum_rows = [
+            [
+                Paragraph("COLLECTION NAME", th_p),
+                Paragraph("ACTIVE LOTS", th_p),
+                Paragraph("TOTAL SLABS", th_p),
+                Paragraph("TOTAL BUNDLES", th_p),
+                Paragraph("TOTAL NET AREA (m²)", th_p),
+                Paragraph("EST. NET WEIGHT (kg)", th_p),
+                Paragraph("SHARE (%)", th_p),
+            ]
+        ]
+        g_m2 = max(0.01, inv_data.get("grand_m2", 0.0))
+        for s_it in inv_data.get("summary", []):
+            sh = (
+                (s_it["m2"] / g_m2) * 100.0
+                if inv_data.get("grand_m2", 0.0) > 0
+                else 0.0
+            )
+            sum_rows.append(
+                [
+                    Paragraph(sanitize_pdf_text(s_it["collection"].upper()), td_l),
+                    Paragraph(str(s_it["lots_count"]), td_c),
+                    Paragraph(f"{s_it['slabs']:,} pcs", td_c),
+                    Paragraph(f"{s_it['bundles']:,} Bundles", td_c),
+                    Paragraph(f"<b>{s_it['m2']:,.2f} m²</b>", td_b),
+                    Paragraph(f"{s_it['net_kg']:,.1f} kg", td_c),
+                    Paragraph(f"%{sh:.1f}", td_c),
+                ]
+            )
+
+        sum_rows.append(
+            [
+                Paragraph("<b>GRAND TOTAL (GENEL FABRIKA TOPLAMI)</b>", td_l),
+                Paragraph(f"<b>{inv_data['grand_lots']} Lots</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_slabs']:,} pcs</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_bundles']:,} Bundles</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_m2']:,.2f} m²</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_weight_kg']:,.1f} kg</b>", td_b),
+                Paragraph("<b>%100.0</b>", td_b),
+            ]
+        )
+
+        sum_table = Table(
+            sum_rows, colWidths=[215, 85, 95, 95, 115, 115, 75], repeatRows=1
+        )
+        sum_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+                    ("BACKGROUND", (0, 1), (-1, -2), LIGHT_BG),
+                    ("BACKGROUND", (0, -1), (-1, -1), TOTAL_BG),
+                    ("GRID", (0, 0), (-1, -1), 0.5, BORD),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ]
+            )
+        )
+        story.append(sum_table)
+        story.append(Spacer(1, 14))
+
+        story.append(
+            Paragraph(
+                "2. COMPREHENSIVE LOT-BY-LOT INVENTORY REPORT (GENIS DETAYLI LOT LISTESI)",
+                sec_h,
+            )
+        )
+
+        det_rows = [
+            [
+                Paragraph("#", th_p),
+                Paragraph("COLLECTION", th_p),
+                Paragraph("STONE DESCRIPTION", th_p),
+                Paragraph("BLOCK / LOT", th_p),
+                Paragraph("SURFACE &amp; THICK", th_p),
+                Paragraph("AVG. SIZE (cm)", th_p),
+                Paragraph("SLABS", th_p),
+                Paragraph("BUNDLES", th_p),
+                Paragraph("NET AREA (m²)", th_p),
+                Paragraph("NET WT (kg)", th_p),
+                Paragraph("DRIVE GALLERY", th_p),
+            ]
+        ]
+
+        for idx, lot in enumerate(inv_data.get("lots", []), start=1):
+            lnk = lot.get("link")
+            lnk_html = (
+                f"<link href='{lnk}' color='#0056b3'><u>Open Folder</u></link>"
+                if lnk
+                else "-"
+            )
+            det_rows.append(
+                [
+                    Paragraph(str(idx), td_c),
+                    Paragraph(
+                        sanitize_pdf_text(
+                            lot["collection"].replace("Arslanlar ", "")
+                        ),
+                        td_c,
+                    ),
+                    Paragraph(sanitize_pdf_text(lot["stone_name"]), td_l),
+                    Paragraph(f"<b>{sanitize_pdf_text(lot['lot_code'])}</b>", td_b),
+                    Paragraph(
+                        sanitize_pdf_text(
+                            f"{lot['surface']} | {lot['thickness']}"
+                        ),
+                        td_c,
+                    ),
+                    Paragraph(sanitize_pdf_text(lot["dimensions"]), td_c),
+                    Paragraph(str(lot["slabs"]), td_c),
+                    Paragraph(str(lot["bundles"]), td_c),
+                    Paragraph(f"<b>{lot['m2']:,.2f} m²</b>", td_b),
+                    Paragraph(f"{lot['net_kg']:,.0f}", td_c),
+                    Paragraph(lnk_html, td_c),
+                ]
+            )
+
+        det_rows.append(
+            [
+                Paragraph("-", td_b),
+                Paragraph("<b>TOTAL</b>", td_b),
+                Paragraph(
+                    f"<b>{inv_data['grand_lots']} Active Lots</b>", td_l
+                ),
+                Paragraph("-", td_b),
+                Paragraph("-", td_b),
+                Paragraph("-", td_b),
+                Paragraph(f"<b>{inv_data['grand_slabs']}</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_bundles']}</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_m2']:,.2f} m²</b>", td_b),
+                Paragraph(f"<b>{inv_data['grand_weight_kg']:,.0f} kg</b>", td_b),
+                Paragraph("-", td_b),
+            ]
+        )
+
+        det_table = Table(
+            det_rows,
+            colWidths=[28, 82, 145, 65, 85, 80, 48, 52, 78, 65, 67],
+            repeatRows=1,
+        )
+        det_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), NAVY),
+                    ("BACKGROUND", (0, 1), (-1, -2), LIGHT_BG),
+                    ("BACKGROUND", (0, -1), (-1, -1), TOTAL_BG),
+                    ("GRID", (0, 0), (-1, -1), 0.5, BORD),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3.5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
+                ]
+            )
+        )
+        story.append(det_table)
+
+        doc.build(story)
+        pdf_io.seek(0)
+        return pdf_io.read()
+
     def generate_presentation_pdf(
         self,
         queries: List[str],
@@ -2238,6 +2945,7 @@ class CorporateDocumentEngine:
                     coll_name,
                     max_lots=100,
                     only_sold_out=only_sold_out,
+                    include_images=True,
                     progress_cb=progress_cb,
                 )
                 for item in scanned:
@@ -2251,7 +2959,10 @@ class CorporateDocumentEngine:
                     seen_keys.add(dedup_k)
 
                     img_pack = self.drive.get_best_framed_slab_for_pdf(
-                        item["id"], item["lot_code"], pre_imgs=item.get("imgs")
+                        item["id"],
+                        item["lot_code"],
+                        pre_imgs=item.get("imgs"),
+                        parent_folder_id=item.get("parent_id"),
                     )
                     cards.append(
                         {
@@ -2274,7 +2985,10 @@ class CorporateDocumentEngine:
                 seen_keys.add(dedup_k)
 
                 img_pack = self.drive.get_best_framed_slab_for_pdf(
-                    info["folder_id"], q, pre_imgs=info.get("imgs")
+                    info["folder_id"],
+                    q,
+                    pre_imgs=info.get("imgs"),
+                    parent_folder_id=info.get("parent_id"),
                 )
                 cards.append(
                     {
@@ -2290,8 +3004,12 @@ class CorporateDocumentEngine:
 
         if not cards:
             if only_sold_out:
-                raise ValueError("Seçilen koleksiyonda 'SOLD OUT' (satılan taş) klasörü bulunamadı.")
-            raise ValueError("Belirtilen kriterler için aktif stoklu klasör bulunamadı.")
+                raise ValueError(
+                    "Seçilen koleksiyonda 'SOLD OUT' (satılan taş) klasörü bulunamadı."
+                )
+            raise ValueError(
+                "Belirtilen kriterler için aktif stoklu klasör bulunamadı."
+            )
 
         pdf_io = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -2419,7 +3137,10 @@ class CorporateDocumentEngine:
                     Paragraph(stone_block_str, tdv_s),
                 ],
                 [
-                    Paragraph("Available Stock" if not only_sold_out else "Stock Status", tdl_s),
+                    Paragraph(
+                        "Available Stock" if not only_sold_out else "Stock Status",
+                        tdl_s,
+                    ),
                     Paragraph(stock_str, tdv_s),
                 ],
                 [
@@ -2961,8 +3682,9 @@ class ArgonBrain:
                     "Yetkinliklerin:\n"
                     "- Her türlü Lot/Blok kodunun (Örn: A-371, A-468, A-221) güncel plaka stoğunu (m², plaka ve bundle adedi), "
                     "plaka fotoğraflarını ve Google Drive klasör linkini anında paylaşmak.\n"
-                    "- Tekli veya çoklu lotlar için ya da Arslanlar Collection, Arslanlar Series ve Arslanlar Exclusive Collection "
-                    "için Bronz Aslan logolu İngilizce Executive PDF Katalog hazırlamak.\n"
+                    "- 'Stoğumda kaç m² var' veya 'Toplam stoğum ne kadar' dendiğinde tüm koleksiyonlardaki satılmamış taşları "
+                    "tek tek inceleyip hem ÖZET hem GENİŞ detaylı PDF ve Excel Master Stok Raporu sunmak.\n"
+                    "- Tekli/çoklu lotlar veya tüm koleksiyon için Bronz Aslan logolu İngilizce Executive PDF Katalog hazırlamak.\n"
                     "- İstenirse 'Arslanlar Series satılan taşların sunumu' gibi komutlarla sadece SOLD OUT (satılan) taşların arşiv sunumunu hazırlamak.\n"
                     "- Minimum 12'şerli ahşap bundle (wooden bundle) standardında resmi Excel ve PDF Çeki Listesi (Packing List) üretmek.\n"
                     f"{cached_lots_summary}\n"
@@ -2987,11 +3709,11 @@ class ArgonBrain:
         return (
             "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan</b>\n\n"
             "Memnuniyetle yardımcı olabilirim. Sistem üzerinden şu işlemleri anında gerçekleştirebilirsiniz:\n"
+            "• <b>Genel Stok Raporu (PDF + Excel):</b> <code>Stoğumda kaç m² var</code> veya <code>Toplam stoğum ne kadar</code>.\n"
             "• <b>Plaka Görselleri & Stok:</b> Lot kodunu yazmanız yeterli (Örn: <code>A-371</code>, <code>A-468 fotoğraf</code>).\n"
-            "• <b>Aktif Koleksiyon Sunumu:</b> <code>Arslanlar Series sunum lütfen</code> (Sadece stoktaki aktif taşları içerir).\n"
+            "• <b>Aktif Koleksiyon Sunumu:</b> <code>Arslanlar Series sunum lütfen</code>.\n"
             "• <b>Satılan Taşlar (Sold Out) Sunumu:</b> <code>Arslanlar Series satılan taşların sunumu</code>.\n"
-            "• <b>Resmi Çeki Listesi (12'li Bundle):</b> <code>A-371 çeki listesi</code>.\n"
-            "• <b>Genel Fabrika Stoğu:</b> <code>Toplam stoğum ne kadar</code>."
+            "• <b>Resmi Çeki Listesi (12'li Bundle):</b> <code>A-371 çeki listesi</code>."
         )
 
     def match_visual_stone(self, image_bytes: bytes) -> List[str]:
@@ -3064,16 +3786,23 @@ class ArgonBrain:
             "TUM STOK",
             "TUM STOGUM",
             "GENEL TARAMA",
+            "GENEL STOK",
+            "STOK RAPORU",
             "DEEP SCAN",
             "RAPORLA",
             "NE KADAR STOGUM",
             "TOPLAM STOK",
             "TOPLAM NE KADAR",
             "TOPLAM STOGUM",
+            "STOGUMDA KAC",
+            "KAC M2 STOK",
+            "KAC M² STOK",
+            "KAC M2 VAR",
+            "KAC M² VAR",
+            "MEVCUT STOGUM",
         ]
         want_deep_scan = any(kw in raw for kw in deep_scan_keywords)
 
-        # Kullanıcı özellikle "satılan taşların sunumu / sold out sunumu" mu istiyor?
         want_sold_out = any(
             kw in raw
             for kw in [
@@ -3096,7 +3825,6 @@ class ArgonBrain:
         if "EXCLUSIVE" in raw:
             collection_folders.append("Arslanlar Exclusive Collection")
 
-        # Eğer sadece "satılan taşların sunumu lütfen" dediyse ve koleksiyon adı belirtmediyse 3 koleksiyonu da kapsa
         if want_sold_out and not collection_folders and not matched:
             collection_folders = [
                 "Arslanlar Collection",
@@ -3263,20 +3991,96 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         collection_folders: List[str] = intent.get("collection_folders", [])
         only_sold_out: bool = bool(intent.get("want_sold_out", False))
 
-        # 1. DEEP SCAN (AKTİF STOK RAPORU)
-        if intent.get("want_deep_scan") and not queries and not collection_folders:
+        # 1. DEEP SCAN: GENİŞ + ÖZET MASTER STOK RAPORU (MESAJ + EXCEL + PDF)
+        if intent.get("want_deep_scan") and not queries:
+            target_colls = collection_folders or [
+                "Arslanlar Collection",
+                "Arslanlar Series",
+                "Arslanlar Exclusive Collection",
+            ]
             status = await msg.reply_text(
-                "🔎 <b>Argon Deep Scan Raporu Hazırlanıyor...</b>\n"
-                "Satılan (Sold Out) taşlar hariç tüm aktif stok klasörleri taranıyor...",
+                "🔎 <b>Argon Kurumsal Stok Raporu (Özet + Geniş PDF & Excel) Hazırlanıyor...</b>\n"
+                f"Kapsam: <b>{', '.join(target_colls)}</b> (Satılan / Sold-Out taşlar hariçtir).",
                 parse_mode=ParseMode.HTML,
             )
+            main_loop = asyncio.get_running_loop()
+
+            def _stock_progress_cb(
+                c_name: str, curr_i: int, tot_i: int, st_title: str
+            ):
+                try:
+                    asyncio.run_coroutine_threadsafe(
+                        status.edit_text(
+                            "📊 <b>Aktif Stok Envanteri Taranıyor...</b>\n"
+                            f"📁 Koleksiyon: <b>{c_name}</b> ({curr_i}/{tot_i})\n"
+                            f"💎 İncelenen Lot: <code>{st_title}</code>",
+                            parse_mode=ParseMode.HTML,
+                        ),
+                        main_loop,
+                    )
+                except Exception:
+                    pass
+
             try:
-                report = await asyncio.to_thread(
-                    inventory_engine.generate_deep_scan_report
+                inv_data = await asyncio.to_thread(
+                    inventory_engine.collect_all_active_inventory_data,
+                    target_colls,
+                    _stock_progress_cb,
                 )
-                await status.edit_text(report, parse_mode=ParseMode.HTML)
+
+                # A) Telegram Yönetici Özeti Mesajı
+                msg_lines = [
+                    "🏛 <b>ARSLANLAR MARBLE — AKTİF STOK YÖNETİCİ ÖZETİ</b>",
+                    f"📅 <i>Tarih: {inv_data['generated_at']} (Sold-Out Hariç)</i>\n",
+                ]
+                for s_it in inv_data.get("summary", []):
+                    msg_lines.append(
+                        f"📁 <b>{s_it['collection'].upper()}</b>\n"
+                        f"  • Aktif Lot: <code>{s_it['lots_count']} Lot</code>\n"
+                        f"  • Toplam Plaka: <code>{s_it['slabs']} Plaka ({s_it['bundles']} Bundle)</code>\n"
+                        f"  • Net Stok: <b><code>{s_it['m2']:,.2f} m²</code></b> (<code>{s_it['net_kg']/1000.0:,.1f} Ton</code>)\n"
+                    )
+                msg_lines.append(
+                    "🌐 <b>GENEL FABRİKA AKTİF STOK TOPLAMI:</b>\n"
+                    f"• Toplam: <b><code>{inv_data['grand_m2']:,.2f} m²</code></b>\n"
+                    f"• Plaka & Bundle: <code>{inv_data['grand_slabs']} Plaka / {inv_data['grand_bundles']} Bundle ({inv_data['grand_lots']} Lot)</code>\n"
+                    f"• Tahmini Net Tonaj: <code>{inv_data['grand_weight_kg']/1000.0:,.2f} Ton</code>"
+                )
+                await status.edit_text(
+                    "\n".join(msg_lines), parse_mode=ParseMode.HTML
+                )
+
+                # B) 2 Sekmeli (1_OZET_RAPOR + 2_GENIS_DETAYLI_ENVANTER) Excel Raporu
+                excel_bytes = await asyncio.to_thread(
+                    doc_engine.generate_master_stock_report_excel, inv_data
+                )
+                date_tag = datetime.now().strftime("%d_%m_%Y")
+                await msg.reply_document(
+                    document=io.BytesIO(excel_bytes),
+                    filename=f"ARSLANLAR_MASTER_STOCK_REPORT_{date_tag}.xlsx",
+                    caption=(
+                        "📊 <b>Arslanlar Marble — Master Stok Excel Raporu</b>\n"
+                        "• <b>Sekme 1:</b> Koleksiyon Bazlı Yönetici Özeti\n"
+                        "• <b>Sekme 2:</b> Geniş Lot Bazlı Detaylı Envanter Tablosu"
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
+
+                # C) Yatay A4 Kurumsal PDF Stok Raporu (Özet + Geniş Tablo)
+                pdf_bytes = await asyncio.to_thread(
+                    doc_engine.generate_master_stock_report_pdf, inv_data
+                )
+                await msg.reply_document(
+                    document=io.BytesIO(pdf_bytes),
+                    filename=f"ARSLANLAR_EXECUTIVE_INVENTORY_REPORT_{date_tag}.pdf",
+                    caption=(
+                        f"📄 <b>Arslanlar Marble — Executive PDF Stok Raporu</b>\n"
+                        f"Toplam Aktif Stok: <b>{inv_data['grand_m2']:,.2f} m²</b> ({inv_data['grand_slabs']} Plaka)"
+                    ),
+                    parse_mode=ParseMode.HTML,
+                )
             except Exception as e:
-                await status.edit_text(f"⚠️ Rapor uyarısı: {e}")
+                await status.edit_text(f"⚠️ Stok raporu oluşturulurken uyarı: {e}")
             return
 
         # 2. KURUMSAL KİMLİK SOHBET & SORU YANITLAMA
@@ -3306,7 +4110,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await msg.reply_text(reply_msg)
             return
 
-        # 3. KOLEKSİYON PDF SUNUMU (NORMAL AKTİF STOK VEYA SADECE SATILAN TAŞLAR MODU)
+        # 3. KOLEKSİYON PDF SUNUMU (AKTİF STOK VEYA SATILAN TAŞLAR MODU)
         if (
             collection_folders
             and intent.get("want_pdf")
@@ -3325,11 +4129,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             main_loop = asyncio.get_running_loop()
 
-            def _progress_callback(curr_idx: int, total_cnt: int, st_title: str):
+            def _progress_callback(
+                c_name: str, curr_idx: int, total_cnt: int, st_title: str
+            ):
                 try:
                     asyncio.run_coroutine_threadsafe(
                         status_msg.edit_text(
-                            f"📁 <b>{coll_label}</b> ({mode_desc}) Hazırlanıyor...\n"
+                            f"📁 <b>{c_name}</b> ({mode_desc}) Hazırlanıyor...\n"
                             f"⏳ İlerleme: <b>{curr_idx} / {total_cnt}</b> Klasör Kontrol Edildi\n"
                             f"💎 Son İşlenen: <code>{st_title}</code>",
                             parse_mode=ParseMode.HTML,
@@ -3566,7 +4372,7 @@ def main():
         )
     )
 
-    logger.info("🚀 Argon Master V15 (Full Excel Engine & Sold-Out Filter) başlatılıyor...")
+    logger.info("🚀 Argon Master V16 (Executive Stock PDF/Excel & Guaranteed Photos) başlatılıyor...")
     application.run_polling(
         drop_pending_updates=True, poll_interval=1.0, timeout=15
     )
