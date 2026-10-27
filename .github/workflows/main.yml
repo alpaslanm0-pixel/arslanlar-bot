@@ -1,0 +1,33 @@
+name: Arslanlar Bot 7-24 Sunucu
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 */5 * * *' # Her 5.5 saatte bir otomatik yenilenir
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest # 7 GB RAM'li ücretsiz sunucu
+    timeout-minutes: 350
+
+    steps:
+      - name: Depodaki kodlari ve tum dosyalari cek
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Kutuphaneleri yukle
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Botu Calistir
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PORT: 10000
+        run: |
+          timeout 330m python bot.py || true
