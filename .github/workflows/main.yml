@@ -3,15 +3,15 @@ name: Arslanlar Bot 7-24 Sunucu
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 */5 * * *' # Her 5.5 saatte bir otomatik yenilenir
+    - cron: '30 */5 * * *'
 
 jobs:
   run-bot:
-    runs-on: ubuntu-latest # 7 GB RAM'li ücretsiz sunucu
+    runs-on: ubuntu-latest
     timeout-minutes: 350
 
     steps:
-      - name: Depodaki kodlari ve tum dosyalari cek
+      - name: Depodaki kodlari cek
         uses: actions/checkout@v4
 
       - name: Python kur
@@ -23,6 +23,12 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: credentials.json dosyasini olustur
+        env:
+          CREDS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          printf '%s\n' "$CREDS" > credentials.json
 
       - name: Botu Calistir
         env:
