@@ -2,9 +2,4118 @@
   "chat_ids": [
     5111469731
   ],
-  "initialized": false,
-  "active_lots": {},
-  "sold_out_lots": {},
+  "initialized": true,
+  "active_lots": {
+    "1bbXcPohIV07MA5WGsjz8wxNy9aqXM7wB": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1bbXcPohIV07MA5WGsjz8wxNy9aqXM7wB"
+    },
+    "1FOEBnpuEo9UlKq-est6eobjmK8qmlqOu": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FOEBnpuEo9UlKq-est6eobjmK8qmlqOu"
+    },
+    "1116qoDpaielpDPmVZW2TBJSPueaFsPfJ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1116qoDpaielpDPmVZW2TBJSPueaFsPfJ"
+    },
+    "1tAvepeiaWJ5EwPg-YZ4Npj9mg3QCwfYl": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1tAvepeiaWJ5EwPg-YZ4Npj9mg3QCwfYl"
+    },
+    "16O0C3MOm7YUiqDAet59nK7D034Z-AHWH": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16O0C3MOm7YUiqDAet59nK7D034Z-AHWH"
+    },
+    "1kVLmgMOXBlZb2c8CET0L5j8QwTSYaPAO": {
+      "lot_code": "A-394",
+      "stone_name": "Silver Roots Full Lot SOLD",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kVLmgMOXBlZb2c8CET0L5j8QwTSYaPAO"
+    },
+    "1kamLJ175dQWE32mFTEQGJyKCnpjoTsC0": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kamLJ175dQWE32mFTEQGJyKCnpjoTsC0"
+    },
+    "1AdlzE6XRosYX8DfkuaSEN4dkpGPiuZV0": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1AdlzE6XRosYX8DfkuaSEN4dkpGPiuZV0"
+    },
+    "1jEMLX67gZCnddbKgizvWroYwwTpBGKsH": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jEMLX67gZCnddbKgizvWroYwwTpBGKsH"
+    },
+    "1uhG7A6IdBOVvqcMdo4plG1Q6e4E_uK_i": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1uhG7A6IdBOVvqcMdo4plG1Q6e4E_uK_i"
+    },
+    "1ytvcFU7UE2gk3aDW4PwX3BdMRUA3CPoW": {
+      "lot_code": "A-221",
+      "stone_name": "Silver Roots Stock Between 2 33",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ytvcFU7UE2gk3aDW4PwX3BdMRUA3CPoW"
+    },
+    "1CMU-6qt9eCMKIr02yWqgX7afkd_tOfYK": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1CMU-6qt9eCMKIr02yWqgX7afkd_tOfYK"
+    },
+    "1jnVUj9hsldGGXQAN8WIiZzLX96Hgv4jT": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jnVUj9hsldGGXQAN8WIiZzLX96Hgv4jT"
+    },
+    "1XD8KMsvF3rPHEHlrnuu5jg30PMCtYSaB": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1XD8KMsvF3rPHEHlrnuu5jg30PMCtYSaB"
+    },
+    "1bh4U91XFZ02ipVODrM1Oq7Uv29BcC9Cj": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1bh4U91XFZ02ipVODrM1Oq7Uv29BcC9Cj"
+    },
+    "1Rk-kno1Q-T5h3NHJD8DyatJ7z3_J7ytI": {
+      "lot_code": "A-62",
+      "stone_name": "Silver Roots Between 1 + 20 44 stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Rk-kno1Q-T5h3NHJD8DyatJ7z3_J7ytI"
+    },
+    "134G_xv1oqZYiLZs_kWoH-JWK3ngLkhIr": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/134G_xv1oqZYiLZs_kWoH-JWK3ngLkhIr"
+    },
+    "1n7nS6AaTkiMyJ2kMTlLFh1gwButL6vI3": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1n7nS6AaTkiMyJ2kMTlLFh1gwButL6vI3"
+    },
+    "1UY3iKOs2OJ5GHiRQ3Opke5AJ_1l2kcQ9": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UY3iKOs2OJ5GHiRQ3Opke5AJ_1l2kcQ9"
+    },
+    "1ww0Ej_HVczr7SC0pIlieg2VZ3vesRzKf": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ww0Ej_HVczr7SC0pIlieg2VZ3vesRzKf"
+    },
+    "1nyevYgIms4Vj5OsWTKhydYNIEakrv-L0": {
+      "lot_code": "A-459",
+      "stone_name": "Silver Roots Full Lot SOLD",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1nyevYgIms4Vj5OsWTKhydYNIEakrv-L0"
+    },
+    "1HgtnRWDB-kg3VEh0XY9Lwi1Cb5feQCHb": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1HgtnRWDB-kg3VEh0XY9Lwi1Cb5feQCHb"
+    },
+    "1UO1m9ml8CHQjj6jH5Kd4pHSUE0d5GoHm": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UO1m9ml8CHQjj6jH5Kd4pHSUE0d5GoHm"
+    },
+    "1Ljl9Yhaax9EU2yYZ2ycYs35NC4-MPo23": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Ljl9Yhaax9EU2yYZ2ycYs35NC4-MPo23"
+    },
+    "1DM0WO5SeSutva5FCCM4ltNYhO2928UBM": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1DM0WO5SeSutva5FCCM4ltNYhO2928UBM"
+    },
+    "12iADkKLpG5-fkSv7W1d2ShotdyRVbpDY": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/12iADkKLpG5-fkSv7W1d2ShotdyRVbpDY"
+    },
+    "11TaQ7ZaFOKgwZcCbO-uDAUIri51uEBk8": {
+      "lot_code": "A-21",
+      "stone_name": "Armoni Blue 1 22 41 42",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/11TaQ7ZaFOKgwZcCbO-uDAUIri51uEBk8"
+    },
+    "179Vfh0gwhK_Up2dVCbcRuI1IJRJqek0c": {
+      "lot_code": "FOTOĞRAF",
+      "stone_name": "Fotoğraf",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/179Vfh0gwhK_Up2dVCbcRuI1IJRJqek0c"
+    },
+    "1VSNA20Ml48SiKDxKwTrkrj1jTp_QB0Yd": {
+      "lot_code": "K-3179",
+      "stone_name": "Silver River Between 48 57 Stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1VSNA20Ml48SiKDxKwTrkrj1jTp_QB0Yd"
+    },
+    "1fVbV-iWe_TCmBOYuIslivDHLT6V3kss5": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1fVbV-iWe_TCmBOYuIslivDHLT6V3kss5"
+    },
+    "1lFnKvwPs63VaqmACaWaTRRIJSL8vN7fA": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1lFnKvwPs63VaqmACaWaTRRIJSL8vN7fA"
+    },
+    "1EpAaLIsh5hVS_dNwZz0C2oZegEAeY_Dg": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1EpAaLIsh5hVS_dNwZz0C2oZegEAeY_Dg"
+    },
+    "1830OBtc7TLvIQe7dIzOfGiqp-FmVWXoQ": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1830OBtc7TLvIQe7dIzOfGiqp-FmVWXoQ"
+    },
+    "1L756PI1494xv1V9Zf7HEmyzR7N8vCG-T": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1L756PI1494xv1V9Zf7HEmyzR7N8vCG-T"
+    },
+    "1jEIdupqCZ-SmUmtbGXNWCJaqXIIyy2ly": {
+      "lot_code": "A-276",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jEIdupqCZ-SmUmtbGXNWCJaqXIIyy2ly"
+    },
+    "1LVDvG1ufcB3gygc6Bj1fRVvGp4M85VAe": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LVDvG1ufcB3gygc6Bj1fRVvGp4M85VAe"
+    },
+    "1PTfGZh1KwRZit6-D_QD7sIuhrsoK-Mtn": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1PTfGZh1KwRZit6-D_QD7sIuhrsoK-Mtn"
+    },
+    "1r-K3OHYHXgz1Wt7U5PlWqXYBjk84umK8": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1r-K3OHYHXgz1Wt7U5PlWqXYBjk84umK8"
+    },
+    "1CKcao1Qe7XWEz2I0AKCFkY2SwZlDrS0T": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1CKcao1Qe7XWEz2I0AKCFkY2SwZlDrS0T"
+    },
+    "1cD2klzA1qSTDbmyxIK-CqpjOQVatxGuK": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1cD2klzA1qSTDbmyxIK-CqpjOQVatxGuK"
+    },
+    "1DCJm594Cypn_sWozvsnNSOEsS8JtZJJa": {
+      "lot_code": "A-371",
+      "stone_name": "Armoni Blue Stock Between 1 33",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1DCJm594Cypn_sWozvsnNSOEsS8JtZJJa"
+    },
+    "16pIviktch2B0gKigRPdWNYVmt2kDR-xi": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16pIviktch2B0gKigRPdWNYVmt2kDR-xi"
+    },
+    "1NCWNhBezALKxXFoLpxDvx0tgu3hrDlYM": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1NCWNhBezALKxXFoLpxDvx0tgu3hrDlYM"
+    },
+    "1vzb8qs-uAntq5_rJcUMDZqbTmP1l35-R": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vzb8qs-uAntq5_rJcUMDZqbTmP1l35-R"
+    },
+    "1KP4bM1MPRNi-tdZtX0Bno0xe5G_fu92C": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KP4bM1MPRNi-tdZtX0Bno0xe5G_fu92C"
+    },
+    "1ncNCeFGi0T8JciY3Zdgf7qwbUws44FRK": {
+      "lot_code": "A-1030",
+      "stone_name": "Silver Roots",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ncNCeFGi0T8JciY3Zdgf7qwbUws44FRK"
+    },
+    "1VCv038HtzYRjB6TVTTMBLS3BKsSr7OnG": {
+      "lot_code": "2- SLABS LEATHERFINISH",
+      "stone_name": "2 Slabs leatherfinish",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1VCv038HtzYRjB6TVTTMBLS3BKsSr7OnG"
+    },
+    "1gSB6kkB60b9AE2ItGuJc_vRLbgYjL7fA": {
+      "lot_code": "K-3968",
+      "stone_name": "Silver River K3968",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1gSB6kkB60b9AE2ItGuJc_vRLbgYjL7fA"
+    },
+    "1TavcDzw9Xp7iPQYTP5HhXEa5ulV5qqN_": {
+      "lot_code": "K-3968",
+      "stone_name": "Silver River",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1TavcDzw9Xp7iPQYTP5HhXEa5ulV5qqN_"
+    },
+    "1k7jlPCWpx0qIkuPhe8rdc5gU_ojMbjRX": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1k7jlPCWpx0qIkuPhe8rdc5gU_ojMbjRX"
+    },
+    "1wvYuv7k6mp64XiUIGAg2MTHYi6Mf4cSs": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1wvYuv7k6mp64XiUIGAg2MTHYi6Mf4cSs"
+    },
+    "1f4O0CS4ktCfLDN8UV4SuRuX8O96yDa8_": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1f4O0CS4ktCfLDN8UV4SuRuX8O96yDa8_"
+    },
+    "1ZpByePgRazwAEQw5aA8QMhowp4p7Gcc7": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ZpByePgRazwAEQw5aA8QMhowp4p7Gcc7"
+    },
+    "114vchOl76UN42UjPv6Y5lVkbwPkxusww": {
+      "lot_code": "A-1009",
+      "stone_name": "Silver River",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/114vchOl76UN42UjPv6Y5lVkbwPkxusww"
+    },
+    "1LzlLLBvAtz31zynUc6kQLzmJuot_ZgUz": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LzlLLBvAtz31zynUc6kQLzmJuot_ZgUz"
+    },
+    "1KiuVvC55sXbh8VpJ27jGoktkI9G9Dg2g": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KiuVvC55sXbh8VpJ27jGoktkI9G9Dg2g"
+    },
+    "1Bph92Pmnlh_8dccir7X2xHxTBrB58KyQ": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Bph92Pmnlh_8dccir7X2xHxTBrB58KyQ"
+    },
+    "1CYcbkC8NNuiiXEsK21oSXO0FbHu8AdSM": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1CYcbkC8NNuiiXEsK21oSXO0FbHu8AdSM"
+    },
+    "1_71e3qt3wzTm0N268y-kbKZPqNgFISE_": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_71e3qt3wzTm0N268y-kbKZPqNgFISE_"
+    },
+    "19Hx7bFvhAjEv82dLl3q8I6anVLl82XKO": {
+      "lot_code": "A-1037",
+      "stone_name": "Silver River 1 38",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/19Hx7bFvhAjEv82dLl3q8I6anVLl82XKO"
+    },
+    "1mDjfpnuw_xlib9iI_srJ5sp9q6zn5N8H": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1mDjfpnuw_xlib9iI_srJ5sp9q6zn5N8H"
+    },
+    "1mPL93FiQAfKRPeBds5CpRoHprptrJd7Q": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1mPL93FiQAfKRPeBds5CpRoHprptrJd7Q"
+    },
+    "1HhXbqGo6siFy4HTlAFEGjOoo8JrtYx7c": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1HhXbqGo6siFy4HTlAFEGjOoo8JrtYx7c"
+    },
+    "1gVniD98QOONle3WC-DXuWYH_bzXINe9Z": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1gVniD98QOONle3WC-DXuWYH_bzXINe9Z"
+    },
+    "1wQotbGoIoS3QV3kQmFwKIxurlnGEcLwJ": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1wQotbGoIoS3QV3kQmFwKIxurlnGEcLwJ"
+    },
+    "1EO9aUkj1MCshL_BdoDBemyXeHNJqlJr0": {
+      "lot_code": "A-383",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1EO9aUkj1MCshL_BdoDBemyXeHNJqlJr0"
+    },
+    "1E5zE6Jzzb5UCoanVA2QIkNWYJ21nyJXo": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1E5zE6Jzzb5UCoanVA2QIkNWYJ21nyJXo"
+    },
+    "163tUkE9uvo4iaJct9s_c5d5jHXEJgyK-": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/163tUkE9uvo4iaJct9s_c5d5jHXEJgyK-"
+    },
+    "1LEPywrXhzVfvBa7IPCOUZs4VoG8RrhtM": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LEPywrXhzVfvBa7IPCOUZs4VoG8RrhtM"
+    },
+    "1FQR6ekeMfGtXAm6sXtn73KblAUdXYgXB": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FQR6ekeMfGtXAm6sXtn73KblAUdXYgXB"
+    },
+    "1yeHBekt4LIof78Gov45zqH0dXqFDycj_": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1yeHBekt4LIof78Gov45zqH0dXqFDycj_"
+    },
+    "1vl5srT8Dyn2g781vwcimpZwojhxSoVik": {
+      "lot_code": "A-324",
+      "stone_name": "Grey Philharmonic Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vl5srT8Dyn2g781vwcimpZwojhxSoVik"
+    },
+    "1YuKMFcWoCC8sw7fS6_92grkYhmuCby5y": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1YuKMFcWoCC8sw7fS6_92grkYhmuCby5y"
+    },
+    "1tFLEQJA9EVGQh_tTOkEfkiKXBiVDebIU": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1tFLEQJA9EVGQh_tTOkEfkiKXBiVDebIU"
+    },
+    "1v1qJ-u-uQ_yhsY5bZ-ys9KYGFkVq3LFD": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1v1qJ-u-uQ_yhsY5bZ-ys9KYGFkVq3LFD"
+    },
+    "133Tf73tJWTaBcy9Dk6FrSUNL6kNGCLoY": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/133Tf73tJWTaBcy9Dk6FrSUNL6kNGCLoY"
+    },
+    "1k5DhO1Ic-2EVFuJ8LAw1awp7ITa2robw": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1k5DhO1Ic-2EVFuJ8LAw1awp7ITa2robw"
+    },
+    "1TgVyr0DaqBO18thJL-0YjAu0awgOh6lT": {
+      "lot_code": "A-96",
+      "stone_name": "Silver Roots Full Lot Without No:56",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1TgVyr0DaqBO18thJL-0YjAu0awgOh6lT"
+    },
+    "1uUsGpWst5TOX7qSQPwGinu_CkysTosS3": {
+      "lot_code": "BUNDLE 2",
+      "stone_name": "Bundle 2",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1uUsGpWst5TOX7qSQPwGinu_CkysTosS3"
+    },
+    "1Zy8FjAN0qKFDx1KYyGNN8B0p_uy1eiJb": {
+      "lot_code": "BUNDLE 1",
+      "stone_name": "Bundle 1",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Zy8FjAN0qKFDx1KYyGNN8B0p_uy1eiJb"
+    },
+    "1lpNLVx8FbT8tZalh62CZCIrCX5nEZRLJ": {
+      "lot_code": "K-4052",
+      "stone_name": "Grey Philharmonic Between 1 16 stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1lpNLVx8FbT8tZalh62CZCIrCX5nEZRLJ"
+    },
+    "1AjztXv7td4Eq4W5bpH0bmnMUN8bL4L40": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1AjztXv7td4Eq4W5bpH0bmnMUN8bL4L40"
+    },
+    "1maPwBLe8FsV3e26VMx2ONQ0zXn_vsGXg": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1maPwBLe8FsV3e26VMx2ONQ0zXn_vsGXg"
+    },
+    "1u2voJfuyXNet7Eai5TGHV7wecpHMpVL0": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1u2voJfuyXNet7Eai5TGHV7wecpHMpVL0"
+    },
+    "1Oga-FWOisbYnV1krEduZBstO-nIYo55w": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Oga-FWOisbYnV1krEduZBstO-nIYo55w"
+    },
+    "1mWFsa9YG1iF_aTcWj6gLlCE1Gt76IVwH": {
+      "lot_code": "A-248",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1mWFsa9YG1iF_aTcWj6gLlCE1Gt76IVwH"
+    },
+    "1DAWTUX3DLFngy_ekac854ZlMQfhXC5MZ": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1DAWTUX3DLFngy_ekac854ZlMQfhXC5MZ"
+    },
+    "1tNvIt1AQf4HjA_tHG-K6cwgKeeQAvhJ_": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1tNvIt1AQf4HjA_tHG-K6cwgKeeQAvhJ_"
+    },
+    "1IFSEU3MVfccBGb0FNo-ngviYNxDbfjek": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1IFSEU3MVfccBGb0FNo-ngviYNxDbfjek"
+    },
+    "1kq_Pj9KXJpDm5PE_sriZVohjR3yglQv8": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kq_Pj9KXJpDm5PE_sriZVohjR3yglQv8"
+    },
+    "1xMOZbHeKmkqW8zTUixTb0e1C_WaGZymp": {
+      "lot_code": "A-156",
+      "stone_name": "Armoni Full Lot 25 58 stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xMOZbHeKmkqW8zTUixTb0e1C_WaGZymp"
+    },
+    "1pko_NStAwbjQfuEXPKywouHeudUrx6R-": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1pko_NStAwbjQfuEXPKywouHeudUrx6R-"
+    },
+    "1pOl9q_0nT4z_uwD68ml48_MqGhdy4xXr": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1pOl9q_0nT4z_uwD68ml48_MqGhdy4xXr"
+    },
+    "1_VFt32bqaCCj42Usjshj_5lzbdQH4T52": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_VFt32bqaCCj42Usjshj_5lzbdQH4T52"
+    },
+    "16TqMpv-tDwo-iOIMQdylMZIq1RwLXZw1": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16TqMpv-tDwo-iOIMQdylMZIq1RwLXZw1"
+    },
+    "11UYtKGuk0MmQPwOg0PDUr_RRuvKA9GLa": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/11UYtKGuk0MmQPwOg0PDUr_RRuvKA9GLa"
+    },
+    "1s-MYd3ssdGfWf7W2ht_qafbLLtXiUSfD": {
+      "lot_code": "A-258",
+      "stone_name": "Silver River Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1s-MYd3ssdGfWf7W2ht_qafbLLtXiUSfD"
+    },
+    "1k0_r1AmfYSh2qPXx8fxYK6dDdvOphveX": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1k0_r1AmfYSh2qPXx8fxYK6dDdvOphveX"
+    },
+    "1IJACwCvqztq8FDgerXi3DYyMDVsSwG-D": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1IJACwCvqztq8FDgerXi3DYyMDVsSwG-D"
+    },
+    "1V5vfKQngu-Kb7EllHrO3a5ErBtHmV9a-": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1V5vfKQngu-Kb7EllHrO3a5ErBtHmV9a-"
+    },
+    "1KhjqIwbAOfy9UixEIsNG_7nqQkkt1iAZ": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KhjqIwbAOfy9UixEIsNG_7nqQkkt1iAZ"
+    },
+    "1e6OTt1uIBZkMfDOmFEpjufDnoFBIF4wB": {
+      "lot_code": "A-290",
+      "stone_name": "Silver Roots Armoni Between 25 56 stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1e6OTt1uIBZkMfDOmFEpjufDnoFBIF4wB"
+    },
+    "1cDL8v3dnDoJveoPcE8Zu33YD1cIT7Pyo": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1cDL8v3dnDoJveoPcE8Zu33YD1cIT7Pyo"
+    },
+    "1vYYbr0ErO-h79iYu90u4Z3Zby1cWF1th": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vYYbr0ErO-h79iYu90u4Z3Zby1cWF1th"
+    },
+    "18CyxO4qBWwEh8e2xl8xMo9jcw3_lfxIr": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18CyxO4qBWwEh8e2xl8xMo9jcw3_lfxIr"
+    },
+    "1UbOXyYtpOaZ4bcNCEZ6ERtqLxB78omEa": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UbOXyYtpOaZ4bcNCEZ6ERtqLxB78omEa"
+    },
+    "1-Gg5CA8cUJgNqDvwfdx_20PXoXfy-NUi": {
+      "lot_code": "A-157",
+      "stone_name": "Silver Roots 25 37 Stock",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1-Gg5CA8cUJgNqDvwfdx_20PXoXfy-NUi"
+    },
+    "19oMIhmQegLZDZ7cIVPswx6iAArYsgnYb": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/19oMIhmQegLZDZ7cIVPswx6iAArYsgnYb"
+    },
+    "1TxQLZUd8l8EVrnQf-oGLK8rDIIN7HL9i": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1TxQLZUd8l8EVrnQf-oGLK8rDIIN7HL9i"
+    },
+    "1V69TsVV2kujLEW1_Ijw-OwVwWXOrTGoG": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1V69TsVV2kujLEW1_Ijw-OwVwWXOrTGoG"
+    },
+    "12fFUvpdeYRVQCp6Z-neiP5l1ECy8sykp": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/12fFUvpdeYRVQCp6Z-neiP5l1ECy8sykp"
+    },
+    "1ARsp0eXbSWFpC6LXr9m1yZAiUcxQ3pGS": {
+      "lot_code": "A-147",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ARsp0eXbSWFpC6LXr9m1yZAiUcxQ3pGS"
+    },
+    "1GnmVmex3AEiMmiZK9cGe9I390eL84wtH": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1GnmVmex3AEiMmiZK9cGe9I390eL84wtH"
+    },
+    "1Dep3ghy3VYYCMUAj912QEmC2edz9GIh5": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Dep3ghy3VYYCMUAj912QEmC2edz9GIh5"
+    },
+    "1DsU2TSlArOzpgN0Wi-gdb3rLigo-drGI": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1DsU2TSlArOzpgN0Wi-gdb3rLigo-drGI"
+    },
+    "1SWMmujgGn-Hsgfr8pARSiYXA-eWxDPs-": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1SWMmujgGn-Hsgfr8pARSiYXA-eWxDPs-"
+    },
+    "14DjkWRGqGp7O8nel3QmfmUMjnom9G94o": {
+      "lot_code": "A-468",
+      "stone_name": "Ceppo Breccia Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/14DjkWRGqGp7O8nel3QmfmUMjnom9G94o"
+    },
+    "1QugWyDLwmoz7igF7YfrFGiaHhLwnpYNj": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1QugWyDLwmoz7igF7YfrFGiaHhLwnpYNj"
+    },
+    "1pbZsNsrvEXVy1tfRm-WlvKBpvD-n18ER": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1pbZsNsrvEXVy1tfRm-WlvKBpvD-n18ER"
+    },
+    "1klvIKUb0rGC0RGfa_AETFvwZ-DoYnu47": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1klvIKUb0rGC0RGfa_AETFvwZ-DoYnu47"
+    },
+    "14EqkJAzotBNgyiXAkkrbk5SOLH9ZLQAo": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/14EqkJAzotBNgyiXAkkrbk5SOLH9ZLQAo"
+    },
+    "1yTx6oiBRJFqSbiHtcgA1lMd8oatuIqtI": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1yTx6oiBRJFqSbiHtcgA1lMd8oatuIqtI"
+    },
+    "1FWPxq8Ox9z-izJOZU9RVpIOZctkx0EfW": {
+      "lot_code": "A-467",
+      "stone_name": "Ceppo Breccia Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FWPxq8Ox9z-izJOZU9RVpIOZctkx0EfW"
+    },
+    "1vjeJkz49TqTLfQ-Am3ZfE6yviB-kX1j_": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vjeJkz49TqTLfQ-Am3ZfE6yviB-kX1j_"
+    },
+    "1ucwShIBP-yIVcJ1GUIl1nHdOmrcwrvxI": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ucwShIBP-yIVcJ1GUIl1nHdOmrcwrvxI"
+    },
+    "1s2w5d1f8vJCyzMiedyK3scC4Jn-X-FWI": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1s2w5d1f8vJCyzMiedyK3scC4Jn-X-FWI"
+    },
+    "1YpzqXbHMG5zkAfRNECFtizLVqtikh90L": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1YpzqXbHMG5zkAfRNECFtizLVqtikh90L"
+    },
+    "1Mc8qYJ1YC3BC7LLjH2Csb02N9Wjyk8HH": {
+      "lot_code": "A-91",
+      "stone_name": "Ash Grey Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Mc8qYJ1YC3BC7LLjH2Csb02N9Wjyk8HH"
+    },
+    "1MnQQaZ_CzKkzGy5aQppTKeqLGCfMeeR2": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1MnQQaZ_CzKkzGy5aQppTKeqLGCfMeeR2"
+    },
+    "1HprRSaCtBH7w_l9FudYXZmQn-Yehpppt": {
+      "lot_code": "A-223",
+      "stone_name": "Likya Beige Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1HprRSaCtBH7w_l9FudYXZmQn-Yehpppt"
+    },
+    "1XKDMTJzrWCNun708nWb6efAzYbd1OFLz": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1XKDMTJzrWCNun708nWb6efAzYbd1OFLz"
+    },
+    "1o0jDNIjZ__URDoK1KAPK9_yI6A4nK5r3": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1o0jDNIjZ__URDoK1KAPK9_yI6A4nK5r3"
+    },
+    "1BgY2cHnbIkfhValUKBsdIbwvYWPEuzvA": {
+      "lot_code": "A-94",
+      "stone_name": "Luna Grey Between 1 57 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1BgY2cHnbIkfhValUKBsdIbwvYWPEuzvA"
+    },
+    "1NyFM-96ekIW0Xi3GxcfLwu938gH4W9hE": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1NyFM-96ekIW0Xi3GxcfLwu938gH4W9hE"
+    },
+    "1PvH8D4OAjI3N2beTtZyO3XefAkfVGWfV": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1PvH8D4OAjI3N2beTtZyO3XefAkfVGWfV"
+    },
+    "1FC9nvh15Qw0clhfEiaBp1EJEHZ3G6vfR": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FC9nvh15Qw0clhfEiaBp1EJEHZ3G6vfR"
+    },
+    "1yB0uQuztInFarsruMZ_4pynAf1HA8hZe": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1yB0uQuztInFarsruMZ_4pynAf1HA8hZe"
+    },
+    "18gFjO_u05mw9uBcc3GLRDESp-oaOgJJR": {
+      "lot_code": "A-108",
+      "stone_name": "Galapagos Between 37 50 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18gFjO_u05mw9uBcc3GLRDESp-oaOgJJR"
+    },
+    "1e8VJA0gQ03NlSKLClKaXf-ZgPXCdmHl5": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1e8VJA0gQ03NlSKLClKaXf-ZgPXCdmHl5"
+    },
+    "14ZszQno6oodfkCyGab1UXz7LeMXj5A-S": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/14ZszQno6oodfkCyGab1UXz7LeMXj5A-S"
+    },
+    "1a7YEE_gzFxSyacY5Py1_mJ7Orhjtq8Ef": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1a7YEE_gzFxSyacY5Py1_mJ7Orhjtq8Ef"
+    },
+    "1zCk0n28xl4aQaGe9tbr52qJgSSkNhT8O": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1zCk0n28xl4aQaGe9tbr52qJgSSkNhT8O"
+    },
+    "1OMmp82myjO99gC1SQkTJq2sO7D4FG75i": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1OMmp82myjO99gC1SQkTJq2sO7D4FG75i"
+    },
+    "1q0uWR6r00sfn13LWKoLoRzBmcU-FTMh6": {
+      "lot_code": "A-378",
+      "stone_name": "Terranova Between 25 56 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1q0uWR6r00sfn13LWKoLoRzBmcU-FTMh6"
+    },
+    "1eTiMOCwnlwQ6PtqoTuCorhzfArLBMcn1": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1eTiMOCwnlwQ6PtqoTuCorhzfArLBMcn1"
+    },
+    "1Ow022oBj8veb3r4IQsraw8c5FvTBhF0P": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Ow022oBj8veb3r4IQsraw8c5FvTBhF0P"
+    },
+    "1RHROD28Xrw09ZBC6sfLSeXE-qk2MwF7u": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1RHROD28Xrw09ZBC6sfLSeXE-qk2MwF7u"
+    },
+    "1IfYhRTalPbaPGub2_oqlWcQ-ZYyDjCFv": {
+      "lot_code": "D-38",
+      "stone_name": "Arabescato Violet between 1 33 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1IfYhRTalPbaPGub2_oqlWcQ-ZYyDjCFv"
+    },
+    "1FzhIg1d5DNtmhFn4PRHEkPIx8C-07Qyh": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FzhIg1d5DNtmhFn4PRHEkPIx8C-07Qyh"
+    },
+    "1zX5uAFw0VV2N90Ccyes0LeDAmAENWSd0": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1zX5uAFw0VV2N90Ccyes0LeDAmAENWSd0"
+    },
+    "1EzFg1qXINb9My7cS1Vr5R4tNJGIbI4iM": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1EzFg1qXINb9My7cS1Vr5R4tNJGIbI4iM"
+    },
+    "1jQfdZx5omjhN0MtBV3kE8PKM8tzFJGyQ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jQfdZx5omjhN0MtBV3kE8PKM8tzFJGyQ"
+    },
+    "18GcxUF8COb6rbxuvx0DPbEwDimeNju65": {
+      "lot_code": "A-422",
+      "stone_name": "Calacatta Gold Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18GcxUF8COb6rbxuvx0DPbEwDimeNju65"
+    },
+    "1X_VpRZkTeHlB8MImQKin2kzga87uZlr0": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1X_VpRZkTeHlB8MImQKin2kzga87uZlr0"
+    },
+    "17d2W4VvZKV5jV5iBsow4oueCsaYrAJIF": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/17d2W4VvZKV5jV5iBsow4oueCsaYrAJIF"
+    },
+    "18EYQIniLUdVl58Fb00HpihlGI0HSGFSh": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18EYQIniLUdVl58Fb00HpihlGI0HSGFSh"
+    },
+    "1F3r-wAS3bok2CH52tZKIjWtE_qhASQ63": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1F3r-wAS3bok2CH52tZKIjWtE_qhASQ63"
+    },
+    "1EEpLvX0GqX_YCjtfCFBUrlcE2lXhuAep": {
+      "lot_code": "A-461",
+      "stone_name": "Rosso Levanto A+ Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1EEpLvX0GqX_YCjtfCFBUrlcE2lXhuAep"
+    },
+    "18yn-2nYWnlp0vkpWEtRQpb1VGTz7D5an": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18yn-2nYWnlp0vkpWEtRQpb1VGTz7D5an"
+    },
+    "1MKfvGI63nUHShAGkPdSMz-ijZUFHvCH2": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1MKfvGI63nUHShAGkPdSMz-ijZUFHvCH2"
+    },
+    "1u-mN04VPPmkACEitC_4pNoKjzFY5Vj4E": {
+      "lot_code": "A-432",
+      "stone_name": "Galaxy Silver Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1u-mN04VPPmkACEitC_4pNoKjzFY5Vj4E"
+    },
+    "1G_lRsYjuWZrcmfUAQDA_WxBqYd4K6VjV": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1G_lRsYjuWZrcmfUAQDA_WxBqYd4K6VjV"
+    },
+    "1yRppaT74V1VW-AF7SRMijZZEuN8maaOP": {
+      "lot_code": "A-398",
+      "stone_name": "Green Onyx Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1yRppaT74V1VW-AF7SRMijZZEuN8maaOP"
+    },
+    "1_qzAr4crCRMvaro5gS2fVQphkGzjSCZ4": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_qzAr4crCRMvaro5gS2fVQphkGzjSCZ4"
+    },
+    "12oryk1iHBO1dnJmH0iG9A9WCPRRe9vuJ": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/12oryk1iHBO1dnJmH0iG9A9WCPRRe9vuJ"
+    },
+    "1-f5KS7cNyD2UOiDFn6SkwYvBuwTkXQZE": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1-f5KS7cNyD2UOiDFn6SkwYvBuwTkXQZE"
+    },
+    "1SALmEy7VfTZvOE6CdQMsOCDkxr4-wYgk": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1SALmEy7VfTZvOE6CdQMsOCDkxr4-wYgk"
+    },
+    "1huEJbmVH_v63cmbkD_dj6Xq3ukCSZtj1": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1huEJbmVH_v63cmbkD_dj6Xq3ukCSZtj1"
+    },
+    "1m0ae0NIxenRxk8dJVKmtkuBd3OXw93OL": {
+      "lot_code": "A-415",
+      "stone_name": "Diana Royal Full Lot Reserved",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1m0ae0NIxenRxk8dJVKmtkuBd3OXw93OL"
+    },
+    "1J17Ta0t7fDECyhCKLO3ius52KRWCGfEO": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1J17Ta0t7fDECyhCKLO3ius52KRWCGfEO"
+    },
+    "1d_BrAr_kj3QVwMDlBg_TurBiXdQvEuWe": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1d_BrAr_kj3QVwMDlBg_TurBiXdQvEuWe"
+    },
+    "15vtBT0bygff1GTsjRMOg5aOeuvB2SnHv": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/15vtBT0bygff1GTsjRMOg5aOeuvB2SnHv"
+    },
+    "1nDIp95S4DBDn_iInc1CeVZfzCxqZpEJR": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1nDIp95S4DBDn_iInc1CeVZfzCxqZpEJR"
+    },
+    "1Sa4BrTSTTLN9iUZUIO3uWckVDzXWNdEm": {
+      "lot_code": "A-201",
+      "stone_name": "Golden Spider 35 44",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Sa4BrTSTTLN9iUZUIO3uWckVDzXWNdEm"
+    },
+    "1itBXWwBxweI9eqyw4nyzOJEYq0iKyeai": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1itBXWwBxweI9eqyw4nyzOJEYq0iKyeai"
+    },
+    "14tGUUq1sCLq3_l_Bx32lHLG6L1jNJ7F0": {
+      "lot_code": "D-33",
+      "stone_name": "Exotic Green Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/14tGUUq1sCLq3_l_Bx32lHLG6L1jNJ7F0"
+    },
+    "1_dPw17zziv91y6aV_5fDQOB_u-BVVdjr": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_dPw17zziv91y6aV_5fDQOB_u-BVVdjr"
+    },
+    "1aij7rOI1BZUBrl0Tu47IJ4elpH2T8YX4": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1aij7rOI1BZUBrl0Tu47IJ4elpH2T8YX4"
+    },
+    "1Z1gLS16cFFAhYisbmQsyz_CqXctoCPSJ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Z1gLS16cFFAhYisbmQsyz_CqXctoCPSJ"
+    },
+    "1x1K9QR3P4uKSo02ZinSDS5Bu1Yv8yk5E": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1x1K9QR3P4uKSo02ZinSDS5Bu1Yv8yk5E"
+    },
+    "1iAozwk9sjNsi4cZqlSuZ8maWl2LYTO03": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1iAozwk9sjNsi4cZqlSuZ8maWl2LYTO03"
+    },
+    "1h2skGpYHmLwoUnN5aKS07cymeY1MaCjI": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1h2skGpYHmLwoUnN5aKS07cymeY1MaCjI"
+    },
+    "1Czgbqcx0JlUmlX1BOU9FHBO_57s1zqpk": {
+      "lot_code": "A-288",
+      "stone_name": "Bianco Lupo Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Czgbqcx0JlUmlX1BOU9FHBO_57s1zqpk"
+    },
+    "1bH18ELvVqPybpGrpQH0EV0wgNCdRGV72": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1bH18ELvVqPybpGrpQH0EV0wgNCdRGV72"
+    },
+    "1omNfWKGWa33I0CWcurISca7NyGPqgfSH": {
+      "lot_code": "A-256",
+      "stone_name": "Moon Cream Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1omNfWKGWa33I0CWcurISca7NyGPqgfSH"
+    },
+    "1MC_ZaE9M36xNLpLsEmKB5Amqxl_2jt8z": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1MC_ZaE9M36xNLpLsEmKB5Amqxl_2jt8z"
+    },
+    "13dJ8LPJaUhH1Gujuda6yILcCmwz644uX": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13dJ8LPJaUhH1Gujuda6yILcCmwz644uX"
+    },
+    "1KEkuUNmKS8AMWgKu5-ks1mur3GaT0X6m": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KEkuUNmKS8AMWgKu5-ks1mur3GaT0X6m"
+    },
+    "1NV8qQQbbovoubB-jYZwEJYr4g74W5EJa": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1NV8qQQbbovoubB-jYZwEJYr4g74W5EJa"
+    },
+    "1SGNTNzZfZJ0_f4YBFrUtK5CVEUE-5bT3": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1SGNTNzZfZJ0_f4YBFrUtK5CVEUE-5bT3"
+    },
+    "1A3C65ql22VagWS42gMOE_EYuHnEQlsVp": {
+      "lot_code": "A-270",
+      "stone_name": "Golden Shadow Dark Between 1 26 Stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1A3C65ql22VagWS42gMOE_EYuHnEQlsVp"
+    },
+    "1iUSc1RzUBYsimtMCOrz04rB9fyFnO6j_": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1iUSc1RzUBYsimtMCOrz04rB9fyFnO6j_"
+    },
+    "1zo3LJ68Ibj0JlCZrCPwywuXvU9wTG3UG": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1zo3LJ68Ibj0JlCZrCPwywuXvU9wTG3UG"
+    },
+    "1pbs84-92vwpdUtojEloItgUTbRFTtgWm": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1pbs84-92vwpdUtojEloItgUTbRFTtgWm"
+    },
+    "1YRTl7WoB614DBoUTuTtkJuiLpu0lIbhA": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1YRTl7WoB614DBoUTuTtkJuiLpu0lIbhA"
+    },
+    "1fjJhqk44iVQ04mcBdVBQQ4AUn3zH4NuX": {
+      "lot_code": "A-261",
+      "stone_name": "Lilac Between 1 44 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1fjJhqk44iVQ04mcBdVBQQ4AUn3zH4NuX"
+    },
+    "10iLp8oc8dUSNXRelCDDs8rYx4b8iZLFi": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/10iLp8oc8dUSNXRelCDDs8rYx4b8iZLFi"
+    },
+    "1dNFOEvKraXvD-EJaeCdUiEE1ZD-iYLr0": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1dNFOEvKraXvD-EJaeCdUiEE1ZD-iYLr0"
+    },
+    "1Lozt5IRElb_z6iU65zldwf_DDnEsu82K": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Lozt5IRElb_z6iU65zldwf_DDnEsu82K"
+    },
+    "13qeqjEdjZLDgoP2mQHwHk61VelA_3lK0": {
+      "lot_code": "DENVER",
+      "stone_name": "denver",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13qeqjEdjZLDgoP2mQHwHk61VelA_3lK0"
+    },
+    "1UoZSUBK_DY_XeUjJDM5wbLS75Zt52OUS": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UoZSUBK_DY_XeUjJDM5wbLS75Zt52OUS"
+    },
+    "1qXTO-n4mzTDAh2twXV3zi1p1vwfIDyxI": {
+      "lot_code": "A-346",
+      "stone_name": "Persian Nero Marquina Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1qXTO-n4mzTDAh2twXV3zi1p1vwfIDyxI"
+    },
+    "1YW2xYEfsQcPPlW6Q0mJMRV81G2EhQx8M": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1YW2xYEfsQcPPlW6Q0mJMRV81G2EhQx8M"
+    },
+    "12gT4l6D_V8cQo3A6LrH4By6zQbqmMLgu": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/12gT4l6D_V8cQo3A6LrH4By6zQbqmMLgu"
+    },
+    "1OUfyDTJKgJUJ-XWOIKDfDx_xF8ADWxON": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1OUfyDTJKgJUJ-XWOIKDfDx_xF8ADWxON"
+    },
+    "1wU_76UPnz1KHKVsflqK_HiR8RWD069pP": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1wU_76UPnz1KHKVsflqK_HiR8RWD069pP"
+    },
+    "1p3WENnZCA1pJOesWV_fIIC1hGtMyh_hT": {
+      "lot_code": "A-339",
+      "stone_name": "Rosso Viola 13 63 Stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1p3WENnZCA1pJOesWV_fIIC1hGtMyh_hT"
+    },
+    "13jYbAmOJ0dBDTE2ouSp2cSx1BWWNatEw": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13jYbAmOJ0dBDTE2ouSp2cSx1BWWNatEw"
+    },
+    "1kZL8vpX6ZocAGQLXf0aWM2qk9LH5i2Lc": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kZL8vpX6ZocAGQLXf0aWM2qk9LH5i2Lc"
+    },
+    "1_29Y5J8kBgCiMmxJG_W2fBkPMIIlcDKr": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_29Y5J8kBgCiMmxJG_W2fBkPMIIlcDKr"
+    },
+    "1xNF7pg2wN_x2HAvk2l70YhI-e-3z8iRW": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xNF7pg2wN_x2HAvk2l70YhI-e-3z8iRW"
+    },
+    "1Xokv3oqHZwUOULVe8WOAH8OY7nIlJWVh": {
+      "lot_code": "A-116",
+      "stone_name": "Tundra Grey Full Lot Without No:59",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Xokv3oqHZwUOULVe8WOAH8OY7nIlJWVh"
+    },
+    "1OIPxgXBna9ri-N2_biM6L9IUH-VhfXC-": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1OIPxgXBna9ri-N2_biM6L9IUH-VhfXC-"
+    },
+    "1Qt_9qw9M8ut0FLOlAGPDfkKFT4JPvXiq": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Qt_9qw9M8ut0FLOlAGPDfkKFT4JPvXiq"
+    },
+    "1SZOswZpVOK_IfS9RbI05AFY0neBfsJYY": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1SZOswZpVOK_IfS9RbI05AFY0neBfsJYY"
+    },
+    "1dJXvyd3GnxOjx55mZfg0PdI4HBMViXG7": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1dJXvyd3GnxOjx55mZfg0PdI4HBMViXG7"
+    },
+    "1J7ZFpMqojTi47C_6407hwF028n8z2eWE": {
+      "lot_code": "A-265",
+      "stone_name": "Rosso Levanto 26 51+53",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1J7ZFpMqojTi47C_6407hwF028n8z2eWE"
+    },
+    "1P7K8LvAiSJMi9DUdu2zjIiNy-hT50Ilz": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1P7K8LvAiSJMi9DUdu2zjIiNy-hT50Ilz"
+    },
+    "1WCpkM8KwZuNlk6oy51hlkxAUQTrog5ha": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1WCpkM8KwZuNlk6oy51hlkxAUQTrog5ha"
+    },
+    "1TE22z2uOAfBnOLMAuQMTecIPYARt6uMO": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1TE22z2uOAfBnOLMAuQMTecIPYARt6uMO"
+    },
+    "10XBrTxzeMtZ8d3AzwtFp2wN07BlQBX3w": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/10XBrTxzeMtZ8d3AzwtFp2wN07BlQBX3w"
+    },
+    "1BkZvAT3_J8julakoIUkSirzyn8dozMkE": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1BkZvAT3_J8julakoIUkSirzyn8dozMkE"
+    },
+    "1S4SlTw0LwXPCQ7ihTp2omQLMilIUvyLI": {
+      "lot_code": "A-362",
+      "stone_name": "Bluetta Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1S4SlTw0LwXPCQ7ihTp2omQLMilIUvyLI"
+    },
+    "1mVZ0PZNlxCW-ltU-pX5w1HpiYpaeXVq7": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1mVZ0PZNlxCW-ltU-pX5w1HpiYpaeXVq7"
+    },
+    "1naWRlFaekAsBnz5owEQ0O1E-978cHa6N": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1naWRlFaekAsBnz5owEQ0O1E-978cHa6N"
+    },
+    "1HC7d392MkwmI9zPGQCKMOCTwy4P99c2v": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1HC7d392MkwmI9zPGQCKMOCTwy4P99c2v"
+    },
+    "13Ix54IDPaAlMsiMxoxC4sMAMqll82xNL": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13Ix54IDPaAlMsiMxoxC4sMAMqll82xNL"
+    },
+    "14BbSxr7ylRsozXmotFEJPpo-YjxSrlzY": {
+      "lot_code": "A-275",
+      "stone_name": "Crema Uno Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/14BbSxr7ylRsozXmotFEJPpo-YjxSrlzY"
+    },
+    "1i5MPi83g1d7ZpuQwYodAuaasrEjtrPMS": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1i5MPi83g1d7ZpuQwYodAuaasrEjtrPMS"
+    },
+    "1D0urSGT1H1ghbt56Z5Z9Tm8qzeD0BXNI": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1D0urSGT1H1ghbt56Z5Z9Tm8qzeD0BXNI"
+    },
+    "16roh79ZvEJkO8K9WEl_AATtbTyBy4BQU": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16roh79ZvEJkO8K9WEl_AATtbTyBy4BQU"
+    },
+    "17MWjywl9pmogG0t8T73_LZ_yjFQ9J0Rt": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/17MWjywl9pmogG0t8T73_LZ_yjFQ9J0Rt"
+    },
+    "1o4IefNdImoE_TBC-FyENrRleoKf4lAK4": {
+      "lot_code": "A-365",
+      "stone_name": "Green Levanto Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1o4IefNdImoE_TBC-FyENrRleoKf4lAK4"
+    },
+    "18T1FR7xgj2KpniWXiXvCNAu1qp_ZcRR3": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/18T1FR7xgj2KpniWXiXvCNAu1qp_ZcRR3"
+    },
+    "1xxnHRGvf5h-4XK5Atum9FT-1uAh20dZC": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xxnHRGvf5h-4XK5Atum9FT-1uAh20dZC"
+    },
+    "1_V2JO3_krrcBarluqXpAfGa4Kd69kvuh": {
+      "lot_code": "A-139",
+      "stone_name": "Petroleum Green 1 32 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_V2JO3_krrcBarluqXpAfGa4Kd69kvuh"
+    },
+    "1znhb62qvh2e_348UWbyVvXk5LIcZ4Iqm": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1znhb62qvh2e_348UWbyVvXk5LIcZ4Iqm"
+    },
+    "1GSQCmFJBrXnXhta2K5eJ9E2UkxX5pNwN": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1GSQCmFJBrXnXhta2K5eJ9E2UkxX5pNwN"
+    },
+    "1q_QrnWy4WzI3toLX9nLS46BsmQysi_aV": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1q_QrnWy4WzI3toLX9nLS46BsmQysi_aV"
+    },
+    "1--lu7tJRclpUrtV9VEMzD4ADXd4qsset": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1--lu7tJRclpUrtV9VEMzD4ADXd4qsset"
+    },
+    "1_-Eg9Hc0gho5i2rkErqrq0LIWZ2MpcvA": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_-Eg9Hc0gho5i2rkErqrq0LIWZ2MpcvA"
+    },
+    "1QYADgvte3tjDjSr2KI43T68GxjqGOz2S": {
+      "lot_code": "A-181",
+      "stone_name": "Alexander Black Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1QYADgvte3tjDjSr2KI43T68GxjqGOz2S"
+    },
+    "1AQMo6va1HT2eZLf6le5Om4FoS0_q3f-Q": {
+      "lot_code": "A-51",
+      "stone_name": "Vegas Gold A-51[Full Lot]",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1AQMo6va1HT2eZLf6le5Om4FoS0_q3f-Q"
+    },
+    "19y9O1hsftLLK18bSCJvIbRadIUMWxv9z": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/19y9O1hsftLLK18bSCJvIbRadIUMWxv9z"
+    },
+    "1QhoB0XqU8H2Nm_0b1es7_LfhY-x2pq50": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1QhoB0XqU8H2Nm_0b1es7_LfhY-x2pq50"
+    },
+    "1_8cvdJNKX26MhcdT7dOY7-GDVwLtV2rM": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_8cvdJNKX26MhcdT7dOY7-GDVwLtV2rM"
+    },
+    "1JNebvPAYOQRieAk82dLpPJW3GkKDP1T2": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1JNebvPAYOQRieAk82dLpPJW3GkKDP1T2"
+    },
+    "1oyGkquaPuGMPK1YGvnmiWdFDtdVkq-38": {
+      "lot_code": "A-51",
+      "stone_name": "Vegas Gold Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1oyGkquaPuGMPK1YGvnmiWdFDtdVkq-38"
+    },
+    "1LfgidYsN_kdwN9BYdo63S_9JS78lO68p": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LfgidYsN_kdwN9BYdo63S_9JS78lO68p"
+    },
+    "15aMFhhu6I4ldgiQifesQqDY54GDxRkaF": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/15aMFhhu6I4ldgiQifesQqDY54GDxRkaF"
+    },
+    "1ALrUyOQSzQo6orB6zaXu2d8A_Tqe44Xj": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ALrUyOQSzQo6orB6zaXu2d8A_Tqe44Xj"
+    },
+    "13N7qVcKZnvA4jZNLTS1q0BfWYcxdm-kI": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13N7qVcKZnvA4jZNLTS1q0BfWYcxdm-kI"
+    },
+    "1sqGThDqLLiKdmp9Fo9j4V_wdon4oS6bY": {
+      "lot_code": "A-274",
+      "stone_name": "Crema Uno Between 27 51 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1sqGThDqLLiKdmp9Fo9j4V_wdon4oS6bY"
+    },
+    "16BxDQ6sVXx37EriuN4qxtcHLyqczf0nD": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16BxDQ6sVXx37EriuN4qxtcHLyqczf0nD"
+    },
+    "1kReNryeYonfTqvQj9ImP4AfJXUTJZg0y": {
+      "lot_code": "THUMBS",
+      "stone_name": "thumbs",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kReNryeYonfTqvQj9ImP4AfJXUTJZg0y"
+    },
+    "1hFmYD8bNbhRIKioxIjbnw4CKt-aCp4q8": {
+      "lot_code": "META",
+      "stone_name": "meta",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1hFmYD8bNbhRIKioxIjbnw4CKt-aCp4q8"
+    },
+    "1F-6LSPR8UTQRyzlM38pC9LNp30DW9Vkn": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1F-6LSPR8UTQRyzlM38pC9LNp30DW9Vkn"
+    },
+    "1ELrFVwkCzeUm0HV18NyuY3so-S2NKVTR": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ELrFVwkCzeUm0HV18NyuY3so-S2NKVTR"
+    },
+    "1XPoVLU81mwn22eiP0BjR-xT9l-bi043F": {
+      "lot_code": "DENVER",
+      "stone_name": "denver",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1XPoVLU81mwn22eiP0BjR-xT9l-bi043F"
+    },
+    "1podZ-RNBMvs8ghflIeKkfD-9qBr_JXzF": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1podZ-RNBMvs8ghflIeKkfD-9qBr_JXzF"
+    },
+    "1FQHsCwrNRj1fv1L45MJYNJD02EGNY6aF": {
+      "lot_code": "A-277",
+      "stone_name": "Crema Uno Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1FQHsCwrNRj1fv1L45MJYNJD02EGNY6aF"
+    },
+    "1H2k30ZltB73O2pofNViuZTW57t1VrdD9": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1H2k30ZltB73O2pofNViuZTW57t1VrdD9"
+    },
+    "1dLX-eGVLssbTTfR86rA40uc1nOIQprNL": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1dLX-eGVLssbTTfR86rA40uc1nOIQprNL"
+    },
+    "1h3xxBdNK2YmulhF-Mdme4h1nIgjmoQGd": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1h3xxBdNK2YmulhF-Mdme4h1nIgjmoQGd"
+    },
+    "1o1H3HPsQcOskecAkrRj9LNMDRMVQj6Hr": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1o1H3HPsQcOskecAkrRj9LNMDRMVQj6Hr"
+    },
+    "1GkAZZuyIhffHtty5QBUYGwCdoNDbFmoS": {
+      "lot_code": "A-222",
+      "stone_name": "Likya Beige Between 27 50 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1GkAZZuyIhffHtty5QBUYGwCdoNDbFmoS"
+    },
+    "1RV3hnXDmAakQMNtS5z-4ZhITKCmpcdTh": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1RV3hnXDmAakQMNtS5z-4ZhITKCmpcdTh"
+    },
+    "1Z4Z-U48LP2lrGcfx1D5c8W6hnlvcvCMw": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Z4Z-U48LP2lrGcfx1D5c8W6hnlvcvCMw"
+    },
+    "104te5TLqxp16ODfqB1GH-XeE4Nwj1Bii": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/104te5TLqxp16ODfqB1GH-XeE4Nwj1Bii"
+    },
+    "1kp8LvruJdx4OyuVvko1RC9SIgWf2s6F4": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kp8LvruJdx4OyuVvko1RC9SIgWf2s6F4"
+    },
+    "1LkXvVcNxKJlsEQeeO6LpH3aPDahL-aMN": {
+      "lot_code": "A-67",
+      "stone_name": "Bruno Perla 1 18 arası stok",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LkXvVcNxKJlsEQeeO6LpH3aPDahL-aMN"
+    },
+    "1NiVKZ2irIJ7vbLn0sdgrp7VgbNSdVGzC": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1NiVKZ2irIJ7vbLn0sdgrp7VgbNSdVGzC"
+    },
+    "10gz7umosUVx9OlUYnCTdHHNYaar6lX-a": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/10gz7umosUVx9OlUYnCTdHHNYaar6lX-a"
+    },
+    "1V74lqquUq5jgA5UDb7Nhf4Wg36D32GWT": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1V74lqquUq5jgA5UDb7Nhf4Wg36D32GWT"
+    },
+    "1ksMj_WLbaBKZLvxyxtIat83W7jJPagb7": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ksMj_WLbaBKZLvxyxtIat83W7jJPagb7"
+    },
+    "1jZCvG87hFqbNRca3atbkv1s0FxlV3i1L": {
+      "lot_code": "A-210",
+      "stone_name": "Wooden Travertine Full Lot SOLD",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jZCvG87hFqbNRca3atbkv1s0FxlV3i1L"
+    },
+    "1n4GpYNQ8zVHZNDxrtw7jneMtRmofKcSe": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1n4GpYNQ8zVHZNDxrtw7jneMtRmofKcSe"
+    },
+    "1aQG3DjMRkFkiQfpbgLrGJdCWEs1MWLJK": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1aQG3DjMRkFkiQfpbgLrGJdCWEs1MWLJK"
+    },
+    "1ZyndHY95Y3LMULlBqxehUflXtfac8A6K": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ZyndHY95Y3LMULlBqxehUflXtfac8A6K"
+    },
+    "1ul20BNNepS4McFMn_XLVZwuXbc-6mLxg": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ul20BNNepS4McFMn_XLVZwuXbc-6mLxg"
+    },
+    "1COLF_dsfe2JlXK1Wyg83gepxKMOj_IIZ": {
+      "lot_code": "A-332",
+      "stone_name": "Alexander Black Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1COLF_dsfe2JlXK1Wyg83gepxKMOj_IIZ"
+    },
+    "1OxGbxXQJkaN_owejIKrIZgpy_b-zWMbI": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1OxGbxXQJkaN_owejIKrIZgpy_b-zWMbI"
+    },
+    "1r4UUfkVVjlMFM2iasb8kKiD5hu49OzRU": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1r4UUfkVVjlMFM2iasb8kKiD5hu49OzRU"
+    },
+    "1EsYlsICly8Vo6oLrNrhq-9SHeUenD_wn": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1EsYlsICly8Vo6oLrNrhq-9SHeUenD_wn"
+    },
+    "1LLq9RylNa_Almcg94uzd2XQeobl9KBYx": {
+      "lot_code": "A-280",
+      "stone_name": "Golden Breccia Between 40 64 stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1LLq9RylNa_Almcg94uzd2XQeobl9KBYx"
+    },
+    "1DE8ZqGBffG__X7oPkhzI7F73AH-UTOlr": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1DE8ZqGBffG__X7oPkhzI7F73AH-UTOlr"
+    },
+    "1iiGvWwAV0uvtiMDvh4nPkzgT89tbFT7X": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1iiGvWwAV0uvtiMDvh4nPkzgT89tbFT7X"
+    },
+    "1_139-pM4tebyiE-y2eI8f8_1X8HZcPPg": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_139-pM4tebyiE-y2eI8f8_1X8HZcPPg"
+    },
+    "1ysu423e_Q4tV-sniGQRj7xBVGYmZLnNA": {
+      "lot_code": "A-120",
+      "stone_name": "Rosalia Between 1 14 Stock",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ysu423e_Q4tV-sniGQRj7xBVGYmZLnNA"
+    },
+    "1KkVfS5uE9QqMFGcMbhxVSeRsB103DPqg": {
+      "lot_code": "A-44",
+      "stone_name": "Autumn Travertine  A-44 [Full Lot]",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KkVfS5uE9QqMFGcMbhxVSeRsB103DPqg"
+    },
+    "1vQwJtryJvmCmXY-tnF4pLhmKXWtKcSFO": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vQwJtryJvmCmXY-tnF4pLhmKXWtKcSFO"
+    },
+    "1F6Ho7Epuq-RsaUZ89NUQeioI4rCAnD23": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1F6Ho7Epuq-RsaUZ89NUQeioI4rCAnD23"
+    },
+    "198xs3cwIgWQcmumrITnp2wuM307JrWzu": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/198xs3cwIgWQcmumrITnp2wuM307JrWzu"
+    },
+    "1daHJabdCRCxZvfBQFxmkCJWHr8rYOS6G": {
+      "lot_code": "A-44",
+      "stone_name": "Autumn Travertine Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1daHJabdCRCxZvfBQFxmkCJWHr8rYOS6G"
+    },
+    "1K1vJqHF6st_JJx88Uza_84_WsS8NzfE3": {
+      "lot_code": "ST-2426",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1K1vJqHF6st_JJx88Uza_84_WsS8NzfE3"
+    },
+    "1qCC7IOhRe5nNh0ZQC8XmyfClo5S5f38L": {
+      "lot_code": "ST-2214",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1qCC7IOhRe5nNh0ZQC8XmyfClo5S5f38L"
+    },
+    "1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK": {
+      "lot_code": "ST-2214",
+      "stone_name": "Exotic Green ST2426",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK"
+    },
+    "1Z0x4QVnExF55Q0buRLV63tpWxbfP3e0x": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Z0x4QVnExF55Q0buRLV63tpWxbfP3e0x"
+    },
+    "1Yjpi01dib1m_L76xiibCUgUaY-BvSgKE": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Yjpi01dib1m_L76xiibCUgUaY-BvSgKE"
+    },
+    "1NhsNma9vbZoNN7K-gWqxXU4xZ9btvGFs": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1NhsNma9vbZoNN7K-gWqxXU4xZ9btvGFs"
+    },
+    "1eL0ATWwd-KXtX5AGpLGDI3aNQS9Bt3Vm": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1eL0ATWwd-KXtX5AGpLGDI3aNQS9Bt3Vm"
+    },
+    "1Xg7UYbMdaSAZlJP1zHCI3QnhOE0-aEgE": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1Xg7UYbMdaSAZlJP1zHCI3QnhOE0-aEgE"
+    },
+    "1vTep2wUJKlqPJtf-rtVIF9egHhKXwo_e": {
+      "lot_code": "A-50",
+      "stone_name": "Vegas Gold 1 7 arası stok",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1vTep2wUJKlqPJtf-rtVIF9egHhKXwo_e"
+    },
+    "1qs9OorXq7ctWQ7Y45wQLrLyownjrfu_M": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1qs9OorXq7ctWQ7Y45wQLrLyownjrfu_M"
+    },
+    "1ORcgeQB3mHMoJV8gbKCtJh37c2kykuQf": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ORcgeQB3mHMoJV8gbKCtJh37c2kykuQf"
+    },
+    "1l5HKS6ua8YMS_ODGY_CahIme0rXAdpUg": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1l5HKS6ua8YMS_ODGY_CahIme0rXAdpUg"
+    },
+    "1IRZjc0GA--d9xolFr6SmSljEY1QUJyLr": {
+      "lot_code": "A-95",
+      "stone_name": "Golden Dolomite Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1IRZjc0GA--d9xolFr6SmSljEY1QUJyLr"
+    },
+    "1QEIa_ER02PP4ln696IIGf9No5Y7Uv3Eo": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1QEIa_ER02PP4ln696IIGf9No5Y7Uv3Eo"
+    },
+    "1dCRyB0Q6dQJafb14GpG_ug82-GXczUeg": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1dCRyB0Q6dQJafb14GpG_ug82-GXczUeg"
+    },
+    "13wWZ9CK7BkU3779b9cOYQ6VQigKAUlzy": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/13wWZ9CK7BkU3779b9cOYQ6VQigKAUlzy"
+    },
+    "1_VCBmVNMvMT6x9zr_vT5EP3knMqOCcfJ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_VCBmVNMvMT6x9zr_vT5EP3knMqOCcfJ"
+    },
+    "19PChACEUijdFmm1cd7J2EbiECNRCAv9S": {
+      "lot_code": "A-117",
+      "stone_name": "Tundra Grey Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/19PChACEUijdFmm1cd7J2EbiECNRCAv9S"
+    },
+    "1C-_hR5cnHNZGLfxmGBQYWI-net8-pTo0": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1C-_hR5cnHNZGLfxmGBQYWI-net8-pTo0"
+    },
+    "1jnruRhBTEXT5Acazee81TAuhBoJMYa72": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jnruRhBTEXT5Acazee81TAuhBoJMYa72"
+    },
+    "1odzHuVT0EsA3AOLLKH2tcd52Sfae7YDN": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1odzHuVT0EsA3AOLLKH2tcd52Sfae7YDN"
+    },
+    "1kcoU0qXSLSK3BLVvH_EEwVxzdtEO6wUV": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1kcoU0qXSLSK3BLVvH_EEwVxzdtEO6wUV"
+    },
+    "1JliL-pTWn_Ux0yVAjfdLE4AJULjgFxta": {
+      "lot_code": "A-119",
+      "stone_name": "Black Salvadori Full Lot",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1JliL-pTWn_Ux0yVAjfdLE4AJULjgFxta"
+    },
+    "1xQcC4qRtlevYxKjjv5C0DODzMp_St0ZM": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xQcC4qRtlevYxKjjv5C0DODzMp_St0ZM"
+    },
+    "1MmXtiVbrsVo7GYmz9tMRnnuh6wFPLjnk": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1MmXtiVbrsVo7GYmz9tMRnnuh6wFPLjnk"
+    },
+    "1QZipmCkpu-5w3ENMomB192DM3Fozz3Jw": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1QZipmCkpu-5w3ENMomB192DM3Fozz3Jw"
+    },
+    "1IYDsk_hwkxUWY0su8HDaiHe1ELlE1n6x": {
+      "lot_code": "A-140",
+      "stone_name": "Toros Black 1 24 arası stok",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1IYDsk_hwkxUWY0su8HDaiHe1ELlE1n6x"
+    },
+    "1UkNKg0Sl7SVB6WNeRx6z2YIbKVn7lq1x": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UkNKg0Sl7SVB6WNeRx6z2YIbKVn7lq1x"
+    },
+    "1_NKJGtPDL5Q1LDgbvAWcQMGqIgrRUyEg": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1_NKJGtPDL5Q1LDgbvAWcQMGqIgrRUyEg"
+    },
+    "1jv8fKL9avmGFEzGabrNX_fKLtV0NaLKt": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1jv8fKL9avmGFEzGabrNX_fKLtV0NaLKt"
+    },
+    "11DT5uKxPVmFyjGgqC3Mssffqzl-Cfr_h": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/11DT5uKxPVmFyjGgqC3Mssffqzl-Cfr_h"
+    },
+    "17OVX-GSadS3ABwJF0Pcyd-VmDHyPHMhT": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/17OVX-GSadS3ABwJF0Pcyd-VmDHyPHMhT"
+    },
+    "1XnvqSzFi153Aea20p9PLcue3aXrn-ztW": {
+      "lot_code": "A-382",
+      "stone_name": "Terra Mater Full Lot Without No:38",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1XnvqSzFi153Aea20p9PLcue3aXrn-ztW"
+    },
+    "1bGEwjvkknlaeX-iAx8h-41tcMiqUUskc": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1bGEwjvkknlaeX-iAx8h-41tcMiqUUskc"
+    },
+    "1v6zIr5vfZDQQU70jKsxmlp4QONTJeTX_": {
+      "lot_code": "A-110",
+      "stone_name": "Terra Mater Between 43 63 stock",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1v6zIr5vfZDQQU70jKsxmlp4QONTJeTX_"
+    },
+    "1ztHFHvPSTbQRVv3D36S2Ob0A0JPBT7M8": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ztHFHvPSTbQRVv3D36S2Ob0A0JPBT7M8"
+    },
+    "1evid5g8HGuLSxB1E_ch_C2myVbJPcWJw": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1evid5g8HGuLSxB1E_ch_C2myVbJPcWJw"
+    },
+    "16C-HnSwws9gQHBQ-QmrpmCfPrlFf9F0S": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/16C-HnSwws9gQHBQ-QmrpmCfPrlFf9F0S"
+    },
+    "1OdPVZrPMaMo1vwS3jrx7lyNO2MkVHxef": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1OdPVZrPMaMo1vwS3jrx7lyNO2MkVHxef"
+    },
+    "1caz3qEoyF4DAjTpDOyKMLcFboUMWB7gW": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1caz3qEoyF4DAjTpDOyKMLcFboUMWB7gW"
+    },
+    "1UtD_KKDRllyM0-8SphQu8PelVJVpN_M4": {
+      "lot_code": "A-368",
+      "stone_name": "Blue Roots Full Lot",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1UtD_KKDRllyM0-8SphQu8PelVJVpN_M4"
+    },
+    "1an9u0xp-VkXYO9VC6DwU9BMCTkFzNvWu": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1an9u0xp-VkXYO9VC6DwU9BMCTkFzNvWu"
+    },
+    "17plPiYFCOj3eHpmEcw1uzZFGXqhplJmR": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/17plPiYFCOj3eHpmEcw1uzZFGXqhplJmR"
+    },
+    "1sUxEqTR4xb1eIcK_pldaFMI5i92XJVFl": {
+      "lot_code": "A-1015",
+      "stone_name": "Silver Roots Breccia Exclusive Between 25 45 stock",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1sUxEqTR4xb1eIcK_pldaFMI5i92XJVFl"
+    },
+    "1GByZbqpkN_rvmT6Ph6VdOf5-VDkxIueu": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1GByZbqpkN_rvmT6Ph6VdOf5-VDkxIueu"
+    },
+    "1cx5nyJ600mqDpI-OFaeS9XVXzbdLyUE9": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1cx5nyJ600mqDpI-OFaeS9XVXzbdLyUE9"
+    },
+    "1a57KVtrVKXuLZR1racnO50nvRbEtfogc": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1a57KVtrVKXuLZR1racnO50nvRbEtfogc"
+    },
+    "1ElMo_TcGIFiRBg5m_F-MG3NLoq6zKuH1": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ElMo_TcGIFiRBg5m_F-MG3NLoq6zKuH1"
+    },
+    "1PeK89hr5ugHen_w8ySW-BCPePSdnvPYr": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1PeK89hr5ugHen_w8ySW-BCPePSdnvPYr"
+    },
+    "1w-GvZ3gHwlhYAbx8ZGam9kFgwj8ZKXTT": {
+      "lot_code": "A-411",
+      "stone_name": "Blue Roots Full Lot",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1w-GvZ3gHwlhYAbx8ZGam9kFgwj8ZKXTT"
+    },
+    "10nqvjtN6LsT7qGNfaR1SdTv-6EO417cg": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/10nqvjtN6LsT7qGNfaR1SdTv-6EO417cg"
+    },
+    "12gu52ybdcb-AZxMxyzZ2FOxuVG8OZCyQ": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/12gu52ybdcb-AZxMxyzZ2FOxuVG8OZCyQ"
+    },
+    "1xA24ukIQ6D0p1rBLuZiTbDTnnZ78b-N4": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xA24ukIQ6D0p1rBLuZiTbDTnnZ78b-N4"
+    },
+    "1xSsuZc4pqwVbiybz1VYOo8uSzZtYCJPn": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1xSsuZc4pqwVbiybz1VYOo8uSzZtYCJPn"
+    },
+    "1yUj_Ak0RvnFCH8wiqf8qJ7fgunqLJpmU": {
+      "lot_code": "A-159",
+      "stone_name": "Earth Blue Between 1 32 stock",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1yUj_Ak0RvnFCH8wiqf8qJ7fgunqLJpmU"
+    },
+    "1c6jQRmyruYx7JB0QF3G4rDl9ooFABbQD": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1c6jQRmyruYx7JB0QF3G4rDl9ooFABbQD"
+    },
+    "1gWluTDIJHXKy3fNujdNKYrysqwwcmyku": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1gWluTDIJHXKy3fNujdNKYrysqwwcmyku"
+    },
+    "1KxNcyXZjsVIVFMfButHH_H696SI0mNzh": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1KxNcyXZjsVIVFMfButHH_H696SI0mNzh"
+    },
+    "1ap3Ja8aBrecfZDarrKk3GYJwh-TGEXG7": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1ap3Ja8aBrecfZDarrKk3GYJwh-TGEXG7"
+    },
+    "1YDfw0-v5eqINckJywQruA_3l0ZAg_CaO": {
+      "lot_code": "A-326",
+      "stone_name": "Blue Roots Full Lot",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 0.0,
+      "slabs": 0,
+      "drive_link": "https://drive.google.com/drive/folders/1YDfw0-v5eqINckJywQruA_3l0ZAg_CaO"
+    }
+  },
+  "sold_out_lots": {
+    "1L955oeBvYwxhml_HQYGpGLJiHMIaVd3e": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1VTNpB79HpIsL3wBW5FDr-bhr19SdVAnE": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1YmChLSdIBvkJTzvGwEigSFP5SnxW7zKy": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1uusnBXYleSCXs6iLOtvXw12H5NsOVMZV": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "12R0qI3J59gYubz7oW1hvel4cy_Ot-b8K": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1e0kZPxUWvZ-0q6I4HFxKRA9KqdhFBHyW": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1gUyWy32SH4OPlJOvDX0LhpEG-8e4j_UL": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1hQyglTcco5Tp1AF7Dvx9COZifSrKRV0k": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1Q_0fcmg27j-p1AP09JmyghgVqrexo25h": {
+      "lot_code": "A-84",
+      "stone_name": "Silver Roots",
+      "collection": "Arslanlar Collection"
+    },
+    "1KcY9yOXvReckAJIY26FTFnK25c4i2Upl": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1k7Wh98PxnB7IFiGKz4AJwanb-s0xZJ-7": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection"
+    },
+    "1hoBjZxxW2rwus-Wtg8DtGTo5WBsDacDY": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1wtTpEWM4lww6cxOoJ9WYvSJa2-UX0F2G": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "14p9XBL1bpTD4K5IUSgovrPGHO6FMB0a2": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1_CIbkUCjXIi8P587WwQobukwZYlyCPSG": {
+      "lot_code": "A-457",
+      "stone_name": "Silver River Full Lot",
+      "collection": "Arslanlar Collection"
+    },
+    "1TVIYbrv0gDaCEEy5Qp0xup5ctNO9vcCP": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1PJTn4-bMZ2RWLICm4ZTUNmbRxGSPBfm3": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1-dvpSs2qVXtg69kBFc79DzuDYQWTaDs3": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "11RR4zf3fD8ZDJH0bGH4pD4YxdtGDYiXy": {
+      "lot_code": "A-101",
+      "stone_name": "Grey Philharmonic SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1lQDglm5chc95eqs9njgm_Sl-fUcEGelJ": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1r0_BfZnUNBl0J57slvzgN4tkf8sWLLnb": {
+      "lot_code": "A-1004",
+      "stone_name": "Silver River 2 29 arası stok SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1R1KJclrGK3RCt_dPJ-DRAwXySSwGkdZv": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1Q44m9lebgagsxKZ9aL-JbiOU6GfP2RGb": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1H1zsHopTF1BFIeWWcS2fTRuKnD-yKe3I": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1wnHJqlX0tk5j0MHh6R01kpEviA7Fw6pN": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1VDzRv-uOYfpL0fJXAPUB2-mM6NNeaJqm": {
+      "lot_code": "A-313",
+      "stone_name": "Silver Roots Between 1 12 stock",
+      "collection": "Arslanlar Collection"
+    },
+    "1No_pDLBIuidiVgEoA4S8VDLiPZs4PCmz": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1OCF-L6UAabEHli9XPYGqe4OFrq5ySadU": {
+      "lot_code": "A-373",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection"
+    },
+    "1flgjiuVrsMXNP9RhweXIYq38Xq4Orhe5": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1o4Mml39powbdbKpKdh1jXujJW4XJbJsl": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1S2QImDpEk50hVbH0y9IYaIU0XFjUboeY": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection"
+    },
+    "1sNLzqgmWUma4ZCRvHaaKAO0ysYORrQvD": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1z15ycymO8S_b43OBXGHdgnqGR-8qWwWR": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1WOSbj3mEzcd6vAaDgqOzpz93FoTdBoKl": {
+      "lot_code": "A-375",
+      "stone_name": "Silver Roots Full Lot",
+      "collection": "Arslanlar Collection"
+    },
+    "1SAXjUASCG2-dALQRMqAPFQWjOgmYbNwn": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "146PoZwmnLk161vuGWGmzu1TUsJ6Lttih": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1vqQZm9DXAkLYeq6oxhQOZk3_6TWYVppz": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1dvMxlgLXoodskE6FxQvExJCv-RgxlaeQ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1Aovws-eyV6rJXqrKSuInhM17VZp6NEXt": {
+      "lot_code": "A-158",
+      "stone_name": "Silver River 1 46 arası stok",
+      "collection": "Arslanlar Collection"
+    },
+    "1taMsel91NVu3h8rQf1NhowHY-Of1T3Bl": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1PkX-gzaEWyVoLstEybw-s1snZBRzPybz": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1ClEorPvPZ2n6vCHDP-MdmVUeGLZ4CSc0": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1zSOrQ9KStnqfFlgqeVND7jwThnjLUXsv": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1KCarlXKUt1YcyGhguV7LdtcpG4aNZf60": {
+      "lot_code": "A-88",
+      "stone_name": "Silver Roots 25 57 arası stok",
+      "collection": "Arslanlar Collection"
+    },
+    "12qyMSQKP_JGwi6nmi6hbs9dTztx_gQHz": {
+      "lot_code": "BUNDLE 4",
+      "stone_name": "Bundle 4",
+      "collection": "Arslanlar Collection"
+    },
+    "1TbFzlKKhAnlUKrf0YKjVaCSrSY5o_fQl": {
+      "lot_code": "BUNDLE 3",
+      "stone_name": "Bundle 3",
+      "collection": "Arslanlar Collection"
+    },
+    "1SCKyNq_obR9O01sKbl3xLkBRGJ7ye7uB": {
+      "lot_code": "BUNDLE 2",
+      "stone_name": "Bundle 2",
+      "collection": "Arslanlar Collection"
+    },
+    "1O2DekA6YOg7pBDxJZK7X1RBTST5uwfOr": {
+      "lot_code": "BUNDLE 1",
+      "stone_name": "Bundle 1",
+      "collection": "Arslanlar Collection"
+    },
+    "1nmK6MAqav9tjkyuyXW1kJtG-JbxoT6JB": {
+      "lot_code": "K-3539",
+      "stone_name": "Silver Roots Polished Full Lot SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1rhLNfmJC0Ou_2-QxOPBNhk2IWl1b3AZw": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1uxv5CJP5i_K3hMjLypO5s-GkWKDv2Um5": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "19471CLWneQG-7NnO7r-UQ1Avqrviql2b": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "19c8Zdj4xGd0GAIeSxwpVBhn29u_546F5": {
+      "lot_code": "A-118",
+      "stone_name": "Silver Roots SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1JF-QE36xF_iAjMVcyHpYVf8nUKuQ21ng": {
+      "lot_code": "THUMBS",
+      "stone_name": "thumbs",
+      "collection": "Arslanlar Collection"
+    },
+    "157pITFmm0D2TqgEoMcXnLdwMry2b5bKe": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1W7w7IsYy18OzJB9yYWctaxOhvZIeZeV4": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1U2eseqQeQauWFXrmw5ryR9agA0C5cCX0": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection"
+    },
+    "1BNWfICbArMyEnozX1Vw18pXtb7TBAnPy": {
+      "lot_code": "DENVER",
+      "stone_name": "denver",
+      "collection": "Arslanlar Collection"
+    },
+    "1G3cMc6JJtYcb3giX4nDRZ4Pr0fRKhG8i": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1O-5rtzSXja1UflbYhzyX7PEftabCYzO9": {
+      "lot_code": "META",
+      "stone_name": "meta",
+      "collection": "Arslanlar Collection"
+    },
+    "1VrDBGxuqYY2NrdpfkSS4aHzzS66iH3rE": {
+      "lot_code": "A-83",
+      "stone_name": "Silver River Full Lot SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1FkU1ZaQ0I98UMtc1HEla82tWlfpgU1S0": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1e3TIU_2zNk9C2kbS4yJ27CB0eRvjpgS2": {
+      "lot_code": "A-1046",
+      "stone_name": "Armoni 39 60 stock SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1-xKuzgTv3ynUuJGylCHF75YAuEssWisj": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1OdrA9uwFbGUG3XeojBN4-530JXvolBEb": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1C2qRdO381idg58nKA0ZuN8AnXfgzr1s6": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1KWexVX_sh3R0Y6qXP8ss2J5xYqOz8Hja": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1LZnp3xpHsJ6-H0aH7YZZuUQxzAIJHZnX": {
+      "lot_code": "A-305",
+      "stone_name": "Silver roots Full Lot",
+      "collection": "Arslanlar Collection"
+    },
+    "1wiKq1vaiOzQj92LXr9BXBldoAd_63DnJ": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1rIrw5AXSrZVkBeGtEfb8zYpDwSwrwc5E": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1MrL2KTJww5cHfINXDlzQTjjlp9PbOvS3": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1XM5_lJ2GpwGOqRqartHcVLNr9aUR-8hs": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1vaUNNezY330LONtlwqeh-GL8b98jmH7m": {
+      "lot_code": "A-306",
+      "stone_name": "Silver Roots 1 30 Stock",
+      "collection": "Arslanlar Collection"
+    },
+    "1Ks6YjjrR2hGKhWipt8Vl2JGg133aS-zF": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1NzYpeyK-2K0TsPQo778fJie63pli6zwt": {
+      "lot_code": "A-1042",
+      "stone_name": "Eldorado SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "100xdaWKyqPj-a0I-4m5-GTyn0uTUUYsQ": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1ek9rA50UdOVnw7bVJkhnAdxVAefgVWBt": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1m97HmenIyyRw1gHCCTsquapTZFqUczCD": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection"
+    },
+    "1A7C0cZtsXwvrOY0zM5_l5t0ELfEzDr4q": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1RBR-qrXJ1UAX_gDK89oWGqSQzm0Z9L-6": {
+      "lot_code": "A-97",
+      "stone_name": "Silver Roots Between 1 28",
+      "collection": "Arslanlar Collection"
+    },
+    "1wUESr8qohfKxBdAbXv66qRceycLET6-O": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "12BEKNCWGh5N0_C2WZodrCplzgYm1F8mq": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1gmBNskdmXD-aOJxpOuBMwBuIlm__t2zl": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1o39jJB_MBO2Klls88IAOfOEUdtGbpMvo": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1IhWHUbQgGP61cOP1S0GLUED9qQYgZlzh": {
+      "lot_code": "A-100",
+      "stone_name": "Silver Roots Between 25 37 Stock",
+      "collection": "Arslanlar Collection"
+    },
+    "1QFlzfqOSypEKR0yOv5yhhWcio_Tu5onX": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1lxMOfcKPITc8WKoqlnhZ27O9NGWHogw2": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1MuODjlyP4yPdBGAyHOYlGmkkOoSBxGtm": {
+      "lot_code": "A-172",
+      "stone_name": "Silver River Full Lot SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1rAAOJ1Ua73KPLQaQK77gbiLscX3Ea25x": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "1aHqg12GK6b2KmRmodvZRq2GAXXHShiHC": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1DY6aZEk19JWOWaInwpjaeLqAEByeMSs0": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1pbxvWbeVZ5DIFCURY5nbNyATx9N7wbFf": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1NqNIAACHIfVXXQYUrcqneeywKpxMiEWy": {
+      "lot_code": "A-166",
+      "stone_name": "Armoni Full Lot SOLD",
+      "collection": "Arslanlar Collection"
+    },
+    "1QViqYjANqjFJA_yqFX0eb8qZK-8ftNZj": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Collection"
+    },
+    "11vTB0H4FElF9uICdm6stIsiPeUfb8BK6": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1uOhWW9QhFokvz4-avOWbaqB3syebHjWo": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1zMODpXuursa-xD4JvYdZ6Tozjw6nKMEf": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1kTUQAeUaLqtBaGqZFyQBcrBS5BWVq0ZG": {
+      "lot_code": "A-167",
+      "stone_name": "Silver Roots Armoni Between 1 34 stock",
+      "collection": "Arslanlar Collection"
+    },
+    "1k67Q2h_lKTnqdfOqzMFfjfgTaRl3PHtv": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Collection"
+    },
+    "1gQfJTDcciUSOokUgZ0Lnz2seE3gND5qi": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Collection"
+    },
+    "1LC6hO8zcCsP5B5kQe67Yz7A_bRWYM_WL": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Collection"
+    },
+    "1qo3KOHV-Hl_damxtNAc5pMz1dhKEMUOh": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Collection"
+    },
+    "12oKgKDt04M7tOHZ5lqcEXf2E9DN8GMyQ": {
+      "lot_code": "A-1026",
+      "stone_name": "Silver Roots Armoni Between 43 63 stock",
+      "collection": "Arslanlar Collection"
+    },
+    "1qmYJuIq51paOBguYMT-ID53rRLRBJbLm": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1tAGcVgrs6Vuw9JGCZYTkhoQuypawHbfn": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1ay8HQjotX87hpqh8_5pXQ8mtXeZAre_2": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1b2B09ZfC6h9LqQ1iVT5zAPRUVcF-hWQi": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series"
+    },
+    "127BU9trhmQHSMhRmZQ62RSlicb-gzkTQ": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "15LbB7wLzA0M2tdwsXi_LrKt75lHHmUTQ": {
+      "lot_code": "A-407",
+      "stone_name": "Diana Royal Full Lot",
+      "collection": "Arslanlar Series"
+    },
+    "1T7yKL1cIE3bQGf2J2Ljln5ZqSJmcpdlO": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1JQSQO9-SmA7gwU5xUpFDqpJL7kk8sn3V": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "11tRRctJRZ_XyPm1X-R_9795Ah-5YdOSg": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1HEHHdKOREOWQXnDJ6w4lcnnj3eDE_38m": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1gXXcmFnba57VKfRZ8ykToSfh5W6W7x2J": {
+      "lot_code": "A-130",
+      "stone_name": "Nebula Black Reserved Between 29 63 stock",
+      "collection": "Arslanlar Series"
+    },
+    "18xyU4ZFAKdk6T6Lka0A9Hafv6t3Mq9EH": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1bZs-zPiEPcxIlCRy44RqoGokBdEbaDfQ": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1ArpZrjQToZVASb0DTY9Kb9GQMknG3d9Y": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1uLUFKlCmbp_MsaBvtVHdVDYXlijDcf_F": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1p7pZLsPtJU7yhbezyBLmk6YTAcgcCO5s": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1_lLqjLGPXmTR7IFIm6IF8K2eo5rHPYcS": {
+      "lot_code": "A-340",
+      "stone_name": "Rosso Viola Between 25 59 stock",
+      "collection": "Arslanlar Series"
+    },
+    "1lCx1K1-sja3Y3HpJFTqVcLuYxXJKwJwk": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "17siPpeUT1rIYQEaQXUQVSMUGY5wKzx0L": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1HwoVWTisvniRM-sy8Y5hxxv9JvUZwa9j": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series"
+    },
+    "19ZB88_jxGAIxs8VdBoTM_HHAZRdd9WwD": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1FTAiY2o7ZXOgai6XhTt8dmueXiV0qEXn": {
+      "lot_code": "A-161",
+      "stone_name": "Astana Grey Between 1 48 stock",
+      "collection": "Arslanlar Series"
+    },
+    "182whn3lqXA1kTTEsaiz-kURSbeZZiDtv": {
+      "lot_code": "A-106",
+      "stone_name": "Astana Grey 46 61",
+      "collection": "Arslanlar Series"
+    },
+    "1SfTs0NZ4ctif0nSmmOkWgovdVVAPMH9j": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "16w7BkUfp5D74F4Mqw3oBgQ0IbC41l64k": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1FVmlHkNsGiWKIzyufoVJHBxLFdA0KmgN": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series"
+    },
+    "1QbDks61meQRzpjREMpnQye_HKOZIv0Ss": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1aNEeI2aLrqg1TOuAiRfXobD9MSVzh6kh": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1MKGroPr9oQQsig0Oq93uG9mJ1GkB3X30": {
+      "lot_code": "A-293",
+      "stone_name": "French Vanillia Full Lot",
+      "collection": "Arslanlar Series"
+    },
+    "1Qd7tS-_NMEtR-ngC06cnQCRv8kr6Ju11": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1gbweAgVT8hpkVVfNm_CwEUIw7qSiY8xm": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1KVr9XdTt2EpsxXKeXwaoUMtol-pjxLOZ": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1hB7gneY7XoXq3X9_i7XCOQS-tdrg8ZSS": {
+      "lot_code": "CUSTOM",
+      "stone_name": "custom",
+      "collection": "Arslanlar Series"
+    },
+    "1TaFbufYqJRZvl9KBF9oBRZomTyl1nteo": {
+      "lot_code": "D-32",
+      "stone_name": "Exotic Green 1 36 Stok",
+      "collection": "Arslanlar Series"
+    },
+    "1MJnYUeLhERWGeoaIUsS_Dh_F5A6FuTjg": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1GG8wfppNrUvdsATq-1nZ6Esub-mrOcOS": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1qQX4xmP0O5iUY9ZQoKy40ad3Yjzy8LGb": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1mx8u8zRQJN9rPdaJEPKIQ47rRqAcQ8-Y": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1S0TQ2RI4tu4exeaWa87uMEwK1frEPPrv": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1x14CzO8mxVJmx9TBoOi7UL4Q-AgF7vzv": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "12r8T2iUnVpr0fSaswlRvVC7WS0DHvrCB": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1O5vQ5YPoKojZ6rE3cqx31huXnBGp6btX": {
+      "lot_code": "A-176",
+      "stone_name": "Golden Black Full Lot SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "1pGBh6pqaM_md4fGxbx9RUNNgkkoZovoi": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1rgk_ZXnddswfr1zTObx-75HiZ1uLOJZ3": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1gPFNwpyixttaeQa4pRyqsChMy7oZCBKz": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1cBSzzsE-KccvuC7jqi4l9NQNp8r611N3": {
+      "lot_code": "A-141",
+      "stone_name": "Strata Diva Between 25 35 stock Without 32 SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "1MJNQEVCSrizWgTsdta7r6uI8UTa8Mhjh": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1ZxfwSEHcklxePdhonocR4SvJ7H-2-V4M": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1KaVPE2hAhrLa_vKLLOWPgPGxeus9fKEM": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1BhGQFgrzBtvn71FcsvQso3XIJcRSt0X_": {
+      "lot_code": "A-128",
+      "stone_name": "Spider Beige Full Lot Honlu Kısım SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "1PhYH-A0iqbOic7YQhcU-hLey539HO0tx": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "15My5-6jORVq6JEOCEdgR-RC0MEDXzvaw": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1BnZ4PIOnhWmCzSVQFmFZSGHrR6PbxkM-": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1Mcu-TXYyKF0whE6Bz6Rff3lqgu5kgnN0": {
+      "lot_code": "A-128",
+      "stone_name": "Spider Beige Full Lot Cilalı Kısım SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "11t3XF4TbZzI85UHLRu0yBgnvnTc6ethn": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1PiHAq4xOiqptPlWO5rrLcjk9ndTHZB1D": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1_xcv1YG0IkNww5spOg2qP3Y3la29W5qA": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1A785_gI9i5-7tsD0PuGOXvWbUETzkZbt": {
+      "lot_code": "A-283",
+      "stone_name": "Breccia Violet Full Lot",
+      "collection": "Arslanlar Series"
+    },
+    "1LH1_IL6IFOUxKeTXXv2J2z_fiSfS0V62": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1dfxXvax-JNsZGEG_pUJLQR5o1EOWwxDu": {
+      "lot_code": "A-345",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1VihKS4x1Z3N5WrlbutgT2Pb-VX1URvWh": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1PxESYbwDAnQO5fPBAMUOElBWhTbUKGGX": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1pgtu7nLJbpSGusH_w61SffPHygw02oeO": {
+      "lot_code": "A-345",
+      "stone_name": "Rosso Levanto Full Lot SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "1v5aqPrwSfZa8DQbjR7gvKJZmdJ-m0Qms": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1Z88fkNO3QzYLaH4FnXoDd5odBq7_GBVn": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1IdZUTNpDL1lfSkX-8pynGFNRvfOy3_H1": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1rY22KAdyz9zrg6EVWgfN1SgMQ7zJvlKK": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1eFmV3n6VsE8_atks4N9Wu2iIq4F-9H2O": {
+      "lot_code": "A-93",
+      "stone_name": "Deep River Full Lot SOLD",
+      "collection": "Arslanlar Series"
+    },
+    "19PLV5VIZPLK4seT_dQ2hJyL3O9-7ltyH": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1XANGBbeNT35OqVYgbn-AMe18H1x3zqal": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1PiJDIkSjq8__SbIQc7IRYNt7to7SPsbG": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "12e5RzcuXb-ro4WtlikC5Py6V_l-KUQIY": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1pFVe9VqxQB0xEifLmt_8D0sqJ-o59Wac": {
+      "lot_code": "A-123",
+      "stone_name": "Golden Shadow Dark",
+      "collection": "Arslanlar Series"
+    },
+    "12PFddG_C_GP9tbsZt8ms_J8l-LdOdkNl": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1VsNMt5W6_ToOHvPTCPx72s3N38xbHP0-": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1agyf0P0fN7lNexlqRdC-Z6-RTrfq2dOS": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1JrvEN_HEw4pMUp-oVFmMhIPuexPkmB0c": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1QdbPDpi0pVFIOLzqNFUzPCY8UeC9AOpG": {
+      "lot_code": "A-163",
+      "stone_name": "Astana Grey Full Lot",
+      "collection": "Arslanlar Series"
+    },
+    "1R9jxKoIw7AoE9P4VhO9VbPNZ5gb1gvsW": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "10LIfZ5mlF9VsrOIjfVtXJngKyExQuoya": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1fiEOF5SyglKnii1T4FAGc4iE9FJrH3Tm": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "16LdaYpcfCyW8FusZMKC56KqRslEJuxrG": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "10dUDRn35RJ_aWhbN5HsIfmviHK-8Ok6o": {
+      "lot_code": "A-41",
+      "stone_name": "Autumn Travertine LF",
+      "collection": "Arslanlar Series"
+    },
+    "1MJXxys0xetDO6qYFrHSKEbnFudjZl9QD": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1kckT0000UU2guX7VDB1LWEO9HeKTi2lA": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1jZn2k_N6hNrLaO6vXZ7k4ApiERg3fIif": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1Th_Rl7kjHZa6KsohTyPWtytu0MV7_tas": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "11wClsTQZthdpiHxbjUrriH5Yf2pQe2na": {
+      "lot_code": "A-289",
+      "stone_name": "Bianco Lupo",
+      "collection": "Arslanlar Series"
+    },
+    "1hhVIn9DUd6Pu73mcENCSQQ1X6d11TiHo": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "1_9JJRcjyEJAr6H7EWA_rgpiIi4HjO6vR": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1zMtRAKEbvJW_fQZO_TfgxLG7tCFBz8P5": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "1WcXuSiLBfGM1TI7BoOdqbk4XjKssmnU7": {
+      "lot_code": "A-73",
+      "stone_name": "Nero Picasso 2, 15 30 arası stok",
+      "collection": "Arslanlar Series"
+    },
+    "1G0MgOnyEBFAF2XqCuDPpuQUoHedt3qh_": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Series"
+    },
+    "1qKKAocpMnw8QyMUDFNN4mKrVgBafCnWC": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Series"
+    },
+    "1BHjf5q8w3VRnCQRsCKimNfBuWW1t6uCe": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Series"
+    },
+    "11r6OkBjxZFQDGyWEOM7c7pd9fuFz2kJu": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Series"
+    },
+    "14-FZ9l65C44Ymm14l1zxUzH4-FRS7_n4": {
+      "lot_code": "A-113",
+      "stone_name": "Ivory Travertine Full Lot",
+      "collection": "Arslanlar Series"
+    },
+    "1RO46WcgSGKWFmWLX7cvIb7P-tXDONfNK": {
+      "lot_code": "A-350",
+      "stone_name": "Terra Mater",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1YB-6rIQfPt8Z62-kRBj0Qk2-RqNADfht": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1PNYLWWmXMM_Zk9rgYur6301nUuHfatg8": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "13iUM9Sv-LR3LtPPP4pCHAUvqVyuDQMi1": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1JsQz0FHtiUJ7G-Ldo9h-OZ6I5NmlA3ah": {
+      "lot_code": "A-350",
+      "stone_name": "Terra Mater Between 25 36",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1rouUKyifLvNvptGBR7hXy2SNs6b4iR2b": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1b8divdXapzLcZGO39GhK1bf9QzrQL4jT": {
+      "lot_code": "SCANNER",
+      "stone_name": "Scanner",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "17AyUUYL9EwQOIEUe-98q293fuuybxSzt": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1q5uT_Pmu6mAkGSop8RojLb59CTcqeM4I": {
+      "lot_code": "A-105",
+      "stone_name": "Terra Mystic Between 17 30 stock",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1KE8Iv_Eb3_wfKn_2o9PLyLMRVS3--_SM": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1WbGJWLbMoA45NbZIhBldJ8Wr9Nf1PtnV": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1IYIfgaOl7y12rF8N5-Uo6N-Lw_LoFACX": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1RqPBYUkyz7enlTAoC061uoeUQFohW04t": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1wvBUUm7q5v-JaeL4mVp-npBSSJXz2MkH": {
+      "lot_code": "A-284",
+      "stone_name": "Terra Mater Between 55 66 stock",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1LQxswyupVqJRv-TnzKweuf0Bmw3tGXl3": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1inbPo_BRUT8LR2pnM6-RMCyR_2oltjcI": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "10rusvsUQVkPQozjjk-waVWcLnMxdOuic": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1zNUYPaEkkT6y__X0yofj_hn70S8ToOfR": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1gQ0eHYFZy3yyD5MVGsDWivykVQuS4LVE": {
+      "lot_code": "A-322",
+      "stone_name": "Blue Roots 5 31 stock SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "17OlFdrX1oWwephkgiWyPpE1AivC6DhvE": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "19kFeWE8sG7ISLQVH2oL_oy0pEb1UiaSe": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "11IdSDMvoyNuW1l_YL-D8IFCjUpLe2rDr": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1QFhJ3nSW2805DGb2gzUcivX84x9yrv_Q": {
+      "lot_code": "A-245",
+      "stone_name": "Terra Mystic Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "13nP9gUfjo-LfQ8HkzlFGaBPHUzmVlniv": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1Eb2oqdwxtiBCj5uEmUg2sobEqjK1TO-X": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1FritZmcXkyt6n24RI9kWcK2yziTaTXDg": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1c3kABeMYOWGOVCb39Dz-HZk6hrNl1sfu": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1qLqwwaPK-QOQSmFaZN5ZprP1tYhvTBHL": {
+      "lot_code": "A-175",
+      "stone_name": "Terra Mystic Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1p2is0x3dEU0DnmbedKmMOscba2ozYWdN": {
+      "lot_code": "A-334",
+      "stone_name": "Terra Mater",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "16O3QftZwIfILDcNMNPW35M4nqXPcFmod": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1O12KQqyAVQKfjtBiKdLlfk1hN5D3-wOV": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1VOC4FlQ_OD_hzpiZSwHwDuduygJRWpWd": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1uQzvsFM2RILpTxauo50ly_Cojxx3Eo9z": {
+      "lot_code": "A-334",
+      "stone_name": "Terra Mater Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1pvn3OR8Vl8M3eWCPGukfIXGkgDUSu0ae": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1AtjXrkTH71XGMQFKQtnnV86DA4oV4I1K": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1oElXtjN0dUkbBLsKVFMbi1lEXQbvStxe": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1HzOwFIpw4ryVUVUYOqJdUgVomOeVPa90": {
+      "lot_code": "A-286",
+      "stone_name": "Terra Mater Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1pb5Ti9CcQrLTSxMYyFm_Su41JvNwcSvp": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1lMgOJ1UBmvtt-sW2DLL775bQblYzqzw7": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "10ilbwIPoytYTpvO7WJn5jGjkGyZibM1O": {
+      "lot_code": "A-127",
+      "stone_name": "Terra Mater Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "11NVdykT1hAWrqU5S0utjD6O73IGurh8x": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1SenwfgJyCiekKQC_O3sycq8fCyfBiSvB": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1KjW99Z3M7T-SwJEr15h4nq_zTsLScDpX": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1ZbYZnideosZXn7nr9i6imQ2UfAQFtGNL": {
+      "lot_code": "A-111",
+      "stone_name": "Terra Mater Between 10 18 stock SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1yFeN1I4ZAop_y17uvj3-fC5rIibJ5HRi": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "12XAr36v5QOVQ-Hl6sNP2fVtUq6lgJdOG": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1pNYVrk8N84UwqpPzlAQ3wm2yr_ut09Md": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1tknb6DG5qVt4RLoSygyiqJLyjGRj4IPD": {
+      "lot_code": "A-148",
+      "stone_name": "Blue Roots Between 20 31 stock SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1If5xQncXETV3sjE34JFt5Ywp2ZwAanwq": {
+      "lot_code": "EMAIL",
+      "stone_name": "email",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1UbKXthYMuMFaSbCzW-aTtGQLOP-z5Ycc": {
+      "lot_code": "WEB",
+      "stone_name": "web",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1lYIT3ORalPDMk1zANCLGBpzHJC9dXbvw": {
+      "lot_code": "LARGE",
+      "stone_name": "large",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1qzzOIee2J5Fa4g6H4aqKCsW7bM22U7Xi": {
+      "lot_code": "A-349",
+      "stone_name": "Blue Armoni Full Lot SOLD",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1CeCXVNlQRr-4A9r7WHCG2pkipEiz0l9v": {
+      "lot_code": "SCANNER PHOTOS",
+      "stone_name": "Scanner Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "1ejGAPWX_pMzE7PR9LbU93xCbhB8yOQzh": {
+      "lot_code": "PHOTOS",
+      "stone_name": "Photos",
+      "collection": "Arslanlar Exclusive Collection"
+    },
+    "11jS-rRGhnvFArm-rdRcNvnCeU3GtY2zZ": {
+      "lot_code": "A-1045",
+      "stone_name": "Blue Armoni between 9 47 Stock",
+      "collection": "Arslanlar Exclusive Collection"
+    }
+  },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-28T23:53:28.208134+03:00"
+  "updated_at": "2026-10-28T23:54:41.761033+03:00"
 }
