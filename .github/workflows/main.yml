@@ -5,6 +5,9 @@ on:
   schedule:
     - cron: '30 */5 * * *'
 
+permissions:
+  contents: write
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
@@ -29,6 +32,16 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_CREDENTIALS }}
+          PYTHONPATH: .
           PORT: 10000
         run: |
           timeout 330m python bot.py || true
+
+      - name: Son Durumu Depoya Yedekle
+        if: always()
+        run: |
+          git config user.name "ArslanlarBot"
+          git config user.email "bot@arslanlarmarble.com"
+          git add arslanlar_watcher_state.json argon_v17_master_cache.json 2>/dev/null || true
+          git commit -m "chore: save bot state [skip ci]" || true
+          git push || true
