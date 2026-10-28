@@ -61,7 +61,7 @@ RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RAMSafeR
 TR_TZ = timezone(timedelta(hours=3))
 
 
-def _ strip_turkish_plural_and_clean(text: str) -> str:
+def _strip_turkish_plural_and_clean(text: str) -> str:
     """
     'Ne kadar silver Rootslar sunum lütfen' -> 'silver roots'
     'Rosso levantolar sunum lütfen' -> 'rosso levanto'
