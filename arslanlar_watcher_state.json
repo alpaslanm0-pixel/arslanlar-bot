@@ -1054,8 +1054,15 @@
       "avg_dim": "65 x 81 cm",
       "surface": "Polished (2 cm)",
       "modified_time": "2026-02-22T11:38:58.261Z"
+    },
+    "1sUxEqTR4xb1eIcK_pldaFMI5i92XJVFl": {
+      "m2": 73814160.0,
+      "slabs": 73814160,
+      "avg_dim": "-",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-08-18T10:28:26.981Z"
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T03:08:20.632054+03:00"
+  "updated_at": "2026-10-29T03:08:32.772333+03:00"
 }
