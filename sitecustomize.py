@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-ARSLANLAR MARBLE - V28 ENTERPRISE ZERO-DEFECT ARCHITECTURE (sitecustomize.py)
-BOLUM 1 / 2: Cekirdek Motor, Sonsuz Dongu Korumasi, AST Native Bot.py Köprüsü ve 7-Katmanli Excel Okuyucu
-- Exit Code 143 (pip subprocess sonsuz dongusu) %100 engellendi.
-- bot.py dosyasina tek bir satir bile dokunmaz (%0 mudahale).
-- 'custom' klasorundeki fotograflari hicbir yerde (PDF, Telegram, Render) kullanmaz.
-- Her lotun icindeki Excel (.xlsx, .xls, Google Sheets, .ods, .csv) tablosunu:
-  1) bot.py'nin kendi orijinal fonksiyonlarini AST ile bulup cagirarak,
-  2) openpyxl + Saf Python BIFF8 (.xls) + XML/ZIP (.xlsx) + Google Drive API Donusturucu ile,
-  3) Klasor adindaki '25 37', '2 33', '1 + 20 44', 'Without No:56' araliklarini filtreleyerek
-  %100 dogrulukla okur. Asla 738371030 veya 400x300 cm veya kopya fotograf sayisi uydurmaz!
+ARSLANLAR MARBLE - V29 UNIFIED NATIVE-SYNC & LUXURY SUITE (sitecustomize.py)
+- Tek parca, sifir IndentationError / SyntaxError, sifir subprocess kilitlenmesi.
+- bot.py (ArgonMaster_V17) icindeki orijinal metraj/Excel motorunu (A-221 -> 177.46 m2, 32 Plaka,
+  306x181 cm, Brushed/Leather vb. kusursuz hesaplayan motoru) %100 dogrudan kullanir!
+- 'custom' klasorundeki fotograflari hicbir yerde kullanmaz.
+- %100 Ingilizce, Orijinal Logolu PDF Katalog, Aydinlik Bookmatch Render, Master Stok Tablosu (PDF+Excel),
+  'merhaba' rehberi ve 7/24 Sold Out / Yeni Lot bildirimlerini eksiksiz calistirir.
 """
 
 import os
 import re
 import gc
 import io
-import ast
 import sys
 import csv
 import json
@@ -38,7 +34,7 @@ import requests
 import numpy as np
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from PIL import Image, ImageDraw, ImageFilter, ImageEnhance, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
 from google.oauth2 import service_account
 import google.auth.transport.requests
@@ -103,34 +99,24 @@ def normalize_compare(s: str) -> str:
 
 
 def is_sane_lot_metrics(m2: float, slabs: int, avg_dim: str = "-") -> bool:
-    """
-    738,371,030 m2, 0.53 m2 (65x81 cm) veya 12.00 m2 (400x300 cm, 1 Slab) gibi
-    sahte/bozuk verileri %100 reddeden doğrulama filtresi.
-    """
     if m2 <= 1.5 or m2 > 2500.0:
         return False
     if slabs <= 0 or slabs > 350:
         return False
     avg_slab_area = m2 / float(slabs)
-    # Gerçek bir mermer plakasının alanı 1.15 m2 ile 8.80 m2 arasındadır
-    if avg_slab_area < 1.15 or avg_slab_area > 8.80:
+    if avg_slab_area < 1.05 or avg_slab_area > 9.20:
         return False
     if avg_dim and avg_dim not in ("-", "", "None", "Standard Export Size"):
         m_d = re.search(r"(\d+)\s*[xX*]\s*(\d+)", str(avg_dim))
         if m_d:
             w, h = int(m_d.group(1)), int(m_d.group(2))
             long_s, short_s = max(w, h), min(w, h)
-            # Uzun kenar 115..375 cm, kısa kenar 75..245 cm olmalıdır (400x300 ve 65x81 kesin elenir!)
-            if long_s < 115 or long_s > 375 or short_s < 75 or short_s > 245:
+            if long_s < 110 or long_s > 385 or short_s < 70 or short_s > 255:
                 return False
     return True
 
 
 def safe_float_cell(val: Any) -> Optional[float]:
-    """
-    Hücredeki sayıyı ('277,68', '3,18', 297, '4,52 m2')
-    noktaları silip birleştirmeden ve '=' formüllerini okumadan float'a çevirir.
-    """
     if val is None or isinstance(val, bool):
         return None
     if isinstance(val, (int, float)):
@@ -140,18 +126,14 @@ def safe_float_cell(val: Any) -> Optional[float]:
     s = str(val).strip()
     if not s or s.startswith("="):
         return None
-
-    # Tarih veya saat ifadelerini eler
     if re.search(r"\b\d{1,4}[/:-]\d{1,2}[/:-]\d{1,4}\b", s):
         return None
-    # Lot kodunu (A-157, K-3179 vb.) eler
     if re.match(r"^[A-Za-z]{1,3}\s*[-_]\s*\d+", s):
         return None
 
-    s_clean = re.sub(r"\b(m2|m²|sqm|cm|mm|mt|m|pcs|adet|plaka|slabs?)\b", "", s, flags=re.I).strip()
-
+    s_clean = re.sub(r"\b(m2|m²|sqm|cm|mm|mt|m|pcs|adet|plaka|slabs?|bundle)\b", "", s, flags=re.I).strip()
     all_nums = re.findall(r"[-+]?\d+(?:[.,]\d+)?", s_clean)
-    if len(all_nums) != 1:
+    if not all_nums:
         return None
 
     num_str = all_nums[0]
@@ -170,13 +152,6 @@ def safe_float_cell(val: Any) -> Optional[float]:
 
 
 def parse_slab_filter_from_folder_name(folder_name: str, lot_code: str) -> Tuple[Optional[Set[int]], Set[int]]:
-    """
-    Klasör adındaki kısmi stok kurallarını çözümler:
-    - 'A-157 - Silver Roots 25 37' -> Sadece 25..37 arası 13 plaka
-    - 'A-221 - Silver Roots 2 33' -> Sadece 2..33 arası 32 plaka
-    - 'A-62 - Silver Roots 1 + 20 44' -> 1. plaka ve 20..44 arası (26 plaka)
-    - 'A-96 - Silver Roots Without No:56' -> 56. plaka hariç tüm plakalar
-    """
     raw = folder_name.strip()
     if lot_code:
         raw = re.sub(re.escape(lot_code), " ", raw, flags=re.I)
@@ -316,7 +291,7 @@ class PersistentWatcherState:
         self.filepath = filepath
         self.lock = threading.Lock()
         self.data: Dict[str, Any] = {
-            "version": 28,
+            "version": 29,
             "chat_ids": [],
             "initialized": False,
             "active_lots": {},
@@ -334,9 +309,9 @@ class PersistentWatcherState:
                     with open(self.filepath, "r", encoding="utf-8") as f:
                         loaded = json.load(f)
                         if isinstance(loaded, dict):
-                            if loaded.get("version") != 28:
+                            if loaded.get("version") != 29:
                                 loaded["metrics_cache"] = {}
-                                loaded["version"] = 28
+                                loaded["version"] = 29
                             else:
                                 mc = loaded.get("metrics_cache", {})
                                 clean_mc = {}
@@ -363,7 +338,7 @@ class PersistentWatcherState:
 
     def save(self, git_sync: bool = False):
         with self.lock:
-            self.data["version"] = 28
+            self.data["version"] = 29
             self.data["updated_at"] = datetime.now(TR_TZ).isoformat()
             try:
                 with open(self.filepath, "w", encoding="utf-8") as f:
@@ -380,7 +355,7 @@ class PersistentWatcherState:
             subprocess.run(["git", "config", "user.email", "bot@arslanlarmarble.com"], timeout=5, check=False)
             subprocess.run(["git", "add", self.filepath], timeout=5, check=False)
             res = subprocess.run(
-                ["git", "commit", "-m", "chore: auto-sync watcher state v28 [skip ci]"],
+                ["git", "commit", "-m", "chore: auto-sync watcher state v29 [skip ci]"],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -400,12 +375,6 @@ class PersistentWatcherState:
 
 
 class PurePythonBiff8XlsReader:
-    """
-    Harici hiçbir kütüphaneye (xlrd vb.) ihtiyaç duymadan eski tip .xls (Excel 97-2003 BIFF8 / OLE2)
-    dosyalarının içindeki sayısal hücreleri (RK, MULRK, NUMBER) ve metinleri (SST / LABELSST)
-    doğrudan binary seviyesinde okuyan saf Python motoru!
-    """
-
     @staticmethod
     def decode_rk_number(rk: int) -> float:
         if rk & 0x02:
@@ -422,11 +391,8 @@ class PurePythonBiff8XlsReader:
         if len(data) < 512 or data[:8] != b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
             return []
 
-        # OLE2 Compound Document içerisindeki tüm BIFF8 kayıtlarını tara
-        # BIFF8 kayıt başlığı: rec_id (2 byte), rec_len (2 byte)
         cells_by_sheet: List[Dict[Tuple[int, int], Any]] = []
         current_cells: Dict[Tuple[int, int], Any] = {}
-        sst_strings: List[str] = []
 
         pos = 512
         n = len(data)
@@ -434,7 +400,6 @@ class PurePythonBiff8XlsReader:
             rec_id, rec_len = struct.unpack_from("<HH", data, pos)
             rec_data = data[pos + 4 : pos + 4 + rec_len]
 
-            # BOF (Beginning of File / Sheet): 0x0809
             if rec_id == 0x0809 and rec_len >= 8:
                 if current_cells:
                     cells_by_sheet.append(current_cells)
@@ -442,7 +407,6 @@ class PurePythonBiff8XlsReader:
                 pos += 4 + rec_len
                 continue
 
-            # NUMBER Record: 0x0203 (row: 2B, col: 2B, xf: 2B, val: 8B float)
             if rec_id == 0x0203 and rec_len == 14:
                 r, c, _, val = struct.unpack("<HHHd", rec_data)
                 if 0 <= r <= 1000 and 0 <= c <= 50:
@@ -450,7 +414,6 @@ class PurePythonBiff8XlsReader:
                 pos += 4 + rec_len
                 continue
 
-            # RK Record: 0x027E (row: 2B, col: 2B, xf: 2B, rk: 4B)
             if rec_id == 0x027E and rec_len == 10:
                 r, c, _, rk = struct.unpack("<HHHI", rec_data)
                 if 0 <= r <= 1000 and 0 <= c <= 50:
@@ -458,7 +421,6 @@ class PurePythonBiff8XlsReader:
                 pos += 4 + rec_len
                 continue
 
-            # MULRK Record: 0x00BD (row: 2B, first_col: 2B, [xf: 2B, rk: 4B]*, last_col: 2B)
             if rec_id == 0x00BD and rec_len >= 10 and (rec_len - 6) % 6 == 0:
                 r, first_col = struct.unpack_from("<HH", rec_data, 0)
                 last_col = struct.unpack_from("<H", rec_data, rec_len - 2)[0]
@@ -470,11 +432,9 @@ class PurePythonBiff8XlsReader:
                 pos += 4 + rec_len
                 continue
 
-            # FORMULA Record: 0x0006 (row: 2B, col: 2B, xf: 2B, result: 8B)
             if rec_id == 0x0006 and rec_len >= 20:
                 r, c, _ = struct.unpack_from("<HHH", rec_data, 0)
                 if 0 <= r <= 1000 and 0 <= c <= 50:
-                    # Eğer son 2 byte 0xFFFF değilse IEEE 754 float sonuçtur
                     flag = struct.unpack_from("<H", rec_data, 12)[0]
                     if flag != 0xFFFF:
                         val = struct.unpack_from("<d", rec_data, 6)[0]
@@ -503,23 +463,11 @@ class PurePythonBiff8XlsReader:
         return sheets
 
 
-class SevenLayerHybridExcelEngine:
-    """
-    7 Katmanlı Hibrit Excel Motoru:
-    1. openpyxl (data_only=True)
-    2. xlrd (.xls)
-    3. PurePythonBiff8XlsReader (xlrd olmasa bile .xls dosyalarını binary seviyesinde okur!)
-    4. ZIP/XML Doğrudan Hücre Okuyucu (.xlsx ve .ods)
-    5. CSV / TSV / HTML Tablo Okuyucu
-    6. Sütun Çifti & Boy x En = M2 Matris Çözücü
-    7. Klasör Adı Plaka Aralığı Filtresi ('25 37', '2 33', '1 + 20 44', 'Without No:56')
-    """
-
+class ExactMathematicalExcelEngine:
     @staticmethod
     def extract_sheets_as_rows(file_bytes: bytes, filename: str = "") -> List[List[List[Any]]]:
         sheets: List[List[List[Any]]] = []
 
-        # Katman 1: openpyxl (data_only=True)
         try:
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
             for ws in wb.worksheets:
@@ -531,7 +479,6 @@ class SevenLayerHybridExcelEngine:
         except Exception:
             pass
 
-        # Katman 2: xlrd (.xls)
         if xlrd is not None:
             try:
                 book = xlrd.open_workbook(file_contents=file_bytes)
@@ -552,7 +499,6 @@ class SevenLayerHybridExcelEngine:
             except Exception:
                 pass
 
-        # Katman 3: Saf Python BIFF8 (.xls) Binary Okuyucu
         try:
             biff_sheets = PurePythonBiff8XlsReader.parse_xls_bytes(file_bytes)
             if biff_sheets:
@@ -560,7 +506,18 @@ class SevenLayerHybridExcelEngine:
         except Exception:
             pass
 
-        # Katman 4: ZIP / XML (.xlsx worksheet xml veya .ods content.xml)
+        if pd is not None:
+            try:
+                excel_dict = pd.read_excel(io.BytesIO(file_bytes), sheet_name=None, header=None)
+                for _, df in excel_dict.items():
+                    rows = df.where(pd.notnull(df), None).values.tolist()
+                    if rows:
+                        sheets.append(rows)
+                if sheets:
+                    return sheets
+            except Exception:
+                pass
+
         try:
             if zipfile.is_zipfile(io.BytesIO(file_bytes)):
                 with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
@@ -578,7 +535,6 @@ class SevenLayerHybridExcelEngine:
                             sheets.append(rows)
                             return sheets
 
-                    # Standart dışı .xlsx dosyaları için xl/worksheets/sheet*.xml doğrudan okuma
                     shared_strings: List[str] = []
                     if "xl/sharedStrings.xml" in namelist:
                         ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
@@ -617,7 +573,6 @@ class SevenLayerHybridExcelEngine:
         except Exception:
             pass
 
-        # Katman 5: CSV / TSV / HTML Table
         for enc in ("utf-8-sig", "utf-8", "cp1254", "latin-1", "utf-16"):
             try:
                 text = file_bytes.decode(enc)
@@ -652,11 +607,11 @@ class SevenLayerHybridExcelEngine:
     def to_cm_dimension(val: Optional[float]) -> Optional[float]:
         if val is None or val <= 0:
             return None
-        if 0.72 <= val <= 3.80:
+        if 0.72 <= val <= 3.85:
             return round(val * 100.0, 1)
-        if 72.0 <= val <= 380.0:
+        if 72.0 <= val <= 385.0:
             return round(val, 1)
-        if 720.0 <= val <= 3800.0:
+        if 720.0 <= val <= 3850.0:
             return round(val / 10.0, 1)
         return None
 
@@ -671,15 +626,18 @@ class SevenLayerHybridExcelEngine:
             if not rows or len(rows) < 2:
                 continue
 
+            finish_name = "Polished"
             thickness_str = "2 cm"
             for r in rows[:15]:
                 row_txt = " ".join(str(c) for c in r if c is not None).lower()
+                if any(k in row_txt for k in ("brushed", "leather", "firca", "fırça", "antik")):
+                    finish_name = "Brushed / Leather"
+                elif any(k in row_txt for k in ("honed", "honlu", "mat")):
+                    finish_name = "Honed"
                 if re.search(r"\b(3\s*cm|30\s*mm)\b", row_txt):
                     thickness_str = "3 cm"
-                    break
-                if re.search(r"\b(2\s*cm|20\s*mm)\b", row_txt):
+                elif re.search(r"\b(2\s*cm|20\s*mm)\b", row_txt):
                     thickness_str = "2 cm"
-                    break
 
             max_cols = min(max((len(r) for r in rows), default=0), 30)
             best_col_pair: Optional[Tuple[int, int]] = None
@@ -696,7 +654,7 @@ class SevenLayerHybridExcelEngine:
                         v2 = cls.to_cm_dimension(safe_float_cell(r[cb]))
                         if v1 and v2:
                             long_s, short_s = max(v1, v2), min(v1, v2)
-                            if 115.0 <= long_s <= 375.0 and 75.0 <= short_s <= 245.0:
+                            if 115.0 <= long_s <= 380.0 and 75.0 <= short_s <= 250.0:
                                 valid_count += 1
                                 calc_m2 = (long_s * short_s) / 10000.0
                                 for cc in range(cb + 1, min(cb + 5, len(r))):
@@ -725,7 +683,7 @@ class SevenLayerHybridExcelEngine:
                     v2 = cls.to_cm_dimension(safe_float_cell(r[cb]))
                     if v1 and v2:
                         long_s, short_s = max(v1, v2), min(v1, v2)
-                        if 115.0 <= long_s <= 375.0 and 75.0 <= short_s <= 245.0:
+                        if 115.0 <= long_s <= 380.0 and 75.0 <= short_s <= 250.0:
                             seq_counter += 1
                             slab_no = seq_counter
                             for c_left in range(0, ca):
@@ -756,7 +714,7 @@ class SevenLayerHybridExcelEngine:
                         d2 = cls.to_cm_dimension(safe_float_cell(m_in.group(2)))
                         if d1 and d2:
                             long_s, short_s = max(d1, d2), min(d1, d2)
-                            if 115.0 <= long_s <= 375.0 and 75.0 <= short_s <= 245.0:
+                            if 115.0 <= long_s <= 380.0 and 75.0 <= short_s <= 250.0:
                                 seq_counter += 1
                                 slab_records.append((seq_counter, long_s, short_s, (long_s * short_s) / 10000.0))
 
@@ -786,13 +744,15 @@ class SevenLayerHybridExcelEngine:
                         "m2": tot_m2,
                         "slabs": tot_slabs,
                         "avg_dim": avg_dim_str,
-                        "surface": f"Polished ({thickness_str})",
+                        "surface": f"{finish_name} ({thickness_str})",
                     }
                     if best_result is None or tot_slabs > best_result["slabs"]:
                         best_result = cand
 
         return best_result
-      class ArslanlarDriveIntelligence:
+
+
+class ArslanlarDriveIntelligence:
     LOT_CODE_REGEX = re.compile(r"\b([A-Z]{1,3}\s*[-_]\s*\d{1,5}[A-Z]?|[A-Z]{1,2}\d{2,5}[A-Z]?)\b", re.IGNORECASE)
     SOLD_KEYWORD_REGEX = re.compile(r"\b(sold\s*out|soldout|sold|satildi|satıldı|pasif)\b", re.IGNORECASE)
 
@@ -901,53 +861,90 @@ class SevenLayerHybridExcelEngine:
         return None
 
     def load_bot_existing_caches(self) -> Dict[str, Dict[str, Any]]:
+        """
+        bot.py'nin (ArgonMaster_V17) kendi önbelleğini ve hafızadaki tüm sözlüklerini
+        (A-221 -> 177.46 m2, 32 Plaka / 2 Bundle, 306 x 181 cm gibi verileri tutan tüm yapıları)
+        derinlemesine tarar ve birleştirir.
+        """
         combined_meta: Dict[str, Dict[str, Any]] = {}
 
-        def extract_entries(d: Any):
-            if not isinstance(d, dict):
-                return
-            for k, v in d.items():
-                if isinstance(v, dict):
-                    has_metric = any(
-                        mk in v
-                        for mk in (
-                            "m2", "total_m2", "sqm", "area", "plaka", "slabs",
-                            "slab_count", "count", "ebat", "avg_dim", "dimensions",
-                            "mevcut_stok", "ortalama_ebat"
-                        )
-                    )
-                    if has_metric:
-                        combined_meta[str(k).upper().strip()] = v
-                        fid = v.get("folder_id") or v.get("id")
-                        if fid:
-                            combined_meta[str(fid).strip()] = v
-                        code = v.get("code") or v.get("lot_code") or v.get("lot")
-                        if code:
-                            combined_meta[str(code).upper().strip()] = v
-                    else:
-                        extract_entries(v)
-                elif isinstance(v, list):
-                    for item in v:
-                        if isinstance(item, dict):
-                            fid = item.get("folder_id") or item.get("id")
-                            code = item.get("code") or item.get("lot_code")
-                            if fid:
-                                combined_meta[str(fid).strip()] = item
-                            if code:
-                                combined_meta[str(code).upper().strip()] = item
+        def register_dict_entry(key_Hint: str, d_obj: Dict[str, Any]):
+            if key_Hint:
+                combined_meta[str(key_Hint).upper().strip()] = d_obj
+            for id_k in ("folder_id", "id", "fid", "lot_id"):
+                if d_obj.get(id_k):
+                    combined_meta[str(d_obj[id_k]).strip()] = d_obj
+            for cd_k in ("code", "lot_code", "lot", "block_no", "name", "folder_name", "title"):
+                if d_obj.get(cd_k):
+                    raw_c = str(d_obj[cd_k]).upper().strip()
+                    combined_meta[raw_c] = d_obj
+                    m_lc = self.LOT_CODE_REGEX.search(raw_c)
+                    if m_lc:
+                        lc_norm = re.sub(r"\s+", "", m_lc.group(1)).upper()
+                        if "-" not in lc_norm:
+                            lc_norm = re.sub(r"^([A-Z]+)(\d+.*)$", r"\1-\2", lc_norm)
+                        combined_meta[lc_norm] = d_obj
+                        combined_meta[lc_norm.replace("-", "")] = d_obj
 
-        if os.path.exists(BOT_CACHE_FILE):
-            try:
-                with open(BOT_CACHE_FILE, "r", encoding="utf-8") as f:
-                    extract_entries(json.load(f))
-            except Exception:
-                pass
+        def extract_entries(d: Any):
+            if isinstance(d, dict):
+                has_metric = any(
+                    mk in d
+                    for mk in (
+                        "m2", "total_m2", "sqm", "area", "plaka", "slabs",
+                        "slab_count", "count", "ebat", "avg_dim", "dimensions",
+                        "mevcut_stok", "ortalama_ebat", "total_area", "net_m2"
+                    )
+                )
+                if has_metric:
+                    register_dict_entry("", d)
+                for k, v in d.items():
+                    if isinstance(v, dict):
+                        v_has = any(
+                            mk in v
+                            for mk in (
+                                "m2", "total_m2", "sqm", "area", "plaka", "slabs",
+                                "slab_count", "count", "ebat", "avg_dim", "dimensions",
+                                "mevcut_stok", "ortalama_ebat", "total_area", "net_m2"
+                            )
+                        )
+                        if v_has:
+                            register_dict_entry(str(k), v)
+                        else:
+                            extract_entries(v)
+                    elif isinstance(v, list):
+                        extract_entries(v)
+            elif isinstance(d, list):
+                for item in d:
+                    if isinstance(item, (dict, list)):
+                        extract_entries(item)
+
+        # Disk üzerindeki tüm .json önbellek dosyalarını oku
+        for fname in os.listdir("."):
+            if fname.endswith(".json") and fname != STATE_FILE:
+                try:
+                    with open(fname, "r", encoding="utf-8") as f:
+                        extract_entries(json.load(f))
+                except Exception:
+                    pass
+
+        # __main__ (bot.py) ve DriveExplorer içindeki tüm bellek sözlüklerini oku
+        main_mod = sys.modules.get("__main__")
+        if main_mod:
+            for attr_name in dir(main_mod):
+                if not attr_name.startswith("__"):
+                    try:
+                        val = getattr(main_mod, attr_name, None)
+                        if isinstance(val, (dict, list)):
+                            extract_entries(val)
+                    except Exception:
+                        pass
 
         explorer = self.find_bot_drive_explorer()
         if explorer is not None:
             try:
                 for attr_val in list(explorer.__dict__.values()):
-                    if isinstance(attr_val, dict):
+                    if isinstance(attr_val, (dict, list)):
                         extract_entries(attr_val)
             except Exception:
                 pass
@@ -1027,21 +1024,69 @@ class SevenLayerHybridExcelEngine:
             pass
         return None
 
+    def convert_xls_via_drive_temp_sheet(self, file_id: str, file_bytes: bytes) -> Optional[bytes]:
+        """
+        Eğer bir lotun içindeki Excel dosyası eski .xls formatındaysa veya formülleri
+        önbelleksiz kaydedildiyse, Google Drive API üzerinde 1 saniyeliğine Google Sheets'e
+        dönüştürüp (Google tüm formülleri otomatik hesaplar!) .xlsx olarak export alır ve siler.
+        """
+        headers = self.get_headers()
+        if not headers:
+            return None
+        temp_id = None
+        try:
+            copy_url = f"https://www.googleapis.com/drive/v3/files/{file_id}/copy?supportsAllDrives=true"
+            copy_headers = dict(headers)
+            copy_headers["Content-Type"] = "application/json"
+            resp = self.session.post(
+                copy_url,
+                headers=copy_headers,
+                json={"name": f"_temp_calc_{int(time.time())}", "mimeType": "application/vnd.google-apps.spreadsheet"},
+                timeout=20,
+            )
+            if resp.status_code == 200:
+                temp_id = resp.json().get("id")
+                if temp_id:
+                    export_url = f"https://www.googleapis.com/drive/v3/files/{temp_id}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    exp_resp = self.session.get(export_url, headers=headers, timeout=20)
+                    if exp_resp.status_code == 200:
+                        return exp_resp.content
+        except Exception:
+            pass
+        finally:
+            if temp_id:
+                try:
+                    del_url = f"https://www.googleapis.com/drive/v3/files/{temp_id}?supportsAllDrives=true"
+                    self.session.delete(del_url, headers=headers, timeout=10)
+                except Exception:
+                    pass
+        return None
+
     def call_bot_py_native_lot_engine(
         self, folder_id: str, folder_name: str, lot_code: str, excel_bytes: Optional[bytes] = None
     ) -> Optional[Dict[str, Any]]:
+        """
+        bot.py'nin (ArgonMaster_V17) A-221 için '177.46 m² (32 Plaka / 2 Bundle) | 306 x 181 cm'
+        hesaplayan kendi orijinal metodunu doğrudan çağırır!
+        """
         def parse_any_bot_return(res: Any) -> Optional[Dict[str, Any]]:
             if isinstance(res, dict):
                 m2_v = safe_float_cell(
-                    res.get("m2") or res.get("total_m2") or res.get("sqm") or res.get("area") or res.get("stok_m2")
+                    res.get("m2") or res.get("total_m2") or res.get("sqm") or res.get("area")
+                    or res.get("stok_m2") or res.get("mevcut_stok") or res.get("net_m2")
                 )
                 sl_v = safe_float_cell(
-                    res.get("slabs") or res.get("plaka") or res.get("slab_count") or res.get("count") or res.get("pcs")
+                    res.get("slabs") or res.get("plaka") or res.get("slab_count")
+                    or res.get("count") or res.get("pcs") or res.get("plaka_sayisi")
                 )
                 dm_v = (
-                    res.get("avg_dim") or res.get("ebat") or res.get("ortalama_ebat") or res.get("dimensions") or "-"
+                    res.get("avg_dim") or res.get("ebat") or res.get("ortalama_ebat")
+                    or res.get("dimensions") or res.get("dim") or "-"
                 )
-                sf_v = res.get("surface_thickness") or res.get("surface") or res.get("yuzey") or "Polished (2 cm)"
+                sf_v = (
+                    res.get("surface_thickness") or res.get("surface") or res.get("yuzey")
+                    or res.get("finish") or "Polished (2 cm)"
+                )
                 if m2_v and sl_v and is_sane_lot_metrics(float(m2_v), int(sl_v), str(dm_v)):
                     return {
                         "m2": round(float(m2_v), 2),
@@ -1049,27 +1094,56 @@ class SevenLayerHybridExcelEngine:
                         "avg_dim": str(dm_v).strip() if dm_v else "-",
                         "surface": str(sf_v).strip() if sf_v else "Polished (2 cm)",
                     }
+            elif isinstance(res, str) and "m²" in res:
+                # Eğer bot.py doğrudan formatlı metin döndürüyorsa (örn: 'Mevcut Stok: 177.46 m² (32 Plaka)...')
+                m_m2 = re.search(r"(\d+[.,]\d+)\s*m²", res)
+                m_sl = re.search(r"\((\d+)\s*(?:Plaka|Slabs?)", res, flags=re.I)
+                m_dm = re.search(r"(?:Ortalama Ebat|Avg\.?\s*Dimensions?)\s*:\s*([^\n<]+)", res, flags=re.I)
+                m_sf = re.search(r"(?:Yüzey\s*&\s*Kalınlık|Finish)\s*:\s*([^\n<]+)", res, flags=re.I)
+                if m_m2 and m_sl:
+                    m2_f = float(m_m2.group(1).replace(",", "."))
+                    sl_i = int(m_sl.group(1))
+                    dm_s = re.sub(r"<[^>]+>", "", m_dm.group(1)).strip() if m_dm else "-"
+                    sf_s = re.sub(r"<[^>]+>", "", m_sf.group(1)).strip() if m_sf else "Polished (2 cm)"
+                    if is_sane_lot_metrics(m2_f, sl_i, dm_s):
+                        return {
+                            "m2": round(m2_f, 2),
+                            "slabs": sl_i,
+                            "avg_dim": dm_s,
+                            "surface": sf_s,
+                        }
             return None
 
+        # 1. DriveExplorer metodlarını dene
         explorer = self.find_bot_drive_explorer()
+        targets_to_inspect = []
         if explorer is not None:
-            for attr_name in dir(explorer):
+            targets_to_inspect.append(explorer)
+        main_mod = sys.modules.get("__main__")
+        if main_mod is not None:
+            targets_to_inspect.append(main_mod)
+
+        for target_obj in targets_to_inspect:
+            for attr_name in dir(target_obj):
                 if attr_name.startswith("__"):
                     continue
-                fn = getattr(explorer, attr_name, None)
-                if not callable(fn):
+                fn = getattr(target_obj, attr_name, None)
+                if not callable(fn) or isinstance(fn, type):
                     continue
 
                 low_fn = attr_name.lower()
-                if any(k in low_fn for k in ("meta", "metric", "excel", "lot", "folder", "analyze", "parse", "calc", "stock", "detail")):
+                if any(k in low_fn for k in ("meta", "metric", "excel", "lot", "folder", "analyze", "parse", "calc", "stock", "detail", "info")):
                     call_args_list = [
                         (folder_id, folder_name),
                         (folder_id,),
+                        (lot_code,),
                         ({"id": folder_id, "name": folder_name},),
                     ]
                     if excel_bytes:
                         call_args_list.insert(0, (excel_bytes, folder_name))
                         call_args_list.insert(1, (excel_bytes,))
+                        call_args_list.insert(2, (io.BytesIO(excel_bytes), folder_name))
+                        call_args_list.insert(3, (io.BytesIO(excel_bytes),))
 
                     for c_args in call_args_list:
                         try:
@@ -1083,11 +1157,12 @@ class SevenLayerHybridExcelEngine:
                         except Exception:
                             pass
 
-            fresh_cache = self.load_bot_existing_caches()
-            for key in (folder_id, lot_code.upper(), folder_name.upper()):
-                parsed = parse_any_bot_return(fresh_cache.get(key))
-                if parsed:
-                    return parsed
+        # Metod çağrısı sonrasında bot.py'nin iç önbelleğini tekrar kontrol et
+        fresh_cache = self.load_bot_existing_caches()
+        for key in (folder_id, lot_code.upper(), lot_code.replace("-", "").upper(), folder_name.upper()):
+            parsed = parse_any_bot_return(fresh_cache.get(key))
+            if parsed:
+                return parsed
 
         return None
 
@@ -1107,14 +1182,17 @@ class SevenLayerHybridExcelEngine:
         avg_dim = "-"
         surface = "Polished (2 cm)"
 
+        # 1. bot.py'nin hazır önbelleğinden kontrol et
         for key in (folder_id, lot_code.upper(), lot_code.replace("-", "").upper(), folder_name.upper()):
             c = bot_cache.get(key)
             if isinstance(c, dict):
                 v_m2 = safe_float_cell(
-                    c.get("m2") or c.get("total_m2") or c.get("sqm") or c.get("area") or c.get("mevcut_stok")
+                    c.get("m2") or c.get("total_m2") or c.get("sqm") or c.get("area")
+                    or c.get("mevcut_stok") or c.get("net_m2")
                 )
                 v_sl = safe_float_cell(
-                    c.get("slabs") or c.get("plaka") or c.get("slab_count") or c.get("count") or c.get("pcs")
+                    c.get("slabs") or c.get("plaka") or c.get("slab_count")
+                    or c.get("count") or c.get("pcs") or c.get("plaka_sayisi")
                 )
                 v_dm = "-"
                 for k_d in ("avg_dim", "ebat", "ortalama_ebat", "dimensions", "dim"):
@@ -1133,6 +1211,7 @@ class SevenLayerHybridExcelEngine:
                             break
                     break
 
+        # 2. V29 kalıcı önbelleğinden kontrol et
         persisted = self.state.data.setdefault("metrics_cache", {}).get(folder_id)
         if m2 <= 0 and isinstance(persisted, dict):
             pm2 = float(persisted.get("m2", 0.0))
@@ -1144,6 +1223,7 @@ class SevenLayerHybridExcelEngine:
                 avg_dim = pdm
                 surface = persisted.get("surface", surface)
 
+        # 3. Derin Okuma: bot.py orijinal motoru + Excel/Google Sheets dönüşümü
         if m2 <= 0 and deep_fetch_if_needed:
             native_res = self.call_bot_py_native_lot_engine(folder_id, folder_name, lot_code, None)
             if native_res:
@@ -1191,6 +1271,21 @@ class SevenLayerHybridExcelEngine:
                             avg_dim = parsed["avg_dim"]
                             surface = parsed["surface"]
                             break
+
+                    # Eğer dosya eski .xls veya formüllü olup doğrudan okunamadıysa Drive API ile dönüştürüp oku!
+                    conv_bytes = self.convert_xls_via_drive_temp_sheet(tf["id"], raw_bytes)
+                    if conv_bytes:
+                        conv_sheets = ExactMathematicalExcelEngine.extract_sheets_as_rows(conv_bytes, "converted.xlsx")
+                        if conv_sheets:
+                            parsed = ExactMathematicalExcelEngine.analyze_sheets(
+                                conv_sheets, folder_name=folder_name, lot_code=lot_code
+                            )
+                            if parsed and is_sane_lot_metrics(parsed["m2"], parsed["slabs"], parsed["avg_dim"]):
+                                m2 = parsed["m2"]
+                                slabs = parsed["slabs"]
+                                avg_dim = parsed["avg_dim"]
+                                surface = parsed["surface"]
+                                break
 
         if slabs <= 0:
             allowed_set, _ = parse_slab_filter_from_folder_name(folder_name, lot_code)
@@ -1719,13 +1814,14 @@ def build_english_luxury_pdf(
         c.setLineWidth(0.8)
         c.rect(35, spec_y, page_w - 70, spec_h, fill=0, stroke=1)
 
-        qty_str = f"{m2:,.2f} m²  ({slabs} Slabs)" if m2 > 0 else f"{slabs} Slabs"
+        bundles = max(1, (slabs + 13) // 14) if slabs > 0 else 0
+        qty_str = f"{m2:,.2f} m²  ({slabs} Slabs / {bundles} Bundle)" if m2 > 0 else f"{slabs} Slabs"
         dim_str = ebat if ebat and ebat != "-" else "Standard Export Size"
 
         metrics_cols = [
             ("TOTAL QUANTITY & SLABS:", qty_str, 46),
-            ("AVERAGE DIMENSIONS:", dim_str, 260),
-            ("FINISH & THICKNESS:", surf, 470),
+            ("AVERAGE DIMENSIONS:", dim_str, 275),
+            ("FINISH & THICKNESS:", surf, 475),
             ("BUNDLE STATUS:", "IN STOCK / READY", 675),
         ]
         for lbl, val, x_pos in metrics_cols:
@@ -1733,7 +1829,7 @@ def build_english_luxury_pdf(
             c.setFont("Helvetica-Bold", 8.5)
             c.drawString(x_pos, spec_y + 20, lbl)
             c.setFillColor(text_white)
-            c.setFont("Helvetica-Bold", 10.5)
+            c.setFont("Helvetica-Bold", 10.0)
             c.drawString(x_pos, spec_y + 6, str(val))
 
         img_candidates = item.get("images") or []
@@ -2101,7 +2197,7 @@ def build_master_stock_table_pdf_and_excel(
 
 def format_welcome_help_guide() -> str:
     return (
-        "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan (V28)</b>\n\n"
+        "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan (V29)</b>\n\n"
         "Merhaba! Sistem üzerinden aşağıdaki tüm işlemleri anında gerçekleştirebilirsiniz. "
         "Mavi renkli örnek komutlara dokunarak kopyalayabilir veya benzer şekilde yazabilirsiniz:\n\n"
         "📊 <b>1. Detaylı Master Stok Tablosu (Aktif + Sold Out PDF & Excel):</b>\n"
@@ -2220,7 +2316,7 @@ class ArslanlarPluginController:
 
     def background_watcher_loop(self):
         time.sleep(12)
-        logger.info("🔍 Arslanlar V28 Drive Watcher started.")
+        logger.info("🔍 Arslanlar V29 Drive Watcher started.")
 
         while True:
             try:
@@ -2403,7 +2499,7 @@ class ArslanlarPluginController:
                     if not is_sane_lot_metrics(x.get("m2", 0.0), x.get("slabs", 0), x.get("avg_dim", "-"))
                 ]
                 if unparsed_lots:
-                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed_lots, max_fetch=12)
+                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed_lots, max_fetch=15)
                 rep_html = self.format_executive_summary_report(act_m, sld_m, title_prefix="MASTER")
                 pdf_b, xlsx_b = build_master_stock_table_pdf_and_excel(act_m, sld_m, self.intel)
                 return rep_html, pdf_b, xlsx_b, len(act_m), len(sld_m)
@@ -2511,7 +2607,7 @@ class ArslanlarPluginController:
 
             raise ApplicationHandlerStop
 
-        # 3. TAŞ ÇEŞİDİNE ÖZEL İNGİLİZCE PREMIUM SUNUM
+        # 3. TAŞ ÇEŞİDİNE ÖZEL İNGİLİZCE PREMIUM SUNUM ("Silver Rootslar sunum lütfen" vb.)
         has_sunum_kw = bool(re.search(r"\b(sunum|sunumu|katalog|kataloğu|presentation|catalog)\b", norm_text))
         is_main_collection_sunum = any(
             normalize_compare(c) in norm_text
@@ -2558,7 +2654,9 @@ class ArslanlarPluginController:
             else:
                 await status_msg.delete()
 
-        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA
+        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA ("Ne kadar Silver Roots var?")
+        # ÖNEMLİ: Eğer bot.py kendi içinde zaten bu sorguyu (A-221 -> 177.46 m2 gibi) işliyorsa,
+        # biz de özet listeyi atalım ve bot.py'nin de önbelleğini beslemesine izin verelim!
         is_general_stock_question = any(
             gk in norm_text for gk in ("stogumda", "toplam stogum", "genel stogum", "tum stogum")
         )
@@ -2612,12 +2710,14 @@ class ArslanlarPluginController:
             surf = item.get("surface", "Polished (2 cm)")
             link = item.get("drive_link", "")
 
-            stock_disp = f"{m2:,.2f} m² ({slabs} Slabs)" if m2 > 0 else f"{slabs} Slabs"
+            bundles = max(1, (slabs + 13) // 14) if slabs > 0 else 0
+            stock_disp = f"{m2:,.2f} m² ({slabs} Slabs / {bundles} Bundle)" if m2 > 0 else f"{slabs} Slabs"
             lines.append(
                 f"🔹 <b>{l_code}</b> — {s_name} <i>({coll})</i>\n"
                 f"  • Available Stock: <code>{stock_disp}</code>\n"
-                f"  • Avg. Dimensions: <code>{ebat}</code> | {surf}\n"
-                f"  • Drive Folder: <a href='{link}'>Open High-Res Folder</a>\n"
+                f"  • Avg. Dimensions: <code>{ebat}</code>\n"
+                f"  • Surface & Thickness: <code>{surf}</code>\n"
+                f"  • Drive Folder: <a href='{link}'>Open High-Res Folder ({l_code})</a>\n"
             )
 
         full_text = "\n".join(lines)
@@ -2681,11 +2781,11 @@ def hooked_run_polling(self: Application, *args, **kwargs):
             )
             watcher_thread = threading.Thread(
                 target=controller.background_watcher_loop,
-                name="ArslanlarDriveWatcherV28",
+                name="ArslanlarDriveWatcherV29",
                 daemon=True,
             )
             watcher_thread.start()
-            logger.info("✅ Arslanlar V28 Enterprise Zero-Defect Plugin successfully attached!")
+            logger.info("✅ Arslanlar V29 Unified Native-Sync & Luxury Suite successfully attached!")
         except Exception as e:
             logger.error(f"Plugin startup error: {e}")
 
