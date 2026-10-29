@@ -1026,8 +1026,15 @@
       "avg_dim": "317 x 181 cm",
       "surface": "Honed (2 cm)",
       "modified_time": "2026-10-08T17:44:23.677Z"
+    },
+    "1XnvqSzFi153Aea20p9PLcue3aXrn-ztW": {
+      "m2": 377.76,
+      "slabs": 62,
+      "avg_dim": "319 x 191 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-17T14:56:30.957Z"
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T18:17:38.782545+03:00"
+  "updated_at": "2026-10-29T18:17:41.116397+03:00"
 }
