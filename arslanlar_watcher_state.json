@@ -130,7 +130,7 @@
       "lot_code": "A-156",
       "stone_name": "Armoni 25 58",
       "collection": "Arslanlar Collection",
-      "m2": 0.0,
+      "m2": 195.43,
       "slabs": 34,
       "drive_link": "https://drive.google.com/drive/folders/1xMOZbHeKmkqW8zTUixTb0e1C_WaGZymp"
     },
@@ -170,7 +170,7 @@
       "lot_code": "A-468",
       "stone_name": "Ceppo Breccia",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
+      "m2": 252.05,
       "slabs": 52,
       "drive_link": "https://drive.google.com/drive/folders/14DjkWRGqGp7O8nel3QmfmUMjnom9G94o"
     },
@@ -194,8 +194,8 @@
       "lot_code": "A-223",
       "stone_name": "Likya Beige",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 53,
+      "m2": 173.17,
+      "slabs": 54,
       "drive_link": "https://drive.google.com/drive/folders/1HprRSaCtBH7w_l9FudYXZmQn-Yehpppt"
     },
     "1BgY2cHnbIkfhValUKBsdIbwvYWPEuzvA": {
@@ -362,8 +362,8 @@
       "lot_code": "A-265",
       "stone_name": "Rosso Levanto 26 51+53",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 27,
+      "m2": 148.85,
+      "slabs": 26,
       "drive_link": "https://drive.google.com/drive/folders/1J7ZFpMqojTi47C_6407hwF028n8z2eWE"
     },
     "1S4SlTw0LwXPCQ7ihTp2omQLMilIUvyLI": {
@@ -1005,8 +1005,22 @@
       "avg_dim": "244 x 131 cm",
       "surface": "Polished (2 cm)",
       "modified_time": "2026-10-17T12:14:04.028Z"
+    },
+    "1Xokv3oqHZwUOULVe8WOAH8OY7nIlJWVh": {
+      "m2": 306.9,
+      "slabs": 62,
+      "avg_dim": "275 x 180 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-08-15T16:42:19.023Z"
+    },
+    "19PChACEUijdFmm1cd7J2EbiECNRCAv9S": {
+      "m2": 379.42,
+      "slabs": 60,
+      "avg_dim": "335 x 189 cm",
+      "surface": "Honed (2 cm)",
+      "modified_time": "2026-02-17T13:41:13.551Z"
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T07:20:18.321087+03:00"
+  "updated_at": "2026-10-29T07:22:51.633450+03:00"
 }
