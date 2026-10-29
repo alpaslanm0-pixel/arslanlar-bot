@@ -914,7 +914,85 @@
       "collection": "Arslanlar Exclusive Collection"
     }
   },
-  "metrics_cache": {},
+  "metrics_cache": {
+    "1ytvcFU7UE2gk3aDW4PwX3BdMRUA3CPoW": {
+      "m2": 73905404180.0,
+      "slabs": 73905404180,
+      "avg_dim": "-",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-26T09:03:21.866Z"
+    },
+    "1Rk-kno1Q-T5h3NHJD8DyatJ7z3_J7ytI": {
+      "m2": 112.06,
+      "slabs": 26,
+      "avg_dim": "292 x 148 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-26T08:58:32.735Z"
+    },
+    "11TaQ7ZaFOKgwZcCbO-uDAUIri51uEBk8": {
+      "m2": 136.08,
+      "slabs": 24,
+      "avg_dim": "309 x 184 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-07T18:30:31.657Z"
+    },
+    "1VSNA20Ml48SiKDxKwTrkrj1jTp_QB0Yd": {
+      "m2": 58.1,
+      "slabs": 10,
+      "avg_dim": "295 x 197 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-06T09:58:10.668Z"
+    },
+    "1jEIdupqCZ-SmUmtbGXNWCJaqXIIyy2ly": {
+      "m2": 217.46,
+      "slabs": 36,
+      "avg_dim": "318 x 189 cm",
+      "surface": "Polished (3 cm)",
+      "modified_time": "2026-10-06T07:29:55.813Z"
+    },
+    "1DCJm594Cypn_sWozvsnNSOEsS8JtZJJa": {
+      "m2": 169.8,
+      "slabs": 33,
+      "avg_dim": "321 x 160 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-28T13:29:33.616Z"
+    },
+    "1ncNCeFGi0T8JciY3Zdgf7qwbUws44FRK": {
+      "m2": 73904950.0,
+      "slabs": 73904950,
+      "avg_dim": "-",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-24T13:38:27.537Z"
+    },
+    "1TavcDzw9Xp7iPQYTP5HhXEa5ulV5qqN_": {
+      "m2": 109.77,
+      "slabs": 28,
+      "avg_dim": "290 x 135 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-24T13:22:34.174Z"
+    },
+    "114vchOl76UN42UjPv6Y5lVkbwPkxusww": {
+      "m2": 738370590.0,
+      "slabs": 738370590,
+      "avg_dim": "-",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-24T10:46:45.227Z"
+    },
+    "19Hx7bFvhAjEv82dLl3q8I6anVLl82XKO": {
+      "m2": 0.44,
+      "slabs": 1,
+      "avg_dim": "54 x 81 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-24T10:35:12.022Z"
+    },
+    "1EO9aUkj1MCshL_BdoDBemyXeHNJqlJr0": {
+      "m2": 73810140.0,
+      "slabs": 73810140,
+      "avg_dim": "-",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-09-19T14:58:42.596Z"
+    }
+  },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T03:06:09.726118+03:00"
+  "updated_at": "2026-10-29T03:07:17.585259+03:00"
 }
