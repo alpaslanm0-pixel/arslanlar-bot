@@ -555,16 +555,16 @@
       "lot_code": "A-382",
       "stone_name": "Terra Mater Without No:38",
       "collection": "Arslanlar Exclusive Collection",
-      "m2": 0.0,
-      "slabs": 69,
+      "m2": 377.76,
+      "slabs": 62,
       "drive_link": "https://drive.google.com/drive/folders/1XnvqSzFi153Aea20p9PLcue3aXrn-ztW"
     },
     "1v6zIr5vfZDQQU70jKsxmlp4QONTJeTX_": {
       "lot_code": "A-110",
       "stone_name": "Terra Mater",
       "collection": "Arslanlar Exclusive Collection",
-      "m2": 0.0,
-      "slabs": 21,
+      "m2": 114.72,
+      "slabs": 20,
       "drive_link": "https://drive.google.com/drive/folders/1v6zIr5vfZDQQU70jKsxmlp4QONTJeTX_"
     },
     "1UtD_KKDRllyM0-8SphQu8PelVJVpN_M4": {
@@ -1037,5 +1037,5 @@
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T18:17:43.976311+03:00"
+  "updated_at": "2026-10-29T19:36:50.571499+03:00"
 }
