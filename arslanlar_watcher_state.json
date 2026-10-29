@@ -58,8 +58,8 @@
       "lot_code": "A-1030",
       "stone_name": "Silver Roots",
       "collection": "Arslanlar Collection",
-      "m2": 12.0,
-      "slabs": 1,
+      "m2": 0.0,
+      "slabs": 65,
       "drive_link": "https://drive.google.com/drive/folders/1ncNCeFGi0T8JciY3Zdgf7qwbUws44FRK"
     },
     "1TavcDzw9Xp7iPQYTP5HhXEa5ulV5qqN_": {
@@ -987,5 +987,5 @@
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T07:14:54.825745+03:00"
+  "updated_at": "2026-10-29T07:15:35.688372+03:00"
 }
