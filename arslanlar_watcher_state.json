@@ -458,39 +458,39 @@
       "lot_code": "A-280",
       "stone_name": "Golden Breccia",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 19,
+      "m2": 125.33,
+      "slabs": 25,
       "drive_link": "https://drive.google.com/drive/folders/1LLq9RylNa_Almcg94uzd2XQeobl9KBYx"
     },
     "1ysu423e_Q4tV-sniGQRj7xBVGYmZLnNA": {
       "lot_code": "A-120",
       "stone_name": "Rosalia",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 38,
+      "m2": 738109600.0,
+      "slabs": 738109600,
       "drive_link": "https://drive.google.com/drive/folders/1ysu423e_Q4tV-sniGQRj7xBVGYmZLnNA"
     },
     "1daHJabdCRCxZvfBQFxmkCJWHr8rYOS6G": {
       "lot_code": "A-44",
       "stone_name": "Autumn Travertine",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 5,
+      "m2": 376.57,
+      "slabs": 69,
       "drive_link": "https://drive.google.com/drive/folders/1daHJabdCRCxZvfBQFxmkCJWHr8rYOS6G"
     },
     "1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK": {
       "lot_code": "ST-2214",
       "stone_name": "Exotic Green St2426",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 6,
+      "m2": 65.96,
+      "slabs": 13,
       "drive_link": "https://drive.google.com/drive/folders/1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK"
     },
     "14Or_rns-bFPwodNmfE0kkDBwZKmnNU5-": {
       "lot_code": "BRONZE ARMONI D7",
       "stone_name": "Bronze Armoni D7",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
+      "m2": 130.98,
       "slabs": 24,
       "drive_link": "https://drive.google.com/drive/folders/14Or_rns-bFPwodNmfE0kkDBwZKmnNU5-"
     },
@@ -498,7 +498,7 @@
       "lot_code": "BRECCIA MONTAGNA D5",
       "stone_name": "Breccia Montagna D5",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
+      "m2": 138.21,
       "slabs": 24,
       "drive_link": "https://drive.google.com/drive/folders/11Syrrdb7FDbx0wkZflhFpFy4VAdhc6KF"
     },
@@ -506,31 +506,31 @@
       "lot_code": "BIANCO DOLOMITE D9",
       "stone_name": "Bianco Dolomite D9",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 22,
+      "m2": 105.78,
+      "slabs": 20,
       "drive_link": "https://drive.google.com/drive/folders/1h8NMcVVkA4Nr1Augz02dT1DouuHpzM4w"
     },
     "1vTep2wUJKlqPJtf-rtVIF9egHhKXwo_e": {
       "lot_code": "A-50",
       "stone_name": "Vegas Gold 1 7 Arası",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 44,
+      "m2": 73912346430.0,
+      "slabs": 73912346430,
       "drive_link": "https://drive.google.com/drive/folders/1vTep2wUJKlqPJtf-rtVIF9egHhKXwo_e"
     },
     "1IRZjc0GA--d9xolFr6SmSljEY1QUJyLr": {
       "lot_code": "A-95",
       "stone_name": "Golden Dolomite",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 22,
+      "m2": 0.62,
+      "slabs": 1,
       "drive_link": "https://drive.google.com/drive/folders/1IRZjc0GA--d9xolFr6SmSljEY1QUJyLr"
     },
     "19PChACEUijdFmm1cd7J2EbiECNRCAv9S": {
       "lot_code": "A-117",
       "stone_name": "Tundra Grey",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
+      "m2": 379.42,
       "slabs": 60,
       "drive_link": "https://drive.google.com/drive/folders/19PChACEUijdFmm1cd7J2EbiECNRCAv9S"
     },
@@ -538,16 +538,16 @@
       "lot_code": "A-119",
       "stone_name": "Black Salvadori",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 48,
+      "m2": 0.53,
+      "slabs": 1,
       "drive_link": "https://drive.google.com/drive/folders/1JliL-pTWn_Ux0yVAjfdLE4AJULjgFxta"
     },
     "1IYDsk_hwkxUWY0su8HDaiHe1ELlE1n6x": {
       "lot_code": "A-140",
       "stone_name": "Toros Black 1 24 Arası",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 24,
+      "m2": 739063380.0,
+      "slabs": 739063380,
       "drive_link": "https://drive.google.com/drive/folders/1IYDsk_hwkxUWY0su8HDaiHe1ELlE1n6x"
     },
     "1XnvqSzFi153Aea20p9PLcue3aXrn-ztW": {
@@ -1397,8 +1397,50 @@
       "avg_dim": "-",
       "surface": "Polished (2 cm)",
       "modified_time": "2026-02-17T13:39:32.258Z"
+    },
+    "1XnvqSzFi153Aea20p9PLcue3aXrn-ztW": {
+      "m2": 377.76,
+      "slabs": 62,
+      "avg_dim": "319 x 191 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-17T14:56:30.957Z"
+    },
+    "1v6zIr5vfZDQQU70jKsxmlp4QONTJeTX_": {
+      "m2": 114.72,
+      "slabs": 20,
+      "avg_dim": "317 x 181 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-10-08T17:44:23.677Z"
+    },
+    "1UtD_KKDRllyM0-8SphQu8PelVJVpN_M4": {
+      "m2": 0.7,
+      "slabs": 1,
+      "avg_dim": "87 x 81 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-08-22T17:20:59.265Z"
+    },
+    "1w-GvZ3gHwlhYAbx8ZGam9kFgwj8ZKXTT": {
+      "m2": 371.72,
+      "slabs": 59,
+      "avg_dim": "327 x 193 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-08-17T16:52:53.076Z"
+    },
+    "1yUj_Ak0RvnFCH8wiqf8qJ7fgunqLJpmU": {
+      "m2": 192.56,
+      "slabs": 32,
+      "avg_dim": "314 x 192 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-04-26T19:50:59.978Z"
+    },
+    "1YDfw0-v5eqINckJywQruA_3l0ZAg_CaO": {
+      "m2": 0.62,
+      "slabs": 1,
+      "avg_dim": "76 x 81 cm",
+      "surface": "Polished (2 cm)",
+      "modified_time": "2026-04-12T14:01:54.935Z"
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T03:19:16.466584+03:00"
+  "updated_at": "2026-10-29T03:22:06.220776+03:00"
 }
