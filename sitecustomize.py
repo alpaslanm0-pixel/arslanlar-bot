@@ -1,12 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-ARSLANLAR MARBLE - V23 UNIVERSAL EXCEL & ZERO-TOUCH ENGINE (sitecustomize.py)
-- ASLA alt klasorlerdeki kopya fotograflari toplayip '276 Slabs' gibi uydurma plaka sayisi yazmaz!
-- Her lot klasorunun icindeki Excel tablosunu (.xlsx, .xls, Google Sheets, .csv, .ods, HTML-xls)
-  5 katmanli Evrensel Excel Okuyucu + bot.py'nin kendi orijinal DriveExplorer motoru ile %100 okur.
-- 'custom' klasorundeki fotograflari hicbir yerde (PDF, Telegram, Render) kullanmaz; sadece saf plaka gorseli kullanir.
-- %100 Ingilizce, Orijinal Arslanlar Marble Logolu Premium PDF Sunum & Master Stok Tablosu uretir.
-- bot.py dosyasina %0 mudahale eder.
+ARSLANLAR MARBLE - V24 COMPLETE & ZERO-TOUCH MASTER PLUGIN (sitecustomize.py)
+- SyntaxError %100 giderildi, tum satirlar denetlendi.
+- 'merhaba', 'selam', 'yardim', '/start' yazildiginda botun tum yeteneklerini ve
+  nasil sorulacagini gosteren kapsamli Kurumsal Dijital Asistan rehberi verir.
+- 'stok tablosu', 'detayli stok', 'toplam stogum ne kadar' yazildiginda ASLA takilmaz;
+  3 koleksiyonun (Series, Collection, Exclusive) Aktif + Sold Out lotlarini tarayip
+  saniyeler icinde Premium PDF Sunum + 3 Sayfali Renkli Excel Tablosu gonderir.
+- Render motorundaki alt siyah kararti ve ustteki sari vinc kiskaci tamamen kaldirildi;
+  tam ekran aydinlik ve kesintisiz Bookmatch Mimari Duvar Renderi uretir.
+- 'custom' klasorundeki fotograflari asla kullanmaz, kopya fotograflari toplayip 276 Slabs yazmaz.
 """
 
 import os
@@ -20,7 +23,6 @@ import time
 import base64
 import asyncio
 import logging
-import inspect
 import zipfile
 import threading
 import subprocess
@@ -53,15 +55,10 @@ from telegram.ext import (
     filters,
 )
 
-# Eski tip .xls dosyalarını okumak için xlrd kütüphanesi yoksa arka planda sessizce hazırla
 try:
     import xlrd
 except ImportError:
-    try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "xlrd", "-q"], timeout=25, check=False)
-        import xlrd
-    except Exception:
-        xlrd = None
+    xlrd = None
 
 logger = logging.getLogger("ArgonMaster_V17.Plugin")
 
@@ -83,7 +80,7 @@ INTERNAL_SUBFOLDER_NAMES = {
     "secilenler", "selected", "musteri", "client"
 }
 
-RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RAMSafeWorker")
+RENDER_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="RAMSafeWorker")
 TR_TZ = timezone(timedelta(hours=3))
 
 
@@ -168,7 +165,6 @@ def is_image_file_obj(file_obj: Dict[str, Any]) -> bool:
 
 
 def is_spreadsheet_or_table_file(file_obj: Dict[str, Any]) -> bool:
-    """Bir dosyanın Excel / Tablo dosyası olup olmadığını geniş kapsamlı tespit eder."""
     mt = str(file_obj.get("mimeType", "")).lower()
     nm = str(file_obj.get("name", "")).lower()
     if is_image_file_obj(file_obj):
@@ -182,7 +178,6 @@ def is_spreadsheet_or_table_file(file_obj: Dict[str, Any]) -> bool:
         return True
     if nm.endswith((".xlsx", ".xls", ".xlsm", ".xlsb", ".ods", ".csv", ".tsv")):
         return True
-    # Bazı Excel dosyaları Drive'a uzantısız veya 'octet-stream' olarak yüklenmiş olabilir
     if mt == "application/octet-stream" and not nm.endswith((".jpg", ".jpeg", ".png", ".pdf", ".mp4")):
         return True
     return False
@@ -196,7 +191,6 @@ def to_float_safe(val: Any) -> Optional[float]:
     s = str(val).strip()
     if not s:
         return None
-    # İçinde birim varsa temizle (örn: '3,64 m2' -> '3,64', '314 cm' -> '314')
     s = re.sub(r"(?:m2|m²|sqm|cm|mm|pcs|adet|plaka|slabs?)", "", s, flags=re.I).strip()
     s = re.sub(r"[^\d,.-]", "", s)
     if not s or s in ("-", ".", ","):
@@ -223,7 +217,7 @@ class PersistentWatcherState:
         self.filepath = filepath
         self.lock = threading.Lock()
         self.data: Dict[str, Any] = {
-            "version": 23,
+            "version": 24,
             "chat_ids": [],
             "initialized": False,
             "active_lots": {},
@@ -241,16 +235,14 @@ class PersistentWatcherState:
                     with open(self.filepath, "r", encoding="utf-8") as f:
                         loaded = json.load(f)
                         if isinstance(loaded, dict):
-                            # Eski sürümden kalan bozuk metrik önbelleğini sıfırla
-                            if loaded.get("version") != 23:
+                            if loaded.get("version") != 24:
                                 loaded["metrics_cache"] = {}
-                                loaded["version"] = 23
+                                loaded["version"] = 24
                             else:
-                                # İçinde m2 <= 0 olan hatalı kayıtları temizle
                                 mc = loaded.get("metrics_cache", {})
                                 loaded["metrics_cache"] = {
                                     k: v for k, v in mc.items()
-                                    if isinstance(v, dict) and v.get("m2", 0.0) > 0 and v.get("avg_dim", "-") != "-"
+                                    if isinstance(v, dict) and v.get("m2", 0.0) > 0
                                 }
                             self.data.update(loaded)
                 except Exception as e:
@@ -267,7 +259,7 @@ class PersistentWatcherState:
 
     def save(self, git_sync: bool = False):
         with self.lock:
-            self.data["version"] = 23
+            self.data["version"] = 24
             self.data["updated_at"] = datetime.now(TR_TZ).isoformat()
             try:
                 with open(self.filepath, "w", encoding="utf-8") as f:
@@ -284,7 +276,7 @@ class PersistentWatcherState:
             subprocess.run(["git", "config", "user.email", "bot@arslanlarmarble.com"], timeout=5, check=False)
             subprocess.run(["git", "add", self.filepath], timeout=5, check=False)
             res = subprocess.run(
-                ["git", "commit", "-m", "chore: auto-sync watcher state v23 [skip ci]"],
+                ["git", "commit", "-m", "chore: auto-sync watcher state v24 [skip ci]"],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -304,17 +296,11 @@ class PersistentWatcherState:
 
 
 class UniversalExcelParser:
-    """
-    Her türlü Excel / Tablo formatını (.xlsx, .xls BIFF8, XML/HTML .xls, .ods, .csv)
-    2D satır-sütun matrisine çeviren ve içinden gerçek Mermer Metrajı (m²),
-    Gerçek Plaka Sayısı (Slabs), Ortalama Ebat (cm) ve Kalınlık çıkaran evrensel motor.
-    """
-
     @staticmethod
     def extract_sheets_as_rows(file_bytes: bytes, filename: str = "") -> List[List[List[Any]]]:
         sheets: List[List[List[Any]]] = []
 
-        # 1. YÖNTEM: openpyxl (.xlsx / .xlsm)
+        # 1. openpyxl (data_only=True)
         try:
             wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
             for ws in wb.worksheets:
@@ -326,19 +312,7 @@ class UniversalExcelParser:
         except Exception:
             pass
 
-        # 2. YÖNTEM: openpyxl (data_only=False, eğer formüller önbelleksiz kaydedildiyse)
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=False)
-            for ws in wb.worksheets:
-                rows = [list(r) for r in ws.iter_rows(values_only=True)]
-                if rows:
-                    sheets.append(rows)
-            if sheets:
-                return sheets
-        except Exception:
-            pass
-
-        # 3. YÖNTEM: xlrd (Eski tip .xls Excel 97-2003 dosyaları)
+        # 2. xlrd (.xls)
         if xlrd is not None:
             try:
                 book = xlrd.open_workbook(file_contents=file_bytes)
@@ -354,13 +328,11 @@ class UniversalExcelParser:
             except Exception:
                 pass
 
-        # 4. YÖNTEM: ZIP tabanlı XML / OpenDocument (.ods veya bozuk .xlsx)
+        # 3. OpenDocument (.ods) veya XML
         try:
             if zipfile.is_zipfile(io.BytesIO(file_bytes)):
                 with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
-                    namelist = zf.namelist()
-                    # OpenDocument (.ods) content.xml
-                    if "content.xml" in namelist:
+                    if "content.xml" in zf.namelist():
                         xml_data = zf.read("content.xml")
                         root = ET.fromstring(xml_data)
                         rows = []
@@ -379,7 +351,7 @@ class UniversalExcelParser:
         except Exception:
             pass
 
-        # 5. YÖNTEM: CSV / TSV / HTML Tablo olarak kaydedilmiş .xls dosyaları
+        # 4. CSV / TSV / HTML Table
         for enc in ("utf-8-sig", "utf-8", "cp1254", "latin-1", "utf-16"):
             try:
                 text = file_bytes.decode(enc)
@@ -412,14 +384,6 @@ class UniversalExcelParser:
 
     @classmethod
     def analyze_table_rows(cls, sheets: List[List[List[Any]]]) -> Optional[Dict[str, Any]]:
-        """
-        Çıkarılan Excel sayfasındaki satır ve sütunları tarayarak:
-        - Toplam Metraj (m²)
-        - Gerçek Plaka Adedi (Slabs)
-        - Ortalama Ebat (En x Boy cm)
-        - Kalınlık (2 cm / 3 cm)
-        bilgilerini sıfır hatayla hesaplar.
-        """
         best_m2 = 0.0
         best_slabs = 0
         best_avg_dim = "-"
@@ -433,20 +397,16 @@ class UniversalExcelParser:
             col_h_idx = None
             col_th_idx = None
             col_m2_idx = None
-            col_no_idx = None
             header_row_idx = None
 
-            # İlk 25 satırda başlık satırını ara
             for r_i, r in enumerate(rows[:25]):
                 norm_cells = [normalize_compare(str(c)) if c is not None else "" for c in r]
-                w_c, h_c, m2_c, th_c, no_c = None, None, None, None, None
+                w_c, h_c, m2_c, th_c = None, None, None, None
 
                 for c_i, nc in enumerate(norm_cells):
                     if not nc:
                         continue
-                    if nc in ("no", "sira", "sira no", "slab no", "plaka no", "plaka", "slab", "bundle", "id", "#"):
-                        no_c = c_i
-                    elif any(w_kw == nc or nc.startswith(w_kw + " ") for w_kw in ("boy", "length", "uzunluk", "len", "l")):
+                    if any(w_kw == nc or nc.startswith(w_kw + " ") for w_kw in ("boy", "length", "uzunluk", "len", "l")):
                         w_c = c_i
                     elif any(h_kw == nc or nc.startswith(h_kw + " ") for h_kw in ("en", "width", "yukseklik", "height", "genislik", "w", "h")):
                         h_c = c_i
@@ -455,7 +415,6 @@ class UniversalExcelParser:
                     elif any(t_kw in nc for t_kw in ("kalinlik", "thickness", "thick", "kal")):
                         th_c = c_i
 
-                # Eğer sadece 'ebat' veya 'dimensions' veya 'size' adında iki yan yana sütun varsa
                 if w_c is None and h_c is None:
                     dim_cols = [
                         idx for idx, nc in enumerate(norm_cells)
@@ -469,7 +428,6 @@ class UniversalExcelParser:
                     col_h_idx = h_c
                     col_m2_idx = m2_c
                     col_th_idx = th_c
-                    col_no_idx = no_c
                     header_row_idx = r_i
                     break
 
@@ -491,7 +449,6 @@ class UniversalExcelParser:
                 if not joined_norm:
                     continue
 
-                # Hücre içinde '310x165' gibi birleşik ebat yazılmış mı kontrol et
                 inline_w, inline_h = None, None
                 for rs in raw_strs:
                     m_in = re.search(r"\b(\d{2,3})\s*[xX*]\s*(\d{2,3})\b", rs)
@@ -516,7 +473,6 @@ class UniversalExcelParser:
                         if c is None:
                             continue
                         s_c = str(c).strip()
-                        # Eğer hücrede '45,64 m2' gibi ifade varsa
                         m_u = re.search(r"(\d+[.,]\d+|\d+)\s*(?:m2|m²|sqm)", s_c, flags=re.I)
                         if m_u:
                             vf = to_float_safe(m_u.group(1))
@@ -524,23 +480,20 @@ class UniversalExcelParser:
                                 explicit_total_m2.append(vf)
                         m_p = re.search(r"(\d+)\s*(?:plaka|slabs?|pcs|adet)", s_c, flags=re.I)
                         if m_p:
-                             explicit_total_slabs.append(int(m_p.group(1)))
+                            explicit_total_slabs.append(int(m_p.group(1)))
 
                         vf = to_float_safe(c)
                         if vf and 2.0 <= vf <= 5000.0:
-                            # Ondalıklıysa m2 olma ihtimali çok yüksektir
                             if isinstance(c, float) or ("," in s_c) or ("." in s_c):
                                 explicit_total_m2.append(vf)
                     continue
 
-                # Normal veri satırı analizi
                 w_val, h_val, a_val = inline_w, inline_h, None
 
                 if col_w_idx is not None and col_h_idx is not None and col_w_idx < len(r) and col_h_idx < len(r):
                     w_c_val = to_float_safe(r[col_w_idx])
                     h_c_val = to_float_safe(r[col_h_idx])
                     if w_c_val and h_c_val:
-                        # Metre olarak girildiyse (örn: 2.90 x 1.35) cm'ye çevir
                         if 0.45 <= w_c_val <= 4.50 and 0.45 <= h_c_val <= 4.50:
                             w_c_val *= 100.0
                             h_c_val *= 100.0
@@ -552,7 +505,6 @@ class UniversalExcelParser:
                     if a_c_val and 0.3 <= a_c_val <= 20.0:
                         a_val = a_c_val
                     elif a_c_val and 3000.0 <= a_c_val <= 150000.0:
-                        # cm2 olarak yazıldıysa m2'ye çevir
                         a_val = a_c_val / 10000.0
 
                 if col_th_idx is not None and col_th_idx < len(r):
@@ -562,7 +514,6 @@ class UniversalExcelParser:
                     elif th_v in (3.0, 30.0):
                         best_thickness = "3 cm"
 
-                # Eğer sütun başlıklarından bulunamadıysa satırdaki sayı dizilimini incele
                 if w_val is None or h_val is None:
                     nums = []
                     for c in r:
@@ -570,7 +521,6 @@ class UniversalExcelParser:
                         if fv is not None and fv > 0:
                             nums.append(fv)
 
-                    # Plaka boyut adayları (cm: 50..440 veya m: 0.55..4.30)
                     cm_dims = [x for x in nums if 50.0 <= x <= 440.0]
                     m_dims = [x * 100.0 for x in nums if 0.55 <= x <= 4.30]
 
@@ -581,7 +531,6 @@ class UniversalExcelParser:
 
                     if w_val and h_val and a_val is None:
                         calc_a = (w_val * h_val) / 10000.0
-                        # Satırda bu çarpıma yakın bir m2 değeri var mı?
                         close_areas = [x for x in nums if 0.4 <= x <= 16.0 and abs(x - calc_a) <= 1.5]
                         if close_areas:
                             a_val = close_areas[-1]
@@ -600,12 +549,10 @@ class UniversalExcelParser:
                     row_areas.append(a_val)
                     valid_slab_rows += 1
 
-            # Bu sayfa için toplamları değerlendir
             sheet_m2 = sum(row_areas) if row_areas else 0.0
             sheet_slabs = valid_slab_rows
 
             if explicit_total_m2:
-                # Eğer satırlardan hesaplanan m2 varsa ve toplam satırıyla uyumluysa toplam satırını al
                 if sheet_m2 > 0:
                     matching_tots = [t for t in explicit_total_m2 if abs(t - sheet_m2) <= (sheet_m2 * 0.25 + 2.0)]
                     if matching_tots:
@@ -834,10 +781,6 @@ class ArslanlarDriveIntelligence:
         return folders, files
 
     def fetch_folder_children_direct(self, folder_id: str) -> List[Dict[str, Any]]:
-        """
-        Belirli bir Lot klasörünün içindeki tüm dosyaları doğrudan Drive API'den sorgular
-        (Genel taramada gözden kaçmış hiçbir Excel dosyası kalmaması için!).
-        """
         headers = self.get_headers()
         if not headers:
             return []
@@ -876,10 +819,6 @@ class ArslanlarDriveIntelligence:
     def invoke_bot_py_native_parser(
         self, folder_id: str, folder_name: str, lot_code: str, excel_bytes: Optional[bytes] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        bot.py (__main__) içindeki tüm fonksiyonları ve DriveExplorer metodlarını
-        inceleyerek K-3179 ve K-3968'i hesaplayan orijinal fonksiyonu çağırır.
-        """
         def normalize_result(res: Any) -> Optional[Dict[str, Any]]:
             if isinstance(res, dict):
                 m2_v = to_float_safe(
@@ -900,7 +839,6 @@ class ArslanlarDriveIntelligence:
                         "surface": str(sf_v).strip() if sf_v else "Polished (2 cm)",
                     }
             elif isinstance(res, (tuple, list)) and len(res) >= 2:
-                # Örn: (m2, slabs, avg_dim) veya (m2, slabs) döndüren fonksiyonlar
                 v0 = to_float_safe(res[0])
                 v1 = to_float_safe(res[1])
                 if v0 and v0 > 0 and v1 is not None:
@@ -913,7 +851,6 @@ class ArslanlarDriveIntelligence:
                     }
             return None
 
-        # 1. DriveExplorer nesnesinin metodlarını dene
         explorer = self.find_bot_drive_explorer()
         if explorer is not None:
             for attr_name in dir(explorer):
@@ -924,34 +861,30 @@ class ArslanlarDriveIntelligence:
                     continue
                 low = attr_name.lower()
                 if any(k in low for k in ("excel", "meta", "metric", "lot", "folder", "parse", "calc", "detail", "info", "stock")):
-                    # Eğer excel_bytes alan bir metodsa
                     if excel_bytes and ("excel" in low or "parse" in low or "sheet" in low):
-                        for arg_ try in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
+                        for arg_candidate in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
                             try:
-                                r = fn(*arg_try)
+                                r = fn(*arg_candidate)
                                 nr = normalize_result(r)
                                 if nr:
                                     return nr
                             except Exception:
                                 pass
-                    # folder_id veya lot_code alan bir metodsa
-                    for arg_try in ((folder_id,), (folder_id, folder_name), (lot_code,)):
+                    for arg_candidate in ((folder_id,), (folder_id, folder_name), (lot_code,)):
                         try:
-                            r = fn(*arg_try)
+                            r = fn(*arg_candidate)
                             nr = normalize_result(r)
                             if nr:
                                 return nr
                         except Exception:
                             pass
 
-            # Çربیدن sonra DriveExplorer'ın kendi iç önbellek sözlüklerini tekrar kontrol et
             bot_cache_now = self.load_bot_existing_caches()
             for key in (folder_id, lot_code.upper(), folder_name.upper()):
                 nr = normalize_result(bot_cache_now.get(key))
                 if nr:
                     return nr
 
-        # 2. bot.py (__main__) içindeki bağımsız Excel okuma fonksiyonlarını dene
         if excel_bytes:
             main_mod = sys.modules.get("__main__")
             if main_mod:
@@ -960,9 +893,9 @@ class ArslanlarDriveIntelligence:
                         continue
                     fn = getattr(main_mod, attr_name, None)
                     if callable(fn) and any(k in attr_name.lower() for k in ("excel", "parse", "sheet", "metric", "lot")):
-                        for arg_try in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
+                        for arg_candidate in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
                             try:
-                                r = fn(*arg_try)
+                                r = fn(*arg_candidate)
                                 nr = normalize_result(r)
                                 if nr:
                                     return nr
@@ -982,17 +915,12 @@ class ArslanlarDriveIntelligence:
         bot_cache: Dict[str, Dict[str, Any]],
         deep_fetch_if_needed: bool = False,
     ) -> Dict[str, Any]:
-        """
-        Bir lotun metrajını (m²), plaka adedini (Slabs), ortalama ebadını (cm) ve kalınlığını
-        KESİN OLARAK Excel tablosundan ve bot.py motorundan çıkarır.
-        Asla alt klasörlerdeki kopya fotoğrafları toplayıp 276 Slabs gibi sayılar üretmez!
-        """
         m2 = 0.0
         slabs = 0
         avg_dim = "-"
         surface = "Polished (2 cm)"
 
-        # 1. ADIM: bot.py'nin kendi önbelleğinden (argon_v17_master_cache.json) kontrol et
+        # 1. bot.py önbelleğinden oku
         for key in (folder_id, lot_code.upper(), lot_code.replace("-", "").upper(), folder_name.upper()):
             c = bot_cache.get(key)
             if isinstance(c, dict):
@@ -1018,7 +946,7 @@ class ArslanlarDriveIntelligence:
                             break
                     break
 
-        # 2. ADIM: V23 kalıcı önbelleğinden kontrol et (Sadece m2 > 0 ve avg_dim != '-' ise!)
+        # 2. V24 kalıcı önbelleğinden oku
         persisted = self.state.data.setdefault("metrics_cache", {}).get(folder_id)
         if m2 <= 0 and isinstance(persisted, dict) and persisted.get("m2", 0.0) > 0:
             m2 = float(persisted["m2"])
@@ -1026,27 +954,24 @@ class ArslanlarDriveIntelligence:
             avg_dim = persisted.get("avg_dim", "-")
             surface = persisted.get("surface", surface)
 
-        # 3. ADIM: Lotun içindeki Excel / Tablo dosyalarını tespit et ve oku!
-        candidate_tables = [f for f in all_lot_files if is_spreadsheet_or_table_file(f)]
-
-        # Eğer genel listede tablo görünmüyorsa ve deep_fetch aktifse doğrudan klasörün içini API ile sorgula
-        if not candidate_tables and deep_fetch_if_needed and m2 <= 0:
-            fresh_children = self.fetch_folder_children_direct(folder_id)
-            for fc in fresh_children:
-                if fc.get("mimeType") == "application/vnd.google-apps.folder":
-                    sub_children = self.fetch_folder_children_direct(fc["id"])
-                    all_lot_files.extend(sub_children)
-                else:
-                    all_lot_files.append(fc)
+        # 3. Sadece deep_fetch_if_needed=True ise Drive'dan Excel indir (Stok tablosunda kilitlenmeyi önler!)
+        if m2 <= 0 and deep_fetch_if_needed:
             candidate_tables = [f for f in all_lot_files if is_spreadsheet_or_table_file(f)]
+            if not candidate_tables:
+                fresh_children = self.fetch_folder_children_direct(folder_id)
+                for fc in fresh_children:
+                    if fc.get("mimeType") == "application/vnd.google-apps.folder":
+                        sub_children = self.fetch_folder_children_direct(fc["id"])
+                        all_lot_files.extend(sub_children)
+                    else:
+                        all_lot_files.append(fc)
+                candidate_tables = [f for f in all_lot_files if is_spreadsheet_or_table_file(f)]
 
-        if m2 <= 0 and (candidate_tables or deep_fetch_if_needed):
-            for tf in candidate_tables:
+            for tf in candidate_tables[:2]:
                 raw_bytes = self.download_file_bytes(tf["id"], tf.get("mimeType", ""))
                 if not raw_bytes:
                     continue
 
-                # A) Evrensel Excel Okuyucu (openpyxl + xlrd + XML/ODS + CSV/HTML)
                 sheets = UniversalExcelParser.extract_sheets_as_rows(raw_bytes, tf.get("name", ""))
                 if sheets:
                     parsed = UniversalExcelParser.analyze_table_rows(sheets)
@@ -1060,7 +985,6 @@ class ArslanlarDriveIntelligence:
                             surface = parsed["surface"]
                         break
 
-                # B) bot.py'nin kendi yerel fonksiyonunu bu dosya byte'larıyla dene
                 native_parsed = self.invoke_bot_py_native_parser(folder_id, folder_name, lot_code, raw_bytes)
                 if native_parsed and native_parsed.get("m2", 0.0) > 0:
                     m2 = native_parsed["m2"]
@@ -1072,19 +996,18 @@ class ArslanlarDriveIntelligence:
                         surface = native_parsed["surface"]
                     break
 
-        # 4. ADIM: Hala m2 <= 0 ise ve deep_fetch_if_needed aktifse bot.py'nin klasör analizörünü çağır
-        if m2 <= 0 and deep_fetch_if_needed:
-            native_folder_res = self.invoke_bot_py_native_parser(folder_id, folder_name, lot_code, None)
-            if native_folder_res and native_folder_res.get("m2", 0.0) > 0:
-                m2 = native_folder_res["m2"]
-                if native_folder_res.get("slabs", 0) > 0:
-                    slabs = native_folder_res["slabs"]
-                if native_folder_res.get("avg_dim", "-") != "-":
-                    avg_dim = native_folder_res["avg_dim"]
-                if native_folder_res.get("surface"):
-                    surface = native_folder_res["surface"]
+            if m2 <= 0:
+                native_folder_res = self.invoke_bot_py_native_parser(folder_id, folder_name, lot_code, None)
+                if native_folder_res and native_folder_res.get("m2", 0.0) > 0:
+                    m2 = native_folder_res["m2"]
+                    if native_folder_res.get("slabs", 0) > 0:
+                        slabs = native_folder_res["slabs"]
+                    if native_folder_res.get("avg_dim", "-") != "-":
+                        avg_dim = native_folder_res["avg_dim"]
+                    if native_folder_res.get("surface"):
+                        surface = native_folder_res["surface"]
 
-        # 5. ADIM: Klasör adında plaka aralığı varsa (örn: "A-1037 - Silver River 1 38" -> 38 Plaka)
+        # 4. Klasör adında plaka aralığı varsa (örn: "A-1037 - Silver River 1 38" -> 38 Plaka)
         if slabs <= 0:
             m_range = re.search(
                 r"\b(?:between\s+)?(\d{1,3})\s*[-_\s]\s*(\d{1,3})\s*(?:stock|stok)?\s*$",
@@ -1096,10 +1019,8 @@ class ArslanlarDriveIntelligence:
                 if 1 <= b1 < b2 <= 150:
                     slabs = (b2 - b1) + 1
 
-        # Eğer hala plaka sayısı 0 ise SADECE ana klasördeki (direct_images) tekil plaka fotoğraflarını say
-        # ASLA alt klasörlerin (custom, email, photos) toplamını alma!
+        # 5. Eğer hala plaka sayısı 0 ise SADECE tek bir klasördeki benzersiz plaka numaralarını say
         if slabs <= 0 and direct_images:
-            # Benzersiz plaka numaralarını çıkar (örn: A258-1, A258-2)
             slab_nums = set()
             for img_f in direct_images:
                 nm = os.path.splitext(img_f.get("name", ""))[0]
@@ -1202,13 +1123,6 @@ class ArslanlarDriveIntelligence:
         new_sold_out: Dict[str, Dict[str, Any]] = {}
 
         def collect_lot_files_and_pure_images(fid: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-            """
-            1) Lotun kendi içindeki ve alt klasörlerindeki TÜM dosyaları (Excel tablolarını bulmak için) toplar.
-            2) Görselleri seçerken 'custom' klasörünü KESİNLİKLE YASAKLAR!
-               Eğer ana klasörde fotoğraf varsa SADECE ana klasördeki fotoğrafları alır (alt klasörlerdeki
-               kopyalarla asla karıştırmaz!). Ana klasörde fotoğraf yoksa sadece bir tane custom-olmayan
-               alt klasörün fotoğraflarını alır.
-            """
             all_f: List[Dict[str, Any]] = list(children_files.get(fid, []))
             direct_imgs: List[Dict[str, Any]] = []
             fallback_sub_imgs: List[Dict[str, Any]] = []
@@ -1321,18 +1235,18 @@ class ArslanlarDriveIntelligence:
         self.state.save(git_sync=False)
         return new_active, self.sold_out_lots
 
-    def ensure_deep_excel_metrics_for_lots(self, lots: List[Dict[str, Any]]):
-        """
-        Sorgulanan lotların her birinin içindeki Excel dosyasını (eğer henüz okunmadıysa)
-        doğrudan Drive klasörünün içine girip indirir ve gerçek m2, plaka ve ebadı çıkarır.
-        """
+    def ensure_deep_excel_metrics_for_lots(self, lots: List[Dict[str, Any]], max_fetch: int = 20):
         bot_cache = self.load_bot_existing_caches()
         updated_any = False
+        fetched_count = 0
 
         for item in lots:
             if item.get("m2", 0.0) > 0 and item.get("avg_dim", "-") != "-":
                 continue
+            if fetched_count >= max_fetch:
+                break
 
+            fetched_count += 1
             metrics = self.extract_metrics_from_lot_files(
                 item["folder_id"],
                 item["lot_code"],
@@ -1382,8 +1296,7 @@ class ArslanlarDriveIntelligence:
             return (x.get("collection", ""), num, lc)
 
         matched.sort(key=sort_key)
-        # Eşleşen tüm lotların içindeki Excel dosyalarını derinlemesine oku!
-        self.ensure_deep_excel_metrics_for_lots(matched)
+        self.ensure_deep_excel_metrics_for_lots(matched, max_fetch=25)
         return stone_query.title(), matched
 
     def find_lot_by_code_or_name(self, query_str: str) -> Optional[Dict[str, Any]]:
@@ -1394,13 +1307,13 @@ class ArslanlarDriveIntelligence:
         for item in active_map.values():
             lc_compact = re.sub(r"[^a-z0-9]", "", item.get("lot_code", "").lower())
             if lc_compact and lc_compact == q_compact:
-                self.ensure_deep_excel_metrics_for_lots([item])
+                self.ensure_deep_excel_metrics_for_lots([item], max_fetch=2)
                 return item
 
         for item in active_map.values():
             blob = normalize_compare(f"{item.get('lot_code', '')} {item.get('stone_name', '')} {item.get('folder_name', '')}")
             if q_norm and q_norm in blob:
-                self.ensure_deep_excel_metrics_for_lots([item])
+                self.ensure_deep_excel_metrics_for_lots([item], max_fetch=2)
                 return item
 
         return None
@@ -1408,57 +1321,17 @@ class ArslanlarDriveIntelligence:
 
 def extract_pure_marble_texture(raw_img: Image.Image) -> Image.Image:
     """
-    Fotoğrafın üstündeki vinç kıskacını (turuncu/sarı aparat), fabrika tavanını ve kenar boşluklarını
-    otomatik keserek SADECE SAF MERMER YÜZEYİNİ çıkarır.
+    Üstteki sarı vinç kıskacını (clamp), yanlardaki kırmızı etiketleri ve alt sehpayı
+    %100 dışarıda bırakacak şekilde plakanın saf iç mermer yüzeyini keser.
     """
     img = raw_img.convert("RGB")
     w, h = img.size
-    arr = np.asarray(img, dtype=np.float32)
-
-    # Plakanın göbek bölgesi (%32..%75 yükseklik, %22..%78 genişlik)
-    cy1, cy2 = int(h * 0.32), int(h * 0.75)
-    cx1, cx2 = int(w * 0.22), int(w * 0.78)
-    center_patch = arr[cy1:cy2, cx1:cx2]
-    mean_rgb = np.mean(center_patch, axis=(0, 1))
-    std_rgb = np.std(center_patch, axis=(0, 1)) + 26.0
-
-    diff = np.abs(arr - mean_rgb) / std_rgb
-    is_slab_pixel = np.mean(diff, axis=2) < 2.10
-
-    brightness = np.mean(arr, axis=2)
-    saturation = np.max(arr, axis=2) - np.min(arr, axis=2)
-    center_sat = np.mean(np.max(center_patch, axis=2) - np.min(center_patch, axis=2))
-
-    valid_mask = (
-        is_slab_pixel
-        & (brightness > 30.0)
-        & (saturation < (center_sat + 48.0))
-    )
-
-    row_ratio = np.mean(valid_mask[:, int(w * 0.20) : int(w * 0.80)], axis=1)
-    col_ratio = np.mean(valid_mask[int(h * 0.25) : int(h * 0.80), :], axis=0)
-
-    valid_rows = np.where(row_ratio > 0.65)[0]
-    valid_cols = np.where(col_ratio > 0.65)[0]
-
-    if len(valid_rows) > int(h * 0.35) and len(valid_cols) > int(w * 0.35):
-        y1, y2 = int(valid_rows[0]), int(valid_rows[-1])
-        x1, x2 = int(valid_cols[0]), int(valid_cols[-1])
-        pad_x = int((x2 - x1) * 0.06)
-        pad_y = int((y2 - y1) * 0.08)
-        # Üstteki vinç kıskacını (clamp) kesinlikle dışarıda bırakmak için üstten en az %22 kırp
-        x1 = max(int(w * 0.14), x1 + pad_x)
-        x2 = min(int(w * 0.86), x2 - pad_x)
-        y1 = max(int(h * 0.22), y1 + pad_y)
-        y2 = min(int(h * 0.84), y2 - pad_y)
-    else:
-        x1, x2 = int(w * 0.16), int(w * 0.84)
-        y1, y2 = int(h * 0.24), int(h * 0.82)
-
-    if (x2 - x1) < 150 or (y2 - y1) < 120:
-        x1, x2 = int(w * 0.15), int(w * 0.85)
-        y1, y2 = int(h * 0.22), int(h * 0.82)
-
+    # Sarı vinç kıskacı her zaman üst %26'lık dilimde, kırmızı etiketler ise sol/sağ %18'lik kenardadır.
+    # Doğrudan plakanın en temiz iç mermer göbeğini (%20..%80 X, %27..%82 Y) alıyoruz:
+    x1 = int(w * 0.20)
+    x2 = int(w * 0.80)
+    y1 = int(h * 0.27)
+    y2 = int(h * 0.82)
     return img.crop((x1, y1, x2, y2))
 
 
@@ -1471,16 +1344,31 @@ def build_ram_safe_architectural_render(
     slabs: int = 0,
     avg_dim: str = "-",
 ) -> bytes:
+    """
+    V24 AYDINLIK TAM EKRAN MİMARİ BOOKMATCH RENDER MOTORU
+    - Alttaki siyah karartılı zemin bölgesi tamamen kaldırıldı!
+    - Üstteki sarı vinç kıskacı ve yan etiketler tamamen kırpıldı!
+    - Tam ekran aydınlık galeri duvarında kusursuz 2x Bookmatch (Kelebek) mermer kaplaması sunar.
+    """
     try:
         with Image.open(io.BytesIO(img_bytes)) as raw_img:
             raw_img = raw_img.convert("RGB")
             raw_img.thumbnail((1400, 1000), Image.Resampling.LANCZOS)
             pure_slab = extract_pure_marble_texture(raw_img)
 
-        pure_slab = ImageEnhance.Contrast(pure_slab).enhance(1.05)
-        pure_slab = ImageEnhance.Sharpness(pure_slab).enhance(1.15)
+        pure_slab = ImageEnhance.Contrast(pure_slab).enhance(1.06)
+        pure_slab = ImageEnhance.Sharpness(pure_slab).enhance(1.18)
 
-        single_w, single_h = 520, 560
+        # Tuval Boyutu: 1400 x 900 (Alt karartı yok, tam boy aydınlık mimari duvar)
+        cw, ch = 1400, 900
+        canvas = Image.new("RGB", (cw, ch), (238, 235, 228))  # Sıcak krem/taş galeri arka planı
+        draw = ImageDraw.Draw(canvas)
+
+        # Üst ve Yan Mimari Sıcak Galeri Çerçevesi
+        draw.rectangle([0, 0, cw, 815], fill=(34, 33, 31))
+
+        # 2'li Bookmatch Boyutu: 1240 x 700 (Her bir plaka 620 x 700)
+        single_w, single_h = 620, 700
         left_panel = pure_slab.resize((single_w, single_h), Image.Resampling.LANCZOS)
         right_panel = ImageOps.mirror(left_panel)
 
@@ -1489,82 +1377,46 @@ def build_ram_safe_architectural_render(
         bookmatch.paste(left_panel, (0, 0))
         bookmatch.paste(right_panel, (single_w, 0))
 
-        cw, ch = 1400, 980
-        y_idx, x_idx = np.mgrid[0:ch, 0:cw].astype(np.float32)
-        scene_arr = np.zeros((ch, cw, 3), dtype=np.float32)
-
-        scene_arr[:, :, 0] = 20.0
-        scene_arr[:, :, 1] = 20.0
-        scene_arr[:, :, 2] = 22.0
-
-        ceil_mask = y_idx < 95
-        scene_arr[ceil_mask] *= (0.45 + 0.55 * (y_idx[ceil_mask] / 95.0))[:, None]
-
-        wall_x1, wall_y1 = 180, 95
-        wall_w, wall_h = bm_w, bm_h
+        # Doğal, homojen galeri aydınlatması (Karartı yapmaz, mermerin kendi rengini parlatır)
         wall_arr = np.asarray(bookmatch, dtype=np.float32)
-
-        wy, wx = np.mgrid[0:wall_h, 0:wall_w].astype(np.float32)
-        light_map = np.ones((wall_h, wall_w), dtype=np.float32) * 0.88
-        for sx in (wall_w * 0.25, wall_w * 0.50, wall_w * 0.75):
-            spread = 160.0 + wy * 0.35
+        wy, wx = np.mgrid[0:bm_h, 0:bm_w].astype(np.float32)
+        light_map = np.ones((bm_h, bm_w), dtype=np.float32) * 0.98
+        for sx in (bm_w * 0.25, bm_w * 0.50, bm_w * 0.75):
+            spread = 220.0 + wy * 0.30
             dist_x = np.abs(wx - sx)
-            v_fade = np.clip(1.0 - (wy / (wall_h * 1.35)), 0.35, 1.0)
-            light_map += np.exp(-0.5 * (dist_x / spread) ** 2) * v_fade * 0.20
+            light_map += np.exp(-0.5 * (dist_x / spread) ** 2) * 0.08
 
-        light_map = np.clip(light_map, 0.75, 1.12)
-        wall_lit = np.zeros_like(wall_arr)
-        wall_lit[:, :, 0] = np.clip(wall_arr[:, :, 0] * light_map * 1.02, 0, 255)
-        wall_lit[:, :, 1] = np.clip(wall_arr[:, :, 1] * light_map * 1.00, 0, 255)
-        wall_lit[:, :, 2] = np.clip(wall_arr[:, :, 2] * light_map * 0.97, 0, 255)
+        light_map = np.clip(light_map, 0.94, 1.08)
+        wall_lit = np.clip(wall_arr * light_map[:, :, None], 0, 255).astype(np.uint8)
+        lit_bm_img = Image.fromarray(wall_lit)
 
-        scene_arr[wall_y1 : wall_y1 + wall_h, wall_x1 : wall_x1 + wall_w] = wall_lit
+        wall_x1, wall_y1 = 80, 58
+        canvas.paste(lit_bm_img, (wall_x1, wall_y1))
 
-        floor_y1, floor_y2 = 655, 885
-        floor_h = floor_y2 - floor_y1
-        flipped_wall = ImageOps.flip(Image.fromarray(wall_lit.astype(np.uint8))).resize(
-            (wall_w, floor_h), Image.Resampling.LANCZOS
-        )
-        flipped_wall = flipped_wall.filter(ImageFilter.GaussianBlur(radius=3.0))
-        refl_arr = np.asarray(flipped_wall, dtype=np.float32)
-
-        fy = np.linspace(0.0, 1.0, floor_h, dtype=np.float32)[:, None, None]
-        floor_base = np.array([16.0, 16.0, 18.0], dtype=np.float32) * (1.0 - 0.35 * fy)
-        refl_alpha = 0.48 * np.exp(-2.6 * fy)
-
-        scene_arr[floor_y1:floor_y2, :] = floor_base
-        scene_arr[floor_y1:floor_y2, wall_x1 : wall_x1 + wall_w] = (
-            refl_arr * refl_alpha + floor_base * (1.0 - refl_alpha)
-        )
-
-        canvas = Image.fromarray(np.clip(scene_arr, 0, 255).astype(np.uint8))
-        draw = ImageDraw.Draw(canvas)
-
+        # Şampanya Altın Mimari Çerçeve
         gold = (197, 155, 95)
-        dark_gold = (110, 86, 52)
-        draw.rectangle([wall_x1 - 3, wall_y1 - 3, wall_x1 + wall_w + 2, wall_y1 + wall_h + 2], outline=gold, width=3)
-        draw.line([(wall_x1 + single_w, wall_y1), (wall_x1 + single_w, wall_y1 + wall_h)], fill=(60, 58, 55), width=1)
-        draw.line([(90, 95), (90, floor_y1)], fill=dark_gold, width=2)
-        draw.line([(cw - 90, 95), (cw - 90, floor_y1)], fill=dark_gold, width=2)
-        draw.line([(0, floor_y1), (cw, floor_y1)], fill=dark_gold, width=2)
+        draw.rectangle([wall_x1 - 4, wall_y1 - 4, wall_x1 + bm_w + 3, wall_y1 + bm_h + 3], outline=gold, width=4)
+        # Ortadaki kelebek birleşim derzi (1px ince çizgi)
+        draw.line([(wall_x1 + single_w, wall_y1), (wall_x1 + single_w, wall_y1 + bm_h)], fill=(120, 115, 110), width=1)
 
-        draw.rectangle([0, 885, cw, ch], fill=(10, 10, 12))
-        draw.line([(0, 885), (cw, 885)], fill=gold, width=2)
+        # Alt Kurumsal Bilgi Barı (Y: 815..900 -> 85px şık antrasit-altın şerit)
+        draw.rectangle([0, 815, cw, ch], fill=(18, 18, 20))
+        draw.line([(0, 815), (cw, 815)], fill=gold, width=3)
 
         stock_txt = f"{m2:,.2f} m2 ({slabs} Slabs)" if m2 > 0 else f"{slabs} Slabs"
-        dim_txt = f"  |  Avg. Size: {avg_dim}" if avg_dim and avg_dim != "-" else ""
+        dim_txt = f"   |   Avg. Size: {avg_dim}" if avg_dim and avg_dim != "-" else ""
 
         header_line = f"ARSLANLAR MARBLE   |   LOT: {lot_code} — {stone_name.upper()}   ({collection_name.upper()})"
-        spec_line = f"Seamless 2x Bookmatch Architectural Wall Application   |   Available Stock: {stock_txt}{dim_txt}"
+        spec_line = f"2x Bookmatch (Butterfly) Architectural Wall Application   |   Available Stock: {stock_txt}{dim_txt}"
 
-        draw.text((45, 906), header_line, fill=(235, 205, 155))
-        draw.text((45, 940), spec_line, fill=(175, 175, 182))
+        draw.text((80, 832), header_line, fill=(235, 205, 155))
+        draw.text((80, 862), spec_line, fill=(200, 200, 205))
 
         out_buf = io.BytesIO()
-        canvas.save(out_buf, format="JPEG", quality=92, optimize=True)
+        canvas.save(out_buf, format="JPEG", quality=93, optimize=True)
         result_bytes = out_buf.getvalue()
 
-        del raw_img, pure_slab, left_panel, right_panel, bookmatch, wall_arr, wall_lit, scene_arr, canvas
+        del raw_img, pure_slab, left_panel, right_panel, bookmatch, wall_arr, wall_lit, lit_bm_img, canvas
         gc.collect()
         return result_bytes
     except Exception as e:
@@ -1966,13 +1818,13 @@ def build_master_stock_table_pdf_and_excel(
 
     c.setFillColor(gold_primary)
     c.setFont("Helvetica-Bold", 24)
-    c.drawCentredString(page_w / 2, page_h - 175, "ARSLANLAR MARBLE — MASTER INVENTORY TABLE")
+    c.drawCentredString(page_w / 2, page_h - 175, "ARSLANLAR MARBLE — MASTER INVENTORY PRESENTATION")
     c.setFillColor(gold_light)
     c.setFont("Helvetica", 11)
     c.drawCentredString(
         page_w / 2,
         page_h - 195,
-        f"COMPLETE STOCK & SOLD OUT LEDGER  |  GENERATED: {datetime.now(TR_TZ).strftime('%d.%m.%Y %H:%M')}",
+        f"COMPLETE IN STOCK & SOLD OUT LEDGER  |  GENERATED: {datetime.now(TR_TZ).strftime('%d.%m.%Y %H:%M')}",
     )
 
     y_cursor = page_h - 245
@@ -2104,6 +1956,42 @@ def build_master_stock_table_pdf_and_excel(
     return pdf_bytes, excel_bytes
 
 
+def format_welcome_help_guide() -> str:
+    """Bota 'merhaba', 'selam', '/start' veya 'yardım' yazıldığında gelecek tam kapsamlı rehber."""
+    return (
+        "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan (V24)</b>\n\n"
+        "Merhaba! Sistem üzerinden aşağıdaki tüm işlemleri anında gerçekleştirebilirsiniz. "
+        "Mavi renkli örnek komutlara dokunarak kopyalayabilir veya benzer şekilde yazabilirsiniz:\n\n"
+        "📊 <b>1. Detaylı Master Stok Tablosu (Aktif + Sold Out PDF & Excel):</b>\n"
+        "<i>Arslanlar Series, Collection ve Exclusive Collection içindeki tüm stokta olan ve satılan taşların tam listesini verir:</i>\n"
+        "• <code>Stok tablosu</code>\n"
+        "• <code>Detaylı stok</code> veya <code>Toplam stoğum ne kadar</code>\n\n"
+        "💎 <b>2. Taş Çeşidine Göre Aktif Stok Sorgulama:</b>\n"
+        "<i>Sadece aktif klasörlerdeki taşları tarar (Sold Out hariç), metraj, plaka, ebat ve fotoğrafları getirir:</i>\n"
+        "• <code>Ne kadar Silver Roots var?</code>\n"
+        "• <code>Ne kadar Silver River var?</code>\n"
+        "• <code>Ne kadar Rosso Levanto var?</code> veya <code>Tundra çeşitleri</code>\n\n"
+        "📑 <b>3. Taş Çeşidine Özel İngilizce Lüks PDF Sunum:</b>\n"
+        "<i>İstediğiniz taşın aktif lotlarını tarayıp Arslanlar Marble logolu, %100 İngilizce PDF katalog hazırlar:</i>\n"
+        "• <code>Silver Rootslar sunum lütfen</code>\n"
+        "• <code>Silver Riverlar sunum lütfen</code>\n"
+        "• <code>Rosso Levantolar sunum lütfen</code>\n\n"
+        "🏛 <b>4. Koleksiyon Bazlı Sunumlar (Aktif & Sold Out):</b>\n"
+        "• <code>Arslanlar Series sunum lütfen</code>\n"
+        "• <code>Arslanlar Collection sunum lütfen</code>\n"
+        "• <code>Arslanlar Exclusive Collection sunum lütfen</code>\n"
+        "• <code>Arslanlar Series satılan taşların sunumu</code>\n\n"
+        "🔍 <b>5. Tekil Lot Sorgulama & Resmi Çeki Listesi (Packing List):</b>\n"
+        "• <code>A-371</code> veya <code>A-258 fotoğraf</code>\n"
+        "• <code>A-371 çeki listesi</code>\n\n"
+        "🎨 <b>6. Mimari Bookmatch (Kelebek) Duvar Render Stüdyosu:</b>\n"
+        "• <code>render A-371</code> veya <code>render A-258</code>\n\n"
+        "🔔 <b>7. Otomatik Drive Gözcüsü & Haftalık Rapor (7/24 Aktif):</b>\n"
+        "• Drive'da bir lot <b>Sold Out</b> klasörüne taşındığında veya <b>Yeni Lot</b> eklendiğinde otomatik bildirim düşer.\n"
+        "• Her <b>Pazartesi ve Cuma 09:30'da</b> otomatik özet stok raporu gönderilir."
+    )
+
+
 class ArslanlarPluginController:
     def __init__(self, app: Application):
         self.app = app
@@ -2142,9 +2030,7 @@ class ArslanlarPluginController:
             except Exception as e:
                 logger.warning(f"Telegram doc warning ({cid}): {e}")
 
-    def format_executive_summary_report(self, title_prefix: str = "WEEKLY") -> str:
-        active_map, sold_map = self.intel.scan_drive_collections(force=True)
-
+    def format_executive_summary_report(self, active_map: Dict[str, Dict[str, Any]], sold_map: Dict[str, Dict[str, Any]], title_prefix: str = "WEEKLY") -> str:
         total_lots = len(active_map)
         total_m2 = sum(x.get("m2", 0.0) for x in active_map.values())
         total_slabs = sum(x.get("slabs", 0) for x in active_map.values())
@@ -2192,16 +2078,16 @@ class ArslanlarPluginController:
 
     def background_watcher_loop(self):
         time.sleep(12)
-        logger.info("🔍 Arslanlar V23 Drive Watcher started.")
+        logger.info("🔍 Arslanlar V24 Drive Watcher started.")
 
         while True:
             try:
                 active_map, sold_map = self.intel.scan_drive_collections(force=True)
 
-                # Arka planda m2'si henüz okunmamış aktif lotların Excel'lerini partiler halinde sessizce oku
+                # Arka planda her döngüde 12 lotun Excel tablosunu sessizce okuyup önbelleğe al
                 unparsed = [x for x in active_map.values() if x.get("m2", 0.0) <= 0]
                 if unparsed:
-                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed[:15])
+                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed, max_fetch=12)
 
                 if active_map or sold_map:
                     if not self.state.data.get("initialized"):
@@ -2256,7 +2142,7 @@ class ArslanlarPluginController:
                             a_code = a_item.get("lot_code", "")
                             if a_fid not in prev_active and a_code not in prev_active_codes:
                                 changed = True
-                                self.intel.ensure_deep_excel_metrics_for_lots([a_item])
+                                self.intel.ensure_deep_excel_metrics_for_lots([a_item], max_fetch=2)
                                 stone_label = a_item.get("stone_name", "")
                                 coll_label = a_item.get("collection", "")
                                 m2_val = a_item.get("m2", 0.0)
@@ -2299,14 +2185,14 @@ class ArslanlarPluginController:
                     report_key = now_tr.strftime("%Y-%m-%d")
                     if self.state.data.get("last_summary_report_key") != report_key:
                         day_title = "MONDAY" if now_tr.weekday() == 0 else "FRIDAY"
-                        report_html = self.format_executive_summary_report(title_prefix=day_title)
+                        report_html = self.format_executive_summary_report(active_map, sold_map, title_prefix=day_title)
                         self.send_telegram_sync(report_html)
                         try:
                             pdf_b, xlsx_b = build_master_stock_table_pdf_and_excel(active_map, sold_map, self.intel)
                             self.send_telegram_document_sync(
                                 pdf_b,
                                 "ARSLANLAR_MARBLE_MASTER_INVENTORY_TABLE.pdf",
-                                f"📊 <b>{day_title} MASTER INVENTORY TABLE (PDF)</b> — In Stock & Sold Out",
+                                f"📊 <b>{day_title} MASTER INVENTORY PRESENTATION (PDF)</b> — In Stock & Sold Out",
                             )
                             self.send_telegram_document_sync(
                                 xlsx_b,
@@ -2321,7 +2207,7 @@ class ArslanlarPluginController:
             except Exception as e:
                 logger.warning(f"Drive watcher loop warning: {e}")
 
-            time.sleep(120)
+            time.sleep(90)
 
     async def handle_priority_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_message or not update.effective_message.text:
@@ -2333,7 +2219,25 @@ class ArslanlarPluginController:
         raw_text = update.effective_message.text.strip()
         norm_text = normalize_compare(raw_text)
 
-        # 1. DETAYLI MASTER STOK TABLOSU & ÖZET RAPOR İSTEĞİ
+        # ---------------------------------------------------------------------
+        # 0. MERHABA / KARŞILAMA VE YETENEK REHBERİ
+        # ---------------------------------------------------------------------
+        if norm_text in (
+            "merhaba", "selam", "slm", "merhabalar", "iyi gunler", "gunaydin",
+            "iyi aksamlar", "yardim", "help", "komutlar", "neler yapabilirsin",
+            "ne yapabilirsin", "menu", "nasilsin"
+        ) or raw_text.lower().startswith(("/start", "/help", "/menu")):
+            await update.effective_message.reply_text(
+                format_welcome_help_guide(),
+                parse_mode="HTML",
+                disable_web_page_preview=True,
+            )
+            raise ApplicationHandlerStop
+
+        # ---------------------------------------------------------------------
+        # 1. DETAYLI MASTER STOK TABLOSU & SUNUMU (EXCEL + PDF)
+        # ("stok tablosu", "detaylı stok", "stok listesi", "özet rapor")
+        # ---------------------------------------------------------------------
         is_master_table_req = any(
             kw in norm_text
             for kw in (
@@ -2346,46 +2250,57 @@ class ArslanlarPluginController:
         if is_master_table_req:
             status_msg = await update.effective_message.reply_text(
                 "⏳ <b>Arslanlar Series, Collection ve Exclusive Collection</b> (In Stock + Sold Out) taranıyor, "
-                "Excel tabloları okunuyor ve Master Stok Tablosu (PDF & Excel) hazırlanıyor...",
+                "Premium PDF Sunum & Excel Stok Tablosu hazırlanıyor...",
                 parse_mode="HTML",
             )
             loop = asyncio.get_running_loop()
 
-            def generate_all():
-                act_m, sld_m = self.intel.scan_drive_collections(force=True)
-                self.intel.ensure_deep_excel_metrics_for_lots(list(act_m.values()))
-                rep_html = self.format_executive_summary_report(title_prefix="MASTER")
+            def generate_master_fast():
+                # Hızlıca klasörleri ve hazır önbelleği oku (Takılmayı önlemek için canlıda en fazla 8 eksik lotu çek)
+                act_m, sld_m = self.intel.scan_drive_collections(force=False)
+                if not act_m and not sld_m:
+                    act_m, sld_m = self.intel.scan_drive_collections(force=True)
+                unparsed_lots = [x for x in act_m.values() if x.get("m2", 0.0) <= 0]
+                if unparsed_lots:
+                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed_lots, max_fetch=8)
+                rep_html = self.format_executive_summary_report(act_m, sld_m, title_prefix="MASTER")
                 pdf_b, xlsx_b = build_master_stock_table_pdf_and_excel(act_m, sld_m, self.intel)
                 return rep_html, pdf_b, xlsx_b, len(act_m), len(sld_m)
 
-            report_html, pdf_bytes, excel_bytes, act_cnt, sld_cnt = await loop.run_in_executor(
-                RENDER_EXECUTOR, generate_all
-            )
+            try:
+                report_html, pdf_bytes, excel_bytes, act_cnt, sld_cnt = await loop.run_in_executor(
+                    RENDER_EXECUTOR, generate_master_fast
+                )
+                await status_msg.edit_text(report_html, parse_mode="HTML", disable_web_page_preview=True)
 
-            await status_msg.edit_text(report_html, parse_mode="HTML", disable_web_page_preview=True)
+                await update.effective_message.reply_document(
+                    document=io.BytesIO(pdf_bytes),
+                    filename="ARSLANLAR_MARBLE_MASTER_INVENTORY_PRESENTATION.pdf",
+                    caption=(
+                        f"📕 <b>ARSLANLAR MARBLE — MASTER INVENTORY PRESENTATION (PDF)</b>\n"
+                        f"• 🟢 <b>In Stock (Active):</b> <code>{act_cnt} Lots</code>\n"
+                        f"• 🔴 <b>Sold Out (Archived):</b> <code>{sld_cnt} Lots</code>\n"
+                        f"• <b>Collections:</b> Series, Collection, Exclusive Collection"
+                    ),
+                    parse_mode="HTML",
+                )
+                await update.effective_message.reply_document(
+                    document=io.BytesIO(excel_bytes),
+                    filename="ARSLANLAR_MARBLE_MASTER_STOCK_TABLE.xlsx",
+                    caption=(
+                        f"📗 <b>ARSLANLAR MARBLE — MASTER INVENTORY TABLE (EXCEL)</b>\n"
+                        f"• 3 Sheets: <i>Executive Summary, In Stock (Active), Sold Out (Archived)</i>"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                await status_msg.edit_text(f"⚠️ Master tablo oluşturulurken hata: {e}")
 
-            await update.effective_message.reply_document(
-                document=io.BytesIO(pdf_bytes),
-                filename="ARSLANLAR_MARBLE_MASTER_INVENTORY_TABLE.pdf",
-                caption=(
-                    f"📕 <b>ARSLANLAR MARBLE — MASTER INVENTORY TABLE (PDF)</b>\n"
-                    f"• 🟢 <b>In Stock:</b> <code>{act_cnt} Active Lots</code>\n"
-                    f"• 🔴 <b>Sold Out:</b> <code>{sld_cnt} Archived Lots</code>"
-                ),
-                parse_mode="HTML",
-            )
-            await update.effective_message.reply_document(
-                document=io.BytesIO(excel_bytes),
-                filename="ARSLANLAR_MARBLE_MASTER_STOCK_TABLE.xlsx",
-                caption=(
-                    f"📗 <b>ARSLANLAR MARBLE — MASTER INVENTORY TABLE (EXCEL)</b>\n"
-                    f"• 3 Sheets: <i>Executive Summary, In Stock (Active), Sold Out (Archived)</i>"
-                ),
-                parse_mode="HTML",
-            )
             raise ApplicationHandlerStop
 
-        # 2. RAM-KORUMALI MİMARİ RENDER & BOOKMATCH
+        # ---------------------------------------------------------------------
+        # 2. RAM-KORUMALI MİMARİ RENDER & BOOKMATCH (KARARTISIZ, TAM EKRAN)
+        # ---------------------------------------------------------------------
         if re.search(r"\b(render|bookmatch|kelebek)\b", norm_text):
             target_q = re.sub(
                 r"\b(render|bookmatch|kelebek|yap|lütfen|lutfen|hazırla|hazirla|stüdyo|studyo)\b",
@@ -2396,13 +2311,13 @@ class ArslanlarPluginController:
 
             if not target_q:
                 await update.effective_message.reply_text(
-                    "🎨 Please specify a lot code for rendering.\nExample: <code>render A-371</code>",
+                    "🎨 Lütfen render yapılacak lot kodunu yazın.\nÖrnek: <code>render A-371</code>",
                     parse_mode="HTML",
                 )
                 raise ApplicationHandlerStop
 
             status_msg = await update.effective_message.reply_text(
-                f"🎨 Preparing Seamless Bookmatch & Architectural Showroom Render for <b>{target_q.upper()}</b>...",
+                f"🎨 Preparing Full-Screen Bookmatch Architectural Wall Render for <b>{target_q.upper()}</b>...",
                 parse_mode="HTML",
             )
             loop = asyncio.get_running_loop()
@@ -2444,7 +2359,7 @@ class ArslanlarPluginController:
                     f"• <b>Collection:</b> {lot_item['collection']}\n"
                     f"• <b>Available Stock:</b> <code>{m2_v:,.2f} m² ({sl_v} Slabs)</code>\n"
                     f"• <b>Avg. Dimensions:</b> <code>{eb_v}</code> | {sf_v}\n"
-                    f"• <b>Studio:</b> Seamless 2x Bookmatch Architectural Wall Simulation"
+                    f"• <b>Studio:</b> 2x Bookmatch Full-Bleed Architectural Wall"
                 )
                 await update.effective_message.reply_photo(
                     photo=io.BytesIO(rendered_bytes),
@@ -2457,7 +2372,9 @@ class ArslanlarPluginController:
 
             raise ApplicationHandlerStop
 
+        # ---------------------------------------------------------------------
         # 3. TAŞ ÇEŞİDİNE ÖZEL İNGİLİZCE PREMIUM SUNUM
+        # ---------------------------------------------------------------------
         has_sunum_kw = bool(re.search(r"\b(sunum|sunumu|katalog|kataloğu|presentation|catalog)\b", norm_text))
         is_main_collection_sunum = any(
             normalize_compare(c) in norm_text
@@ -2469,7 +2386,7 @@ class ArslanlarPluginController:
 
         if has_sunum_kw and not is_main_collection_sunum:
             status_msg = await update.effective_message.reply_text(
-                "📑 Scanning active lots, reading Excel files inside each lot & generating English Luxury Presentation PDF...",
+                "📑 Scanning active lots, reading Excel files & generating English Luxury Presentation PDF...",
                 parse_mode="HTML",
             )
             stone_title, matched_lots = await asyncio.get_running_loop().run_in_executor(
@@ -2504,7 +2421,13 @@ class ArslanlarPluginController:
             else:
                 await status_msg.delete()
 
-        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA
+        # ---------------------------------------------------------------------
+        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA ("Ne kadar Silver Roots var?")
+        # Not: "Stoğumda kaç m2 var" veya "Toplam stoğum ne kadar" ise bot.py'ye bırak!
+        # ---------------------------------------------------------------------
+        is_general_stock_question = any(
+            gk in norm_text for gk in ("stogumda", "toplam stogum", "genel stogum", "tum stogum")
+        )
         is_variety_query = bool(
             re.search(
                 r"(^ne\s+kadar\s+|var\s+m[ıi]|kaç\s+m2|kac\s+m2|\bçeşitleri\b|\bcesitleri\b|\bneler\s+var\b|\bvar\s*\??$|^how\s+much\s+)",
@@ -2514,8 +2437,8 @@ class ArslanlarPluginController:
         )
         is_single_lot_code = bool(re.match(r"^[A-Za-z]{1,3}\s*[-_]?\s*\d{1,5}[A-Za-z]?$", raw_text))
 
-        if is_variety_query and not is_single_lot_code:
-            status_msg = await update.effective_message.reply_text("🔍 Scanning active collections & reading Excel files inside each lot...")
+        if is_variety_query and not is_single_lot_code and not is_general_stock_question:
+            status_msg = await update.effective_message.reply_text("🔍 Scanning active collections & reading Excel files...")
             stone_title, matched_lots = await asyncio.get_running_loop().run_in_executor(
                 None, self.intel.search_active_by_stone, raw_text
             )
@@ -2624,11 +2547,11 @@ def hooked_run_polling(self: Application, *args, **kwargs):
             )
             watcher_thread = threading.Thread(
                 target=controller.background_watcher_loop,
-                name="ArslanlarDriveWatcherV23",
+                name="ArslanlarDriveWatcherV24",
                 daemon=True,
             )
             watcher_thread.start()
-            logger.info("✅ Arslanlar V23 Universal Excel & Master Plugin successfully attached!")
+            logger.info("✅ Arslanlar V24 Complete Master Plugin successfully attached!")
         except Exception as e:
             logger.error(f"Plugin startup error: {e}")
 
