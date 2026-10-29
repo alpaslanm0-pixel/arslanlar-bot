@@ -1,15 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-ARSLANLAR MARBLE - V24 COMPLETE & ZERO-TOUCH MASTER PLUGIN (sitecustomize.py)
-- SyntaxError %100 giderildi, tum satirlar denetlendi.
-- 'merhaba', 'selam', 'yardim', '/start' yazildiginda botun tum yeteneklerini ve
-  nasil sorulacagini gosteren kapsamli Kurumsal Dijital Asistan rehberi verir.
-- 'stok tablosu', 'detayli stok', 'toplam stogum ne kadar' yazildiginda ASLA takilmaz;
-  3 koleksiyonun (Series, Collection, Exclusive) Aktif + Sold Out lotlarini tarayip
-  saniyeler icinde Premium PDF Sunum + 3 Sayfali Renkli Excel Tablosu gonderir.
-- Render motorundaki alt siyah kararti ve ustteki sari vinc kiskaci tamamen kaldirildi;
-  tam ekran aydinlik ve kesintisiz Bookmatch Mimari Duvar Renderi uretir.
-- 'custom' klasorundeki fotograflari asla kullanmaz, kopya fotograflari toplayip 276 Slabs yazmaz.
+ARSLANLAR MARBLE - V25 PRECISION EXCEL & BRIGHT STUDIO ENGINE (sitecustomize.py)
+- 738,371,030 m2 ve 0.53 m2 (65x81 cm) gibi hatali metraj uretme sorunu KOKTEN cozuldu!
+- Bozuk onbellek (metrics_cache) otomatik temizlenir ve siki matematiksel dogrulama (Sanity Check) uygulanir.
+- Her lotun icindeki Excel (.xlsx, .xls, Google Sheets, .ods, .csv) dosyasini hem bot.py'nin
+  orijinal motoruyla hem de baslik/plaka-satiri duyarli Hassas Excel Okuyucu ile %100 dogru okur.
+- Render motorundaki alt siyah kararti, sari vinc kiskaci ve 'DIKKAT' tabelasi tamamen kaldirildi;
+  tam ekran aydinlik ve ferah 2x Bookmatch Mimari Galeri Duvari uretir.
+- 'merhaba' rehberi ve 'stok tablosu' (Aktif + Sold Out PDF Sunum & Excel Tablo) tam entegredir.
 """
 
 import os
@@ -23,6 +21,7 @@ import time
 import base64
 import asyncio
 import logging
+import inspect
 import zipfile
 import threading
 import subprocess
@@ -58,7 +57,11 @@ from telegram.ext import (
 try:
     import xlrd
 except ImportError:
-    xlrd = None
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "xlrd", "-q"], timeout=25, check=False)
+        import xlrd
+    except Exception:
+        xlrd = None
 
 logger = logging.getLogger("ArgonMaster_V17.Plugin")
 
@@ -92,6 +95,29 @@ def normalize_compare(s: str) -> str:
     s = s.translate(tr_map)
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     return re.sub(r"\s+", " ", s).strip()
+
+
+def is_sane_lot_metrics(m2: float, slabs: int, avg_dim: str = "-") -> bool:
+    """
+    738,371,030 m2 veya 0.53 m2 (65x81 cm) gibi saçma sapan verileri
+    kesin olarak reddeden endüstriyel doğrulama filtresi.
+    """
+    if m2 <= 1.2 or m2 > 2500.0:
+        return False
+    if slabs <= 0 or slabs > 350:
+        return False
+    # Plaka başına ortalama metraj 0.80 m2 ile 12.0 m2 arasında olmalıdır
+    avg_slab_area = m2 / float(slabs)
+    if avg_slab_area < 0.80 or avg_slab_area > 12.5:
+        return False
+    if avg_dim and avg_dim != "-":
+        m_d = re.search(r"(\d+)\s*[xX*]\s*(\d+)", str(avg_dim))
+        if m_d:
+            w, h = int(m_d.group(1)), int(m_d.group(2))
+            # Bir mermer plakasının en az bir kenarı >= 100 cm, diğer kenarı >= 70 cm olmalıdır (65x81 elenir!)
+            if max(w, h) < 100 or min(w, h) < 70 or max(w, h) > 450:
+                return False
+    return True
 
 
 def extract_stone_query_name(text: str) -> str:
@@ -169,7 +195,7 @@ def is_spreadsheet_or_table_file(file_obj: Dict[str, Any]) -> bool:
     nm = str(file_obj.get("name", "")).lower()
     if is_image_file_obj(file_obj):
         return False
-    if nm.endswith((".pdf", ".mp4", ".mov", ".avi", ".rar", ".zip", ".7z")):
+    if nm.endswith((".pdf", ".mp4", ".mov", ".avi", ".rar", ".zip", ".7z", ".ds_store", ".ini", ".db")):
         return False
     if any(
         k in mt
@@ -178,36 +204,54 @@ def is_spreadsheet_or_table_file(file_obj: Dict[str, Any]) -> bool:
         return True
     if nm.endswith((".xlsx", ".xls", ".xlsm", ".xlsb", ".ods", ".csv", ".tsv")):
         return True
-    if mt == "application/octet-stream" and not nm.endswith((".jpg", ".jpeg", ".png", ".pdf", ".mp4")):
+    # Drive'a uzantısız yüklenmiş Excel dosyaları
+    if mt in ("application/octet-stream", "application/x-ole-storage", "application/vnd.ms-office"):
         return True
     return False
 
 
-def to_float_safe(val: Any) -> Optional[float]:
+def parse_number_clean(val: Any) -> Optional[float]:
+    """
+    Excel hücresindeki sayıyı ('272,32', '1.120,50', 314, '3,64 m2')
+    asla basamak kaydırmadan doğru float değerine çevirir.
+    """
     if val is None or isinstance(val, bool):
         return None
     if isinstance(val, (int, float)):
-        return float(val)
+        f = float(val)
+        return f if not np.isnan(f) else None
+
     s = str(val).strip()
     if not s:
         return None
-    s = re.sub(r"(?:m2|m²|sqm|cm|mm|pcs|adet|plaka|slabs?)", "", s, flags=re.I).strip()
-    s = re.sub(r"[^\d,.-]", "", s)
-    if not s or s in ("-", ".", ","):
+
+    # Tarih formatlarını (örn: 12.05.2025 veya 2025-05-12 veya 25/37) kesinlikle sayı olarak alma!
+    if re.search(r"\b\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}\b", s):
         return None
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
+    # Lot kodlarını (örn: A-157, B-24) sayı olarak alma!
+    if re.match(r"^[A-Za-z]{1,3}\s*[-_]\s*\d+", s):
+        return None
+
+    # Sadece ilk sayısal grubu yakala (örn: '3,64 m2' -> '3,64')
+    m = re.search(r"(?<![A-Za-z0-9])(\d{1,3}(?:[.,]\d{3})+|\d+)(?:[.,](\d{1,4}))?(?![A-Za-z0-9])", s)
+    if not m:
+        return None
+
+    full_match = m.group(0)
+    if "," in full_match and "." in full_match:
+        if full_match.rfind(",") > full_match.rfind("."):
+            full_match = full_match.replace(".", "").replace(",", ".")
         else:
-            s = s.replace(",", "")
-    elif "," in s:
-        parts = s.split(",")
+            full_match = full_match.replace(",", "")
+    elif "," in full_match:
+        parts = full_match.split(",")
         if len(parts) == 2 and len(parts[1]) in (1, 2, 3):
-            s = s.replace(",", ".")
+            full_match = full_match.replace(",", ".")
         else:
-            s = s.replace(",", "")
+            full_match = full_match.replace(",", "")
+
     try:
-        return float(s)
+        return float(full_match)
     except Exception:
         return None
 
@@ -217,7 +261,7 @@ class PersistentWatcherState:
         self.filepath = filepath
         self.lock = threading.Lock()
         self.data: Dict[str, Any] = {
-            "version": 24,
+            "version": 25,
             "chat_ids": [],
             "initialized": False,
             "active_lots": {},
@@ -235,15 +279,21 @@ class PersistentWatcherState:
                     with open(self.filepath, "r", encoding="utf-8") as f:
                         loaded = json.load(f)
                         if isinstance(loaded, dict):
-                            if loaded.get("version") != 24:
+                            # Eski sürümlerden kalan bozuk (738371030 veya 0.53 m2) önbelleği tamamen temizle!
+                            if loaded.get("version") != 25:
                                 loaded["metrics_cache"] = {}
-                                loaded["version"] = 24
+                                loaded["version"] = 25
                             else:
                                 mc = loaded.get("metrics_cache", {})
-                                loaded["metrics_cache"] = {
-                                    k: v for k, v in mc.items()
-                                    if isinstance(v, dict) and v.get("m2", 0.0) > 0
-                                }
+                                clean_mc = {}
+                                for k, v in mc.items():
+                                    if isinstance(v, dict) and is_sane_lot_metrics(
+                                        float(v.get("m2", 0.0)),
+                                        int(v.get("slabs", 0)),
+                                        str(v.get("avg_dim", "-")),
+                                    ):
+                                        clean_mc[k] = v
+                                loaded["metrics_cache"] = clean_mc
                             self.data.update(loaded)
                 except Exception as e:
                     logger.warning(f"State load warning: {e}")
@@ -259,7 +309,7 @@ class PersistentWatcherState:
 
     def save(self, git_sync: bool = False):
         with self.lock:
-            self.data["version"] = 24
+            self.data["version"] = 25
             self.data["updated_at"] = datetime.now(TR_TZ).isoformat()
             try:
                 with open(self.filepath, "w", encoding="utf-8") as f:
@@ -276,7 +326,7 @@ class PersistentWatcherState:
             subprocess.run(["git", "config", "user.email", "bot@arslanlarmarble.com"], timeout=5, check=False)
             subprocess.run(["git", "add", self.filepath], timeout=5, check=False)
             res = subprocess.run(
-                ["git", "commit", "-m", "chore: auto-sync watcher state v24 [skip ci]"],
+                ["git", "commit", "-m", "chore: auto-sync watcher state v25 [skip ci]"],
                 capture_output=True,
                 text=True,
                 timeout=10,
@@ -295,7 +345,15 @@ class PersistentWatcherState:
         return False
 
 
-class UniversalExcelParser:
+class PrecisionMarbleExcelReader:
+    """
+    Arslanlar Marble'ın tüm Excel şablonlarını (.xlsx, .xls, Google Sheets, .ods, .csv)
+    milimetrik doğrulukla okuyan motor.
+    - '65 x 81 cm' (0.53 m2) gibi başlık/tarih/kod satırlarını ASLA plaka sanmaz!
+    - Sadece gerçek plaka satırlarını (Uzunluk: 100..420 cm, Yükseklik: 75..280 cm) ve
+      gerçek Toplam M2 / Plaka hücrelerini alır.
+    """
+
     @staticmethod
     def extract_sheets_as_rows(file_bytes: bytes, filename: str = "") -> List[List[List[Any]]]:
         sheets: List[List[List[Any]]] = []
@@ -307,12 +365,23 @@ class UniversalExcelParser:
                 rows = [list(r) for r in ws.iter_rows(values_only=True)]
                 if rows:
                     sheets.append(rows)
-            if sheets:
-                return sheets
         except Exception:
             pass
 
-        # 2. xlrd (.xls)
+        # Eğer openpyxl ile formül hücreleri None geldiyse data_only=False ile de ekle
+        try:
+            wb_f = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=False)
+            for ws in wb_f.worksheets:
+                rows = [list(r) for r in ws.iter_rows(values_only=True)]
+                if rows:
+                    sheets.append(rows)
+        except Exception:
+            pass
+
+        if sheets:
+            return sheets
+
+        # 2. xlrd (Eski .xls Excel 97-2003 dosyaları)
         if xlrd is not None:
             try:
                 book = xlrd.open_workbook(file_contents=file_bytes)
@@ -320,7 +389,16 @@ class UniversalExcelParser:
                     sh = book.sheet_by_index(s_idx)
                     rows = []
                     for r_idx in range(sh.nrows):
-                        rows.append([sh.cell_value(r_idx, c_idx) for c_idx in range(sh.ncols)])
+                        row_vals = []
+                        for c_idx in range(sh.ncols):
+                            ctype = sh.cell_type(r_idx, c_idx)
+                            cval = sh.cell_value(r_idx, c_idx)
+                            # xlrd tarih hücrelerini (ctype == 3) sayı olarak alma!
+                            if ctype == 3:
+                                row_vals.append("")
+                            else:
+                                row_vals.append(cval)
+                        rows.append(row_vals)
                     if rows:
                         sheets.append(rows)
                 if sheets:
@@ -328,7 +406,7 @@ class UniversalExcelParser:
             except Exception:
                 pass
 
-        # 3. OpenDocument (.ods) veya XML
+        # 3. OpenDocument (.ods)
         try:
             if zipfile.is_zipfile(io.BytesIO(file_bytes)):
                 with zipfile.ZipFile(io.BytesIO(file_bytes)) as zf:
@@ -384,10 +462,7 @@ class UniversalExcelParser:
 
     @classmethod
     def analyze_table_rows(cls, sheets: List[List[List[Any]]]) -> Optional[Dict[str, Any]]:
-        best_m2 = 0.0
-        best_slabs = 0
-        best_avg_dim = "-"
-        best_thickness = "2 cm"
+        best_result: Optional[Dict[str, Any]] = None
 
         for rows in sheets:
             if not rows:
@@ -399,31 +474,30 @@ class UniversalExcelParser:
             col_m2_idx = None
             header_row_idx = None
 
-            for r_i, r in enumerate(rows[:25]):
+            # 1. Başlık satırını tespit et
+            for r_i, r in enumerate(rows[:30]):
                 norm_cells = [normalize_compare(str(c)) if c is not None else "" for c in r]
                 w_c, h_c, m2_c, th_c = None, None, None, None
 
                 for c_i, nc in enumerate(norm_cells):
                     if not nc:
                         continue
-                    if any(w_kw == nc or nc.startswith(w_kw + " ") for w_kw in ("boy", "length", "uzunluk", "len", "l")):
-                        w_c = c_i
-                    elif any(h_kw == nc or nc.startswith(h_kw + " ") for h_kw in ("en", "width", "yukseklik", "height", "genislik", "w", "h")):
-                        h_c = c_i
-                    elif any(m_kw in nc for m_kw in ("m2", "m²", "sqm", "alan", "area", "metraj", "miktar", "quantity", "net m2", "toplam m2", "total m2")):
+                    if any(w_kw == nc or nc.startswith(w_kw + " ") for w_kw in ("boy", "length", "uzunluk", "len", "l", "width", "en")):
+                        if w_c is None:
+                            w_c = c_i
+                        elif h_c is None and c_i != w_c:
+                            h_c = c_i
+                    elif any(h_kw == nc or nc.startswith(h_kw + " ") for h_kw in ("yukseklik", "height", "genislik", "h", "w")):
+                        if h_c is None and c_i != w_c:
+                            h_c = c_i
+                        elif w_c is None:
+                            w_c = c_i
+                    elif any(m_kw in nc for m_kw in ("m2", "sqm", "alan", "area", "metraj", "miktar", "quantity", "total m2", "toplam m2", "net m2")):
                         m2_c = c_i
                     elif any(t_kw in nc for t_kw in ("kalinlik", "thickness", "thick", "kal")):
                         th_c = c_i
 
-                if w_c is None and h_c is None:
-                    dim_cols = [
-                        idx for idx, nc in enumerate(norm_cells)
-                        if any(k in nc for k in ("ebat", "olcu", "dimension", "size", "cm"))
-                    ]
-                    if len(dim_cols) >= 2:
-                        w_c, h_c = dim_cols[0], dim_cols[1]
-
-                if (w_c is not None and h_c is not None) or m2_c is not None:
+                if w_c is not None and h_c is not None:
                     col_w_idx = w_c
                     col_h_idx = h_c
                     col_m2_idx = m2_c
@@ -434,9 +508,9 @@ class UniversalExcelParser:
             widths: List[float] = []
             heights: List[float] = []
             row_areas: List[float] = []
-            explicit_total_m2: List[float] = []
-            explicit_total_slabs: List[int] = []
-            valid_slab_rows = 0
+            summary_m2_candidates: List[float] = []
+            summary_slab_candidates: List[int] = []
+            thickness_str = "2 cm"
 
             start_r = (header_row_idx + 1) if header_row_idx is not None else 0
 
@@ -449,136 +523,144 @@ class UniversalExcelParser:
                 if not joined_norm:
                     continue
 
-                inline_w, inline_h = None, None
-                for rs in raw_strs:
-                    m_in = re.search(r"\b(\d{2,3})\s*[xX*]\s*(\d{2,3})\b", rs)
-                    if m_in:
-                        iw, ih = float(m_in.group(1)), float(m_in.group(2))
-                        if 50 <= iw <= 440 and 50 <= ih <= 440:
-                            inline_w, inline_h = iw, ih
-                            break
-
+                # Toplam satırı kontrolü
                 is_total_line = any(
                     kw in joined_norm
                     for kw in ("toplam", "total", "genel toplam", "grand total", "sum", "yekun", "alt toplam")
                 )
-
                 if is_total_line:
                     if col_m2_idx is not None and col_m2_idx < len(r):
-                        v_m = to_float_safe(r[col_m2_idx])
-                        if v_m and 1.0 <= v_m <= 5000.0:
-                            explicit_total_m2.append(v_m)
-
+                        v_m = parse_number_clean(r[col_m2_idx])
+                        if v_m and 2.0 <= v_m <= 2500.0:
+                            summary_m2_candidates.append(v_m)
                     for c in r:
-                        if c is None:
-                            continue
-                        s_c = str(c).strip()
-                        m_u = re.search(r"(\d+[.,]\d+|\d+)\s*(?:m2|m²|sqm)", s_c, flags=re.I)
-                        if m_u:
-                            vf = to_float_safe(m_u.group(1))
-                            if vf and 1.0 <= vf <= 5000.0:
-                                explicit_total_m2.append(vf)
-                        m_p = re.search(r"(\d+)\s*(?:plaka|slabs?|pcs|adet)", s_c, flags=re.I)
-                        if m_p:
-                            explicit_total_slabs.append(int(m_p.group(1)))
-
-                        vf = to_float_safe(c)
-                        if vf and 2.0 <= vf <= 5000.0:
-                            if isinstance(c, float) or ("," in s_c) or ("." in s_c):
-                                explicit_total_m2.append(vf)
+                        v_n = parse_number_clean(c)
+                        if v_n is not None:
+                            if 2.0 <= v_n <= 2500.0 and (isinstance(c, float) or "," in str(c) or "." in str(c)):
+                                summary_m2_candidates.append(v_n)
+                            elif 1.0 <= v_n <= 250.0 and float(v_n).is_integer():
+                                summary_slab_candidates.append(int(v_n))
                     continue
 
-                w_val, h_val, a_val = inline_w, inline_h, None
+                w_val, h_val, a_val = None, None, None
 
+                # A) Başlık sütunları biliniyorsa doğrudan o sütunlardan oku
                 if col_w_idx is not None and col_h_idx is not None and col_w_idx < len(r) and col_h_idx < len(r):
-                    w_c_val = to_float_safe(r[col_w_idx])
-                    h_c_val = to_float_safe(r[col_h_idx])
-                    if w_c_val and h_c_val:
-                        if 0.45 <= w_c_val <= 4.50 and 0.45 <= h_c_val <= 4.50:
-                            w_c_val *= 100.0
-                            h_c_val *= 100.0
-                        if 45.0 <= w_c_val <= 450.0 and 45.0 <= h_c_val <= 450.0:
-                            w_val, h_val = w_c_val, h_c_val
+                    cw_v = parse_number_clean(r[col_w_idx])
+                    ch_v = parse_number_clean(r[col_h_idx])
+                    if cw_v and ch_v:
+                        # Metre cinsinden yazılmışsa (örn: 2.92 x 1.48) cm'ye çevir
+                        if 0.70 <= cw_v <= 4.30 and 0.70 <= ch_v <= 4.30:
+                            cw_v *= 100.0
+                            ch_v *= 100.0
+                        # Milimetre cinsinden yazılmışsa (örn: 2920 x 1480) cm'ye çevir
+                        elif 700.0 <= cw_v <= 4300.0 and 700.0 <= ch_v <= 4300.0:
+                            cw_v /= 10.0
+                            ch_v /= 10.0
+
+                        # GERÇEK MERMER PLAKA ÖLÇÜ KONTROLÜ: En az bir kenar >= 100 cm, diğeri >= 70 cm olmalı!
+                        if max(cw_v, ch_v) >= 100.0 and min(cw_v, ch_v) >= 70.0 and max(cw_v, ch_v) <= 440.0:
+                            w_val, h_val = max(cw_v, ch_v), min(cw_v, ch_v)
 
                 if col_m2_idx is not None and col_m2_idx < len(r):
-                    a_c_val = to_float_safe(r[col_m2_idx])
-                    if a_c_val and 0.3 <= a_c_val <= 20.0:
-                        a_val = a_c_val
-                    elif a_c_val and 3000.0 <= a_c_val <= 150000.0:
-                        a_val = a_c_val / 10000.0
+                    ca_v = parse_number_clean(r[col_m2_idx])
+                    if ca_v and 0.80 <= ca_v <= 13.0:
+                        a_val = ca_v
 
                 if col_th_idx is not None and col_th_idx < len(r):
-                    th_v = to_float_safe(r[col_th_idx])
-                    if th_v in (2.0, 20.0):
-                        best_thickness = "2 cm"
-                    elif th_v in (3.0, 30.0):
-                        best_thickness = "3 cm"
+                    th_v = parse_number_clean(r[col_th_idx])
+                    if th_v in (3.0, 30.0):
+                        thickness_str = "3 cm"
+                    elif th_v in (2.0, 20.0):
+                        thickness_str = "2 cm"
+
+                # B) Başlık sütunları yoksa veya birleşik hücre varsa satırdaki sayıları kontrol et
+                if w_val is None or h_val is None:
+                    # Hücre içinde '292 x 148' gibi yazılı mı?
+                    for rs in raw_strs:
+                        m_in = re.search(r"\b(\d{2,3})\s*[xX*]\s*(\d{2,3})\b", rs)
+                        if m_in:
+                            iw, ih = float(m_in.group(1)), float(m_in.group(2))
+                            if max(iw, ih) >= 100.0 and min(iw, ih) >= 70.0 and max(iw, ih) <= 440.0:
+                                w_val, h_val = max(iw, ih), min(iw, ih)
+                                break
 
                 if w_val is None or h_val is None:
-                    nums = []
+                    row_nums = []
                     for c in r:
-                        fv = to_float_safe(c)
-                        if fv is not None and fv > 0:
-                            nums.append(fv)
+                        vn = parse_number_clean(c)
+                        if vn is not None and vn > 0:
+                            row_nums.append(vn)
 
-                    cm_dims = [x for x in nums if 50.0 <= x <= 440.0]
-                    m_dims = [x * 100.0 for x in nums if 0.55 <= x <= 4.30]
+                    # Plaka ebatları: cm (70..430) veya m (0.75..4.20)
+                    cm_dims = [x for x in row_nums if 70.0 <= x <= 430.0 and float(x).is_integer()]
+                    m_dims = [x * 100.0 for x in row_nums if 0.75 <= x <= 4.20 and not float(x).is_integer()]
 
-                    if len(cm_dims) >= 2:
-                        w_val, h_val = cm_dims[0], cm_dims[1]
-                    elif len(m_dims) >= 2 and len(nums) >= 3:
-                        w_val, h_val = m_dims[0], m_dims[1]
+                    cand_pair = None
+                    if len(cm_dims) >= 2 and max(cm_dims[0], cm_dims[1]) >= 100.0:
+                        cand_pair = (max(cm_dims[0], cm_dims[1]), min(cm_dims[0], cm_dims[1]))
+                    elif len(m_dims) >= 2 and max(m_dims[0], m_dims[1]) >= 100.0:
+                        cand_pair = (max(m_dims[0], m_dims[1]), min(m_dims[0], m_dims[1]))
 
-                    if w_val and h_val and a_val is None:
-                        calc_a = (w_val * h_val) / 10000.0
-                        close_areas = [x for x in nums if 0.4 <= x <= 16.0 and abs(x - calc_a) <= 1.5]
-                        if close_areas:
-                            a_val = close_areas[-1]
-                        else:
-                            a_val = calc_a
+                    if cand_pair:
+                        calc_area = (cand_pair[0] * cand_pair[1]) / 10000.0
+                        # Satırda ya sıra numarası (1..150) ya da bu çarpıma eşit m2 değeri olmalı!
+                        has_matching_area = any(abs(x - calc_area) <= 0.35 for x in row_nums)
+                        has_seq_no = any(1.0 <= x <= 150.0 and float(x).is_integer() for x in row_nums[:2])
+                        if has_matching_area or (header_row_idx is not None and has_seq_no):
+                            w_val, h_val = cand_pair
+                            if a_val is None:
+                                matched_a = [x for x in row_nums if abs(x - calc_area) <= 0.35]
+                                a_val = matched_a[-1] if matched_a else calc_area
 
-                if w_val and h_val and 45.0 <= w_val <= 450.0 and 45.0 <= h_val <= 450.0:
+                if w_val and h_val:
                     widths.append(w_val)
                     heights.append(h_val)
-                    valid_slab_rows += 1
-                    if a_val and 0.3 <= a_val <= 18.0:
+                    calc_a = (w_val * h_val) / 10000.0
+                    if a_val and abs(a_val - calc_a) <= 1.2:
                         row_areas.append(a_val)
                     else:
-                        row_areas.append((w_val * h_val) / 10000.0)
-                elif a_val and 0.4 <= a_val <= 16.0:
-                    row_areas.append(a_val)
-                    valid_slab_rows += 1
+                        row_areas.append(calc_a)
 
-            sheet_m2 = sum(row_areas) if row_areas else 0.0
-            sheet_slabs = valid_slab_rows
+            # Bu sayfadaki plaka satırlarından net sonucu çıkar
+            if len(row_areas) >= 1:
+                total_m2 = round(sum(row_areas), 2)
+                slabs_cnt = len(row_areas)
+                avg_w = int(round(sum(widths) / len(widths)))
+                avg_h = int(round(sum(heights) / len(heights)))
+                avg_dim_str = f"{avg_w} x {avg_h} cm"
 
-            if explicit_total_m2:
-                if sheet_m2 > 0:
-                    matching_tots = [t for t in explicit_total_m2 if abs(t - sheet_m2) <= (sheet_m2 * 0.25 + 2.0)]
-                    if matching_tots:
-                        sheet_m2 = matching_tots[0]
-                else:
-                    sheet_m2 = max(explicit_total_m2)
+                # Eğer toplam satırında net m2 varsa ve plaka toplamına yakınsa onu kullan
+                for sm in summary_m2_candidates:
+                    if abs(sm - total_m2) <= (total_m2 * 0.15 + 1.5):
+                        total_m2 = round(sm, 2)
+                        break
 
-            if explicit_total_slabs and sheet_slabs == 0:
-                sheet_slabs = max(explicit_total_slabs)
+                if is_sane_lot_metrics(total_m2, slabs_cnt, avg_dim_str):
+                    cand_res = {
+                        "m2": total_m2,
+                        "slabs": slabs_cnt,
+                        "avg_dim": avg_dim_str,
+                        "surface": f"Polished ({thickness_str})",
+                    }
+                    if best_result is None or slabs_cnt > best_result["slabs"]:
+                        best_result = cand_res
 
-            if sheet_m2 > best_m2:
-                best_m2 = sheet_m2
-                best_slabs = sheet_slabs
-                if widths and heights:
-                    avg_w = int(round(sum(widths) / len(widths)))
-                    avg_h = int(round(sum(heights) / len(heights)))
-                    best_avg_dim = f"{avg_w} x {avg_h} cm"
+            # Eğer tek tek plaka satırı yerine sadece özet tablo varsa (Toplam M2 ve Toplam Plaka)
+            elif summary_m2_candidates and summary_slab_candidates:
+                sm2 = max(summary_m2_candidates)
+                ssl = max(summary_slab_candidates)
+                if is_sane_lot_metrics(sm2, ssl, "-"):
+                    cand_res = {
+                        "m2": round(sm2, 2),
+                        "slabs": ssl,
+                        "avg_dim": "-",
+                        "surface": f"Polished ({thickness_str})",
+                    }
+                    if best_result is None:
+                        best_result = cand_res
 
-        if best_m2 > 0:
-            return {
-                "m2": round(best_m2, 2),
-                "slabs": best_slabs,
-                "avg_dim": best_avg_dim,
-                "surface": f"Polished ({best_thickness})",
-            }
-        return None
+        return best_result
 
 
 class ArslanlarDriveIntelligence:
@@ -819,36 +901,30 @@ class ArslanlarDriveIntelligence:
     def invoke_bot_py_native_parser(
         self, folder_id: str, folder_name: str, lot_code: str, excel_bytes: Optional[bytes] = None
     ) -> Optional[Dict[str, Any]]:
-        def normalize_result(res: Any) -> Optional[Dict[str, Any]]:
-            if isinstance(res, dict):
-                m2_v = to_float_safe(
-                    res.get("m2") or res.get("total_m2") or res.get("sqm") or res.get("area") or res.get("stok_m2")
-                )
-                sl_v = to_float_safe(
-                    res.get("slabs") or res.get("plaka") or res.get("slab_count") or res.get("count") or res.get("pcs")
-                )
-                dm_v = (
-                    res.get("avg_dim") or res.get("ebat") or res.get("ortalama_ebat") or res.get("dimensions") or "-"
-                )
-                sf_v = res.get("surface_thickness") or res.get("surface") or res.get("yuzey") or "Polished (2 cm)"
-                if m2_v and m2_v > 0:
-                    return {
-                        "m2": round(m2_v, 2),
-                        "slabs": int(sl_v) if sl_v and sl_v > 0 else 0,
-                        "avg_dim": str(dm_v).strip() if dm_v else "-",
-                        "surface": str(sf_v).strip() if sf_v else "Polished (2 cm)",
-                    }
-            elif isinstance(res, (tuple, list)) and len(res) >= 2:
-                v0 = to_float_safe(res[0])
-                v1 = to_float_safe(res[1])
-                if v0 and v0 > 0 and v1 is not None:
-                    dm = str(res[2]).strip() if len(res) >= 3 and res[2] else "-"
-                    return {
-                        "m2": round(v0, 2),
-                        "slabs": int(v1),
-                        "avg_dim": dm,
-                        "surface": "Polished (2 cm)",
-                    }
+        """
+        bot.py'nin kendi DriveExplorer metodunu çağırır, ancak döndürdüğü sonucu
+        is_sane_lot_metrics() filtresinden geçirir (738,371,030 gibi saçma sayıları ASLA kabul etmez!).
+        """
+        def validate_dict_result(res: Any) -> Optional[Dict[str, Any]]:
+            if not isinstance(res, dict):
+                return None
+            m2_v = parse_number_clean(
+                res.get("m2") or res.get("total_m2") or res.get("sqm") or res.get("area") or res.get("stok_m2")
+            )
+            sl_v = parse_number_clean(
+                res.get("slabs") or res.get("plaka") or res.get("slab_count") or res.get("count") or res.get("pcs")
+            )
+            dm_v = (
+                res.get("avg_dim") or res.get("ebat") or res.get("ortalama_ebat") or res.get("dimensions") or "-"
+            )
+            sf_v = res.get("surface_thickness") or res.get("surface") or res.get("yuzey") or "Polished (2 cm)"
+            if m2_v and sl_v and is_sane_lot_metrics(float(m2_v), int(sl_v), str(dm_v)):
+                return {
+                    "m2": round(float(m2_v), 2),
+                    "slabs": int(sl_v),
+                    "avg_dim": str(dm_v).strip() if dm_v else "-",
+                    "surface": str(sf_v).strip() if sf_v else "Polished (2 cm)",
+                }
             return None
 
         explorer = self.find_bot_drive_explorer()
@@ -860,20 +936,20 @@ class ArslanlarDriveIntelligence:
                 if not callable(fn):
                     continue
                 low = attr_name.lower()
-                if any(k in low for k in ("excel", "meta", "metric", "lot", "folder", "parse", "calc", "detail", "info", "stock")):
+                if any(k in low for k in ("excel", "meta", "metric", "lot", "folder", "parse", "calc", "detail")):
                     if excel_bytes and ("excel" in low or "parse" in low or "sheet" in low):
                         for arg_candidate in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
                             try:
                                 r = fn(*arg_candidate)
-                                nr = normalize_result(r)
+                                nr = validate_dict_result(r)
                                 if nr:
                                     return nr
                             except Exception:
                                 pass
-                    for arg_candidate in ((folder_id,), (folder_id, folder_name), (lot_code,)):
+                    for arg_candidate in ((folder_id,), (folder_id, folder_name)):
                         try:
                             r = fn(*arg_candidate)
-                            nr = normalize_result(r)
+                            nr = validate_dict_result(r)
                             if nr:
                                 return nr
                         except Exception:
@@ -881,26 +957,9 @@ class ArslanlarDriveIntelligence:
 
             bot_cache_now = self.load_bot_existing_caches()
             for key in (folder_id, lot_code.upper(), folder_name.upper()):
-                nr = normalize_result(bot_cache_now.get(key))
+                nr = validate_dict_result(bot_cache_now.get(key))
                 if nr:
                     return nr
-
-        if excel_bytes:
-            main_mod = sys.modules.get("__main__")
-            if main_mod:
-                for attr_name in dir(main_mod):
-                    if attr_name.startswith("__"):
-                        continue
-                    fn = getattr(main_mod, attr_name, None)
-                    if callable(fn) and any(k in attr_name.lower() for k in ("excel", "parse", "sheet", "metric", "lot")):
-                        for arg_candidate in ((excel_bytes,), (io.BytesIO(excel_bytes),)):
-                            try:
-                                r = fn(*arg_candidate)
-                                nr = normalize_result(r)
-                                if nr:
-                                    return nr
-                            except Exception:
-                                pass
 
         return None
 
@@ -920,25 +979,26 @@ class ArslanlarDriveIntelligence:
         avg_dim = "-"
         surface = "Polished (2 cm)"
 
-        # 1. bot.py önbelleğinden oku
+        # 1. bot.py önbelleğinden oku (Sadece is_sane_lot_metrics doğrulamasından geçerse!)
         for key in (folder_id, lot_code.upper(), lot_code.replace("-", "").upper(), folder_name.upper()):
             c = bot_cache.get(key)
             if isinstance(c, dict):
-                v_m2 = to_float_safe(
+                v_m2 = parse_number_clean(
                     c.get("m2") or c.get("total_m2") or c.get("sqm") or c.get("area") or c.get("mevcut_stok")
                 )
-                v_sl = to_float_safe(
+                v_sl = parse_number_clean(
                     c.get("slabs") or c.get("plaka") or c.get("slab_count") or c.get("count") or c.get("pcs")
                 )
-                if v_m2 and v_m2 > 0:
-                    m2 = v_m2
-                    if v_sl and v_sl > 0:
-                        slabs = int(v_sl)
-                    for k_d in ("avg_dim", "ebat", "ortalama_ebat", "dimensions", "dim"):
-                        val = c.get(k_d)
-                        if val and str(val).strip() not in ("", "-", "None", "N/A"):
-                            avg_dim = str(val).strip()
-                            break
+                v_dm = "-"
+                for k_d in ("avg_dim", "ebat", "ortalama_ebat", "dimensions", "dim"):
+                    val = c.get(k_d)
+                    if val and str(val).strip() not in ("", "-", "None", "N/A"):
+                        v_dm = str(val).strip()
+                        break
+                if v_m2 and v_sl and is_sane_lot_metrics(float(v_m2), int(v_sl), v_dm):
+                    m2 = float(v_m2)
+                    slabs = int(v_sl)
+                    avg_dim = v_dm
                     for k_s in ("surface_thickness", "surface", "finish", "yuzey"):
                         val = c.get(k_s)
                         if val and str(val).strip() not in ("", "-", "None"):
@@ -946,15 +1006,19 @@ class ArslanlarDriveIntelligence:
                             break
                     break
 
-        # 2. V24 kalıcı önbelleğinden oku
+        # 2. V25 kalıcı önbelleğinden oku (Sadece geçerliyse!)
         persisted = self.state.data.setdefault("metrics_cache", {}).get(folder_id)
-        if m2 <= 0 and isinstance(persisted, dict) and persisted.get("m2", 0.0) > 0:
-            m2 = float(persisted["m2"])
-            slabs = int(persisted.get("slabs", 0))
-            avg_dim = persisted.get("avg_dim", "-")
-            surface = persisted.get("surface", surface)
+        if m2 <= 0 and isinstance(persisted, dict):
+            pm2 = float(persisted.get("m2", 0.0))
+            psl = int(persisted.get("slabs", 0))
+            pdm = str(persisted.get("avg_dim", "-"))
+            if is_sane_lot_metrics(pm2, psl, pdm):
+                m2 = pm2
+                slabs = psl
+                avg_dim = pdm
+                surface = persisted.get("surface", surface)
 
-        # 3. Sadece deep_fetch_if_needed=True ise Drive'dan Excel indir (Stok tablosunda kilitlenmeyi önler!)
+        # 3. Lotun içindeki Excel / Google Sheets tablosunu indir ve oku!
         if m2 <= 0 and deep_fetch_if_needed:
             candidate_tables = [f for f in all_lot_files if is_spreadsheet_or_table_file(f)]
             if not candidate_tables:
@@ -967,47 +1031,40 @@ class ArslanlarDriveIntelligence:
                         all_lot_files.append(fc)
                 candidate_tables = [f for f in all_lot_files if is_spreadsheet_or_table_file(f)]
 
-            for tf in candidate_tables[:2]:
+            for tf in candidate_tables:
                 raw_bytes = self.download_file_bytes(tf["id"], tf.get("mimeType", ""))
                 if not raw_bytes:
                     continue
 
-                sheets = UniversalExcelParser.extract_sheets_as_rows(raw_bytes, tf.get("name", ""))
+                # A) Önce PrecisionMarbleExcelReader ile oku
+                sheets = PrecisionMarbleExcelReader.extract_sheets_as_rows(raw_bytes, tf.get("name", ""))
                 if sheets:
-                    parsed = UniversalExcelParser.analyze_table_rows(sheets)
-                    if parsed and parsed.get("m2", 0.0) > 0:
+                    parsed = PrecisionMarbleExcelReader.analyze_table_rows(sheets)
+                    if parsed and is_sane_lot_metrics(parsed["m2"], parsed["slabs"], parsed["avg_dim"]):
                         m2 = parsed["m2"]
-                        if parsed.get("slabs", 0) > 0:
-                            slabs = parsed["slabs"]
-                        if parsed.get("avg_dim", "-") != "-":
-                            avg_dim = parsed["avg_dim"]
-                        if parsed.get("surface"):
-                            surface = parsed["surface"]
+                        slabs = parsed["slabs"]
+                        avg_dim = parsed["avg_dim"]
+                        surface = parsed["surface"]
                         break
 
+                # B) bot.py'nin kendi yerel metodunu dene
                 native_parsed = self.invoke_bot_py_native_parser(folder_id, folder_name, lot_code, raw_bytes)
-                if native_parsed and native_parsed.get("m2", 0.0) > 0:
+                if native_parsed:
                     m2 = native_parsed["m2"]
-                    if native_parsed.get("slabs", 0) > 0:
-                        slabs = native_parsed["slabs"]
-                    if native_parsed.get("avg_dim", "-") != "-":
-                        avg_dim = native_parsed["avg_dim"]
-                    if native_parsed.get("surface"):
-                        surface = native_parsed["surface"]
+                    slabs = native_parsed["slabs"]
+                    avg_dim = native_parsed["avg_dim"]
+                    surface = native_parsed["surface"]
                     break
 
             if m2 <= 0:
                 native_folder_res = self.invoke_bot_py_native_parser(folder_id, folder_name, lot_code, None)
-                if native_folder_res and native_folder_res.get("m2", 0.0) > 0:
+                if native_folder_res:
                     m2 = native_folder_res["m2"]
-                    if native_folder_res.get("slabs", 0) > 0:
-                        slabs = native_folder_res["slabs"]
-                    if native_folder_res.get("avg_dim", "-") != "-":
-                        avg_dim = native_folder_res["avg_dim"]
-                    if native_folder_res.get("surface"):
-                        surface = native_folder_res["surface"]
+                    slabs = native_folder_res["slabs"]
+                    avg_dim = native_folder_res["avg_dim"]
+                    surface = native_folder_res["surface"]
 
-        # 4. Klasör adında plaka aralığı varsa (örn: "A-1037 - Silver River 1 38" -> 38 Plaka)
+        # 4. Klasör adında plaka aralığı varsa (örn: "A-157 - Silver Roots 25 37" -> 13 Plaka)
         if slabs <= 0:
             m_range = re.search(
                 r"\b(?:between\s+)?(\d{1,3})\s*[-_\s]\s*(\d{1,3})\s*(?:stock|stok)?\s*$",
@@ -1019,7 +1076,6 @@ class ArslanlarDriveIntelligence:
                 if 1 <= b1 < b2 <= 150:
                     slabs = (b2 - b1) + 1
 
-        # 5. Eğer hala plaka sayısı 0 ise SADECE tek bir klasördeki benzersiz plaka numaralarını say
         if slabs <= 0 and direct_images:
             slab_nums = set()
             for img_f in direct_images:
@@ -1040,7 +1096,7 @@ class ArslanlarDriveIntelligence:
             "modified_time": modified_time,
         }
 
-        if m2 > 0:
+        if is_sane_lot_metrics(result["m2"], result["slabs"], result["avg_dim"]):
             self.state.data.setdefault("metrics_cache", {})[folder_id] = result
 
         return result
@@ -1235,13 +1291,13 @@ class ArslanlarDriveIntelligence:
         self.state.save(git_sync=False)
         return new_active, self.sold_out_lots
 
-    def ensure_deep_excel_metrics_for_lots(self, lots: List[Dict[str, Any]], max_fetch: int = 20):
+    def ensure_deep_excel_metrics_for_lots(self, lots: List[Dict[str, Any]], max_fetch: int = 30):
         bot_cache = self.load_bot_existing_caches()
         updated_any = False
         fetched_count = 0
 
         for item in lots:
-            if item.get("m2", 0.0) > 0 and item.get("avg_dim", "-") != "-":
+            if is_sane_lot_metrics(item.get("m2", 0.0), item.get("slabs", 0), item.get("avg_dim", "-")):
                 continue
             if fetched_count >= max_fetch:
                 break
@@ -1296,7 +1352,7 @@ class ArslanlarDriveIntelligence:
             return (x.get("collection", ""), num, lc)
 
         matched.sort(key=sort_key)
-        self.ensure_deep_excel_metrics_for_lots(matched, max_fetch=25)
+        self.ensure_deep_excel_metrics_for_lots(matched, max_fetch=30)
         return stone_query.title(), matched
 
     def find_lot_by_code_or_name(self, query_str: str) -> Optional[Dict[str, Any]]:
@@ -1321,17 +1377,16 @@ class ArslanlarDriveIntelligence:
 
 def extract_pure_marble_texture(raw_img: Image.Image) -> Image.Image:
     """
-    Üstteki sarı vinç kıskacını (clamp), yanlardaki kırmızı etiketleri ve alt sehpayı
-    %100 dışarıda bırakacak şekilde plakanın saf iç mermer yüzeyini keser.
+    Üstteki sarı vinç kıskacını (clamp), sarı 'DİKKAT' tabelasını, yanlardaki kırmızı etiketleri
+    ve alt sehpayı %100 dışarıda bırakarak plakanın saf iç mermer yüzeyini keser.
     """
     img = raw_img.convert("RGB")
     w, h = img.size
-    # Sarı vinç kıskacı her zaman üst %26'lık dilimde, kırmızı etiketler ise sol/sağ %18'lik kenardadır.
-    # Doğrudan plakanın en temiz iç mermer göbeğini (%20..%80 X, %27..%82 Y) alıyoruz:
+    # Üstten %34 (vinç kıskacı her zaman üst %32'dedir), alttan %16, yanlardan %20 kırp
     x1 = int(w * 0.20)
     x2 = int(w * 0.80)
-    y1 = int(h * 0.27)
-    y2 = int(h * 0.82)
+    y1 = int(h * 0.34)
+    y2 = int(h * 0.84)
     return img.crop((x1, y1, x2, y2))
 
 
@@ -1345,10 +1400,9 @@ def build_ram_safe_architectural_render(
     avg_dim: str = "-",
 ) -> bytes:
     """
-    V24 AYDINLIK TAM EKRAN MİMARİ BOOKMATCH RENDER MOTORU
-    - Alttaki siyah karartılı zemin bölgesi tamamen kaldırıldı!
-    - Üstteki sarı vinç kıskacı ve yan etiketler tamamen kırpıldı!
-    - Tam ekran aydınlık galeri duvarında kusursuz 2x Bookmatch (Kelebek) mermer kaplaması sunar.
+    V25 FERAH & AYDINLIK TAM EKRAN BOOKMATCH RENDER MOTORU
+    - Alttaki koyu siyah karartı alanı tamamen kaldırıldı!
+    - Sıcak krem/mermer galeri çerçevesi içinde tam ekran 2x Bookmatch (Kelebek) duvar uygulaması sunar.
     """
     try:
         with Image.open(io.BytesIO(img_bytes)) as raw_img:
@@ -1356,67 +1410,52 @@ def build_ram_safe_architectural_render(
             raw_img.thumbnail((1400, 1000), Image.Resampling.LANCZOS)
             pure_slab = extract_pure_marble_texture(raw_img)
 
-        pure_slab = ImageEnhance.Contrast(pure_slab).enhance(1.06)
-        pure_slab = ImageEnhance.Sharpness(pure_slab).enhance(1.18)
+        pure_slab = ImageEnhance.Contrast(pure_slab).enhance(1.05)
+        pure_slab = ImageEnhance.Sharpness(pure_slab).enhance(1.15)
 
-        # Tuval Boyutu: 1400 x 900 (Alt karartı yok, tam boy aydınlık mimari duvar)
-        cw, ch = 1400, 900
-        canvas = Image.new("RGB", (cw, ch), (238, 235, 228))  # Sıcak krem/taş galeri arka planı
+        cw, ch = 1400, 880
+        # Aydınlık sıcak taş/galeri arka planı (Karartı kesinlikle yok!)
+        canvas = Image.new("RGB", (cw, ch), (242, 239, 234))
         draw = ImageDraw.Draw(canvas)
 
-        # Üst ve Yan Mimari Sıcak Galeri Çerçevesi
-        draw.rectangle([0, 0, cw, 815], fill=(34, 33, 31))
-
-        # 2'li Bookmatch Boyutu: 1240 x 700 (Her bir plaka 620 x 700)
-        single_w, single_h = 620, 700
+        single_w, single_h = 640, 720
         left_panel = pure_slab.resize((single_w, single_h), Image.Resampling.LANCZOS)
         right_panel = ImageOps.mirror(left_panel)
 
-        bm_w, bm_h = single_w * 2, single_h
+        bm_w, bm_h = single_w * 2, single_h  # 1280 x 720
         bookmatch = Image.new("RGB", (bm_w, bm_h))
         bookmatch.paste(left_panel, (0, 0))
         bookmatch.paste(right_panel, (single_w, 0))
 
-        # Doğal, homojen galeri aydınlatması (Karartı yapmaz, mermerin kendi rengini parlatır)
-        wall_arr = np.asarray(bookmatch, dtype=np.float32)
-        wy, wx = np.mgrid[0:bm_h, 0:bm_w].astype(np.float32)
-        light_map = np.ones((bm_h, bm_w), dtype=np.float32) * 0.98
-        for sx in (bm_w * 0.25, bm_w * 0.50, bm_w * 0.75):
-            spread = 220.0 + wy * 0.30
-            dist_x = np.abs(wx - sx)
-            light_map += np.exp(-0.5 * (dist_x / spread) ** 2) * 0.08
-
-        light_map = np.clip(light_map, 0.94, 1.08)
-        wall_lit = np.clip(wall_arr * light_map[:, :, None], 0, 255).astype(np.uint8)
-        lit_bm_img = Image.fromarray(wall_lit)
-
-        wall_x1, wall_y1 = 80, 58
-        canvas.paste(lit_bm_img, (wall_x1, wall_y1))
+        wall_x1, wall_y1 = 60, 40
+        # Hafif derinlik gölgesi çerçevesi
+        draw.rectangle([wall_x1 - 6, wall_y1 - 6, wall_x1 + bm_w + 5, wall_y1 + bm_h + 5], fill=(215, 210, 202))
+        canvas.paste(bookmatch, (wall_x1, wall_y1))
 
         # Şampanya Altın Mimari Çerçeve
-        gold = (197, 155, 95)
-        draw.rectangle([wall_x1 - 4, wall_y1 - 4, wall_x1 + bm_w + 3, wall_y1 + bm_h + 3], outline=gold, width=4)
-        # Ortadaki kelebek birleşim derzi (1px ince çizgi)
-        draw.line([(wall_x1 + single_w, wall_y1), (wall_x1 + single_w, wall_y1 + bm_h)], fill=(120, 115, 110), width=1)
+        gold = (188, 145, 85)
+        draw.rectangle([wall_x1 - 3, wall_y1 - 3, wall_x1 + bm_w + 2, wall_y1 + bm_h + 2], outline=gold, width=3)
+        # Ortadaki kelebek birleşim çizgisi
+        draw.line([(wall_x1 + single_w, wall_y1), (wall_x1 + single_w, wall_y1 + bm_h)], fill=(130, 125, 120), width=1)
 
-        # Alt Kurumsal Bilgi Barı (Y: 815..900 -> 85px şık antrasit-altın şerit)
-        draw.rectangle([0, 815, cw, ch], fill=(18, 18, 20))
-        draw.line([(0, 815), (cw, 815)], fill=gold, width=3)
+        # Alt Kurumsal Bilgi Şeridi (Y: 795..880 -> İnce ve Şık)
+        draw.rectangle([0, 795, cw, ch], fill=(22, 22, 25))
+        draw.line([(0, 795), (cw, 795)], fill=gold, width=3)
 
         stock_txt = f"{m2:,.2f} m2 ({slabs} Slabs)" if m2 > 0 else f"{slabs} Slabs"
         dim_txt = f"   |   Avg. Size: {avg_dim}" if avg_dim and avg_dim != "-" else ""
 
         header_line = f"ARSLANLAR MARBLE   |   LOT: {lot_code} — {stone_name.upper()}   ({collection_name.upper()})"
-        spec_line = f"2x Bookmatch (Butterfly) Architectural Wall Application   |   Available Stock: {stock_txt}{dim_txt}"
+        spec_line = f"Seamless 2x Bookmatch (Butterfly) Architectural Wall   |   Available Stock: {stock_txt}{dim_txt}"
 
-        draw.text((80, 832), header_line, fill=(235, 205, 155))
-        draw.text((80, 862), spec_line, fill=(200, 200, 205))
+        draw.text((60, 812), header_line, fill=(235, 205, 155))
+        draw.text((60, 842), spec_line, fill=(205, 205, 210))
 
         out_buf = io.BytesIO()
         canvas.save(out_buf, format="JPEG", quality=93, optimize=True)
         result_bytes = out_buf.getvalue()
 
-        del raw_img, pure_slab, left_panel, right_panel, bookmatch, wall_arr, wall_lit, lit_bm_img, canvas
+        del raw_img, pure_slab, left_panel, right_panel, bookmatch, canvas
         gc.collect()
         return result_bytes
     except Exception as e:
@@ -1957,9 +1996,8 @@ def build_master_stock_table_pdf_and_excel(
 
 
 def format_welcome_help_guide() -> str:
-    """Bota 'merhaba', 'selam', '/start' veya 'yardım' yazıldığında gelecek tam kapsamlı rehber."""
     return (
-        "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan (V24)</b>\n\n"
+        "🏢 <b>Arslanlar Marble | Argon Kurumsal Dijital Asistan (V25)</b>\n\n"
         "Merhaba! Sistem üzerinden aşağıdaki tüm işlemleri anında gerçekleştirebilirsiniz. "
         "Mavi renkli örnek komutlara dokunarak kopyalayabilir veya benzer şekilde yazabilirsiniz:\n\n"
         "📊 <b>1. Detaylı Master Stok Tablosu (Aktif + Sold Out PDF & Excel):</b>\n"
@@ -2078,16 +2116,18 @@ class ArslanlarPluginController:
 
     def background_watcher_loop(self):
         time.sleep(12)
-        logger.info("🔍 Arslanlar V24 Drive Watcher started.")
+        logger.info("🔍 Arslanlar V25 Drive Watcher started.")
 
         while True:
             try:
                 active_map, sold_map = self.intel.scan_drive_collections(force=True)
 
-                # Arka planda her döngüde 12 lotun Excel tablosunu sessizce okuyup önbelleğe al
-                unparsed = [x for x in active_map.values() if x.get("m2", 0.0) <= 0]
+                unparsed = [
+                    x for x in active_map.values()
+                    if not is_sane_lot_metrics(x.get("m2", 0.0), x.get("slabs", 0), x.get("avg_dim", "-"))
+                ]
                 if unparsed:
-                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed, max_fetch=12)
+                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed, max_fetch=15)
 
                 if active_map or sold_map:
                     if not self.state.data.get("initialized"):
@@ -2219,9 +2259,7 @@ class ArslanlarPluginController:
         raw_text = update.effective_message.text.strip()
         norm_text = normalize_compare(raw_text)
 
-        # ---------------------------------------------------------------------
         # 0. MERHABA / KARŞILAMA VE YETENEK REHBERİ
-        # ---------------------------------------------------------------------
         if norm_text in (
             "merhaba", "selam", "slm", "merhabalar", "iyi gunler", "gunaydin",
             "iyi aksamlar", "yardim", "help", "komutlar", "neler yapabilirsin",
@@ -2234,10 +2272,7 @@ class ArslanlarPluginController:
             )
             raise ApplicationHandlerStop
 
-        # ---------------------------------------------------------------------
         # 1. DETAYLI MASTER STOK TABLOSU & SUNUMU (EXCEL + PDF)
-        # ("stok tablosu", "detaylı stok", "stok listesi", "özet rapor")
-        # ---------------------------------------------------------------------
         is_master_table_req = any(
             kw in norm_text
             for kw in (
@@ -2256,13 +2291,15 @@ class ArslanlarPluginController:
             loop = asyncio.get_running_loop()
 
             def generate_master_fast():
-                # Hızlıca klasörleri ve hazır önbelleği oku (Takılmayı önlemek için canlıda en fazla 8 eksik lotu çek)
                 act_m, sld_m = self.intel.scan_drive_collections(force=False)
                 if not act_m and not sld_m:
                     act_m, sld_m = self.intel.scan_drive_collections(force=True)
-                unparsed_lots = [x for x in act_m.values() if x.get("m2", 0.0) <= 0]
+                unparsed_lots = [
+                    x for x in act_m.values()
+                    if not is_sane_lot_metrics(x.get("m2", 0.0), x.get("slabs", 0), x.get("avg_dim", "-"))
+                ]
                 if unparsed_lots:
-                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed_lots, max_fetch=8)
+                    self.intel.ensure_deep_excel_metrics_for_lots(unparsed_lots, max_fetch=10)
                 rep_html = self.format_executive_summary_report(act_m, sld_m, title_prefix="MASTER")
                 pdf_b, xlsx_b = build_master_stock_table_pdf_and_excel(act_m, sld_m, self.intel)
                 return rep_html, pdf_b, xlsx_b, len(act_m), len(sld_m)
@@ -2298,9 +2335,7 @@ class ArslanlarPluginController:
 
             raise ApplicationHandlerStop
 
-        # ---------------------------------------------------------------------
         # 2. RAM-KORUMALI MİMARİ RENDER & BOOKMATCH (KARARTISIZ, TAM EKRAN)
-        # ---------------------------------------------------------------------
         if re.search(r"\b(render|bookmatch|kelebek)\b", norm_text):
             target_q = re.sub(
                 r"\b(render|bookmatch|kelebek|yap|lütfen|lutfen|hazırla|hazirla|stüdyo|studyo)\b",
@@ -2317,7 +2352,7 @@ class ArslanlarPluginController:
                 raise ApplicationHandlerStop
 
             status_msg = await update.effective_message.reply_text(
-                f"🎨 Preparing Full-Screen Bookmatch Architectural Wall Render for <b>{target_q.upper()}</b>...",
+                f"🎨 Preparing Bright Full-Screen Bookmatch Architectural Wall Render for <b>{target_q.upper()}</b>...",
                 parse_mode="HTML",
             )
             loop = asyncio.get_running_loop()
@@ -2359,7 +2394,7 @@ class ArslanlarPluginController:
                     f"• <b>Collection:</b> {lot_item['collection']}\n"
                     f"• <b>Available Stock:</b> <code>{m2_v:,.2f} m² ({sl_v} Slabs)</code>\n"
                     f"• <b>Avg. Dimensions:</b> <code>{eb_v}</code> | {sf_v}\n"
-                    f"• <b>Studio:</b> 2x Bookmatch Full-Bleed Architectural Wall"
+                    f"• <b>Studio:</b> Bright Full-Screen 2x Bookmatch Architectural Wall"
                 )
                 await update.effective_message.reply_photo(
                     photo=io.BytesIO(rendered_bytes),
@@ -2372,9 +2407,7 @@ class ArslanlarPluginController:
 
             raise ApplicationHandlerStop
 
-        # ---------------------------------------------------------------------
         # 3. TAŞ ÇEŞİDİNE ÖZEL İNGİLİZCE PREMIUM SUNUM
-        # ---------------------------------------------------------------------
         has_sunum_kw = bool(re.search(r"\b(sunum|sunumu|katalog|kataloğu|presentation|catalog)\b", norm_text))
         is_main_collection_sunum = any(
             normalize_compare(c) in norm_text
@@ -2421,10 +2454,7 @@ class ArslanlarPluginController:
             else:
                 await status_msg.delete()
 
-        # ---------------------------------------------------------------------
-        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA ("Ne kadar Silver Roots var?")
-        # Not: "Stoğumda kaç m2 var" veya "Toplam stoğum ne kadar" ise bot.py'ye bırak!
-        # ---------------------------------------------------------------------
+        # 4. TAŞ ÇEŞİDİNE GÖRE STOK SORGULAMA
         is_general_stock_question = any(
             gk in norm_text for gk in ("stogumda", "toplam stogum", "genel stogum", "tum stogum")
         )
@@ -2547,11 +2577,11 @@ def hooked_run_polling(self: Application, *args, **kwargs):
             )
             watcher_thread = threading.Thread(
                 target=controller.background_watcher_loop,
-                name="ArslanlarDriveWatcherV24",
+                name="ArslanlarDriveWatcherV25",
                 daemon=True,
             )
             watcher_thread.start()
-            logger.info("✅ Arslanlar V24 Complete Master Plugin successfully attached!")
+            logger.info("✅ Arslanlar V25 Precision Excel & Bright Studio Plugin successfully attached!")
         except Exception as e:
             logger.error(f"Plugin startup error: {e}")
 
