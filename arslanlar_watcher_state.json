@@ -354,8 +354,8 @@
       "lot_code": "A-116",
       "stone_name": "Tundra Grey Without No:59",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 67,
+      "m2": 306.9,
+      "slabs": 62,
       "drive_link": "https://drive.google.com/drive/folders/1Xokv3oqHZwUOULVe8WOAH8OY7nIlJWVh"
     },
     "1J7ZFpMqojTi47C_6407hwF028n8z2eWE": {
@@ -530,7 +530,7 @@
       "lot_code": "A-117",
       "stone_name": "Tundra Grey",
       "collection": "Arslanlar Series",
-      "m2": 0.0,
+      "m2": 379.42,
       "slabs": 60,
       "drive_link": "https://drive.google.com/drive/folders/19PChACEUijdFmm1cd7J2EbiECNRCAv9S"
     },
@@ -1022,5 +1022,5 @@
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T07:22:57.362254+03:00"
+  "updated_at": "2026-10-29T12:36:29.031630+03:00"
 }
