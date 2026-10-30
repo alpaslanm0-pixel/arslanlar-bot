@@ -169,6 +169,22 @@
       "slabs": 34,
       "drive_link": "https://drive.google.com/drive/folders/1ARsp0eXbSWFpC6LXr9m1yZAiUcxQ3pGS"
     },
+    "1hwQBganPY6DSJCMLqXAH_KadQs8vQcxo": {
+      "lot_code": "A-388",
+      "stone_name": "Green Levanto",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 40,
+      "drive_link": "https://drive.google.com/drive/folders/1hwQBganPY6DSJCMLqXAH_KadQs8vQcxo"
+    },
+    "1O6XqgZkTuPdmkOGgB2xtgTG-xRK9jpfP": {
+      "lot_code": "A-478",
+      "stone_name": "Rosso Levanto Ful",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 66,
+      "drive_link": "https://drive.google.com/drive/folders/1O6XqgZkTuPdmkOGgB2xtgTG-xRK9jpfP"
+    },
     "1jNLL32QrXbFfA4nCsaHaDLwJmMjoJhHg": {
       "lot_code": "A-442",
       "stone_name": "Moon Cream",
@@ -280,14 +296,6 @@
       "m2": 0.0,
       "slabs": 61,
       "drive_link": "https://drive.google.com/drive/folders/1yRppaT74V1VW-AF7SRMijZZEuN8maaOP"
-    },
-    "1m0ae0NIxenRxk8dJVKmtkuBd3OXw93OL": {
-      "lot_code": "A-415",
-      "stone_name": "Diana Royal Reserved",
-      "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 68,
-      "drive_link": "https://drive.google.com/drive/folders/1m0ae0NIxenRxk8dJVKmtkuBd3OXw93OL"
     },
     "1Sa4BrTSTTLN9iUZUIO3uWckVDzXWNdEm": {
       "lot_code": "A-201",
@@ -489,14 +497,6 @@
       "slabs": 5,
       "drive_link": "https://drive.google.com/drive/folders/1daHJabdCRCxZvfBQFxmkCJWHr8rYOS6G"
     },
-    "1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK": {
-      "lot_code": "ST-2214",
-      "stone_name": "Exotic Green St2426",
-      "collection": "Arslanlar Series",
-      "m2": 0.0,
-      "slabs": 6,
-      "drive_link": "https://drive.google.com/drive/folders/1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK"
-    },
     "14Or_rns-bFPwodNmfE0kkDBwZKmnNU5-": {
       "lot_code": "BRONZE ARMONI D7",
       "stone_name": "Bronze Armoni D7",
@@ -634,6 +634,11 @@
       "stone_name": "Silver Roots",
       "collection": "Arslanlar Collection"
     },
+    "1DtkbeT4CMRIzVgGj2U0hRsLPPOpvXCho": {
+      "lot_code": "L-008",
+      "stone_name": "Silver Roots",
+      "collection": "Arslanlar Collection"
+    },
     "1uusnBXYleSCXs6iLOtvXw12H5NsOVMZV": {
       "lot_code": "LARGE",
       "stone_name": "Large",
@@ -754,6 +759,16 @@
       "stone_name": "Diana Royal",
       "collection": "Arslanlar Series"
     },
+    "1ar6-eKhad19XYLFNNikl0y7oM6Mm9Ml9": {
+      "lot_code": "A-451",
+      "stone_name": "Rosso Levanto A+",
+      "collection": "Arslanlar Series"
+    },
+    "1m0ae0NIxenRxk8dJVKmtkuBd3OXw93OL": {
+      "lot_code": "A-415",
+      "stone_name": "Diana Royal Reserved",
+      "collection": "Arslanlar Series"
+    },
     "1gXXcmFnba57VKfRZ8ykToSfh5W6W7x2J": {
       "lot_code": "A-130",
       "stone_name": "Nebula Black Reserved",
@@ -827,6 +842,11 @@
     "1eFmV3n6VsE8_atks4N9Wu2iIq4F-9H2O": {
       "lot_code": "A-93",
       "stone_name": "Deep River",
+      "collection": "Arslanlar Series"
+    },
+    "1gmAb8yPW-ZkDin-2tbpWefS-fFt56arK": {
+      "lot_code": "ST-2214",
+      "stone_name": "Exotic Green St2426",
       "collection": "Arslanlar Series"
     },
     "1pFVe9VqxQB0xEifLmt_8D0sqJ-o59Wac": {
@@ -1052,5 +1072,5 @@
     }
   },
   "last_summary_report_key": "2026-10-30",
-  "updated_at": "2026-10-30T09:59:41.171639+03:00"
+  "updated_at": "2026-10-30T14:11:55.004768+03:00"
 }
