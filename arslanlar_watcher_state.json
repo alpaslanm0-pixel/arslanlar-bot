@@ -169,6 +169,14 @@
       "slabs": 34,
       "drive_link": "https://drive.google.com/drive/folders/1ARsp0eXbSWFpC6LXr9m1yZAiUcxQ3pGS"
     },
+    "1jNLL32QrXbFfA4nCsaHaDLwJmMjoJhHg": {
+      "lot_code": "A-442",
+      "stone_name": "Moon Cream",
+      "collection": "Arslanlar Series",
+      "m2": 0.0,
+      "slabs": 26,
+      "drive_link": "https://drive.google.com/drive/folders/1jNLL32QrXbFfA4nCsaHaDLwJmMjoJhHg"
+    },
     "14DjkWRGqGp7O8nel3QmfmUMjnom9G94o": {
       "lot_code": "A-468",
       "stone_name": "Ceppo Breccia",
@@ -1044,5 +1052,5 @@
     }
   },
   "last_summary_report_key": "2026-10-30",
-  "updated_at": "2026-10-30T09:21:31.034336+03:00"
+  "updated_at": "2026-10-30T09:29:45.715553+03:00"
 }
