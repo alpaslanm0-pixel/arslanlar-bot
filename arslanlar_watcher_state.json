@@ -609,6 +609,11 @@
     }
   },
   "sold_out_lots": {
+    "1iEYX1nzNiDrol8j5srjCBteuQu8mBgMM": {
+      "lot_code": "A-410",
+      "stone_name": "Armoni",
+      "collection": "Arslanlar Collection"
+    },
     "1kVLmgMOXBlZb2c8CET0L5j8QwTSYaPAO": {
       "lot_code": "A-394",
       "stone_name": "Silver Roots",
@@ -1037,5 +1042,5 @@
     }
   },
   "last_summary_report_key": "",
-  "updated_at": "2026-10-29T19:36:50.571499+03:00"
+  "updated_at": "2026-10-30T08:49:33.564635+03:00"
 }
