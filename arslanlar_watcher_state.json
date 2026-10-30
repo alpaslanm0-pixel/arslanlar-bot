@@ -561,6 +561,14 @@
       "slabs": 24,
       "drive_link": "https://drive.google.com/drive/folders/1IYDsk_hwkxUWY0su8HDaiHe1ELlE1n6x"
     },
+    "1zNKouIjI3w41xSVSLR7QdpAZWZ8i8YHH": {
+      "lot_code": "A-369",
+      "stone_name": "Terra Mystic",
+      "collection": "Arslanlar Exclusive Collection",
+      "m2": 362.91,
+      "slabs": 56,
+      "drive_link": "https://drive.google.com/drive/folders/1zNKouIjI3w41xSVSLR7QdpAZWZ8i8YHH"
+    },
     "1XnvqSzFi153Aea20p9PLcue3aXrn-ztW": {
       "lot_code": "A-382",
       "stone_name": "Terra Mater Without No:38",
@@ -1079,5 +1087,5 @@
     }
   },
   "last_summary_report_key": "2026-10-30",
-  "updated_at": "2026-10-30T16:25:30.251732+03:00"
+  "updated_at": "2026-10-30T16:25:31.896765+03:00"
 }
